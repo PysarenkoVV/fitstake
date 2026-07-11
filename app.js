@@ -39,11 +39,13 @@ const PATHS = {
 };
 
 function icon(name, cls = "") {
-  const filled = ["flame", "trophy", "chartBar", "person", "play", "seal", "camera", "bolt"].includes(name) ? "" : "";
   return `<svg class="icon ${cls}" viewBox="0 0 24 24" aria-hidden="true">${PATHS[name] || ""}</svg>`;
 }
-// сплошная заливка для «жирных» символов
+// Заливкой рисуем только сплошные силуэты; штриховые иконки при stroke:none пропадали,
+// поэтому все прочие рендерим контурными.
+const FILLED_ICONS = new Set(["flame", "play", "seal"]);
 function iconF(name, cls = "") {
+  if (!FILLED_ICONS.has(name)) return icon(name, cls);
   return `<svg class="icon filled ${cls}" viewBox="0 0 24 24" aria-hidden="true">${PATHS[name] || ""}</svg>`;
 }
 
@@ -120,7 +122,7 @@ const RU = {
   "Your data": "Твои данные", "Your fitness level": "Твоя физуха", "Your gender": "Твой пол", "Your height": "Твой рост",
   "Your starting point — at the finish you'll see how far you've come.": "Твоя точка отсчёта — на финише увидишь, как далеко ушёл.",
   "Your weight": "Твой вес", "Your whole body must be in frame": "В кадре должно быть всё тело целиком", "Yours": "Твои",
-  "Language": "Язык",
+  "Language": "Язык", "Edit": "Изменить",
 };
 
 // Перевод + подстановка %lld / %@ по порядку аргументов.
@@ -262,13 +264,16 @@ function newChallenge(o) {
 }
 
 function mockChallenges() {
+  // Один активный челлендж: 150 отжиманий + 50 приседаний в день.
   return [
-    newChallenge({ title: "100 Push-ups / 30 Days", goals: [{ exercise: "pushups", repsPerDay: 100 }], durationDays: 30, buyIn: 50, isPublic: true, currentDay: 12, yesterdayDropouts: 4, participants: mockParticipants(47, 9, 34, true, 100), myTotalReps: 1140 }),
-    newChallenge({ title: "Combo 100 + 50", goals: [{ exercise: "pushups", repsPerDay: 100 }, { exercise: "squats", repsPerDay: 50 }], durationDays: 30, buyIn: 75, isPublic: true, currentDay: 3, yesterdayDropouts: 1, participants: mockParticipants(19, 2, 8, true, 150), myTotalReps: 260 }),
-    newChallenge({ title: "Morning 20", goals: [{ exercise: "pushups", repsPerDay: 20 }], durationDays: 14, buyIn: 20, isPublic: false, missPolicy: "never", currentDay: 14, yesterdayDropouts: 0, participants: mockParticipants(4, 0, 2, true, 20), myTotalReps: 260, startWeight: 78, startMaxReps: 12 }),
-    newChallenge({ title: "Push-up Sprint 50", goals: [{ exercise: "pushups", repsPerDay: 50 }], durationDays: 7, buyIn: 100, isPublic: true, progression: { step: 5, period: "day" }, currentDay: 2, yesterdayDropouts: 1, participants: mockParticipants(23, 2, 11, false, 55) }),
-    newChallenge({ title: "Squats 100 / Day", goals: [{ exercise: "squats", repsPerDay: 100 }], durationDays: 14, buyIn: 25, isPublic: true, missPolicy: "onePerTwoWeeks", currentDay: 4, yesterdayDropouts: 2, participants: mockParticipants(31, 5, 18, false, 100) }),
-    newChallenge({ title: "Beginner 10 / Day", goals: [{ exercise: "pushups", repsPerDay: 10 }], durationDays: 21, buyIn: 10, isPublic: true, currentDay: 5, yesterdayDropouts: 3, participants: mockParticipants(156, 12, 96, false, 10) }),
+    newChallenge({
+      title: "150 Push-ups + 50 Squats",
+      goals: [{ exercise: "pushups", repsPerDay: 150 }, { exercise: "squats", repsPerDay: 50 }],
+      durationDays: 30, buyIn: 100, isPublic: true,
+      currentDay: 12, yesterdayDropouts: 1,
+      participants: mockParticipants(15, 1, 6, true, 200),
+      myTotalReps: 1760,
+    }),
   ];
 }
 
@@ -305,7 +310,7 @@ const app = {
   challenges: mockChallenges(),
   history: [],
   measurements: [],
-  totalPushups: 1240,
+  totalPushups: 1760,
 };
 app.history = mockHistory(app.challenges.filter(C.isJoined));
 {
@@ -438,7 +443,7 @@ function langToggle() {
 function TabBar() {
   const tabs = [["yours", t("Yours"), "trophy"], ["challenges", t("Challenges"), "flame"], ["stats", t("Stats"), "chartBar"], ["profile", t("Profile"), "person"]];
   return `<nav class="tabbar">${tabs.map(([k, name, ic]) =>
-    `<button data-act="tab:${k}" class="${ui.tab === k && !ui.detailId ? "active" : ""}">${iconF(ic)}<span>${esc(name)}</span></button>`).join("")}</nav>`;
+    `<button data-act="tab:${k}" class="${ui.tab === k && !ui.detailId ? "active" : ""}">${icon(ic)}<span>${esc(name)}</span></button>`).join("")}</nav>`;
 }
 
 // ==========================================================================
@@ -548,7 +553,7 @@ function DetailScreen(id) {
   } else {
     body = [potCard(c), callToAction(c), rulesCard(c), participantsCard(c)].join("");
   }
-  return `<div class="fullscreen" id="detail-scroll" style="z-index:1">${nav}<div class="screen" style="padding-top:14px">${body}</div></div>`;
+  return `<div class="fullscreen" id="detail-scroll" style="z-index:1">${nav}<div class="screen" style="padding-top:24px">${body}</div></div>`;
 }
 
 function potCard(c) {
@@ -733,6 +738,7 @@ function dailyChart(days) {
 // Профиль
 // ==========================================================================
 let photosUnlocked = false;
+let profileEditing = false;
 function ProfileTab() {
   const level = store["profile.level"], gender = store["profile.gender"];
   const withPhotos = app.challenges.filter((c) => c.beforePhoto);
@@ -746,22 +752,36 @@ function ProfileTab() {
       <span class="secondary">${t("Active challenges: %lld", activeCount)}</span><span class="secondary">${t("Finished: %lld", finished)}</span></div>
   </div>`;
 
-  const seg = (key, opts, cur) => `<div class="segmented" data-store="${key}">${opts.map(([v, n]) => `<button data-act="seg" data-store="${key}" data-val="${v}" class="${cur === v ? "active" : ""}">${esc(n)}</button>`).join("")}</div>`;
+  const editing = profileEditing;
+  const seg = (key, opts, cur) => `<div class="segmented">${opts.map(([v, n]) => `<button data-act="seg" data-store="${key}" data-val="${v}" class="${cur === v ? "active" : ""}">${esc(n)}</button>`).join("")}</div>`;
   const numStore = (label, key, min, max, unit) => `<div class="settings-row"><span>${esc(label)}</span>
     <div class="stepper"><button data-act="dec" data-store="${key}" data-min="${min}" data-max="${max}">−</button>
       <input class="mono" type="number" data-store="${key}" value="${store[key]}"><span class="mono secondary" style="font-size:13px;min-width:20px">${unit || ""}</span>
       <button data-act="inc" data-store="${key}" data-min="${min}" data-max="${max}">+</button></div></div>`;
+  const roRow = (label, value, unit) => `<div class="settings-row"><span>${esc(label)}</span><span class="mono" style="font-weight:700;font-size:15px">${esc(value)}${unit ? ` <span class="secondary" style="font-size:13px">${esc(unit)}</span>` : ""}</span></div>`;
 
-  const bodyCard = `<div class="card" style="padding:16px;display:flex;flex-direction:column;gap:14px">
-    ${lbl(t("Your data"), "tracking-1")}
+  const editControls = `
     ${seg("profile.gender", Gender.all.map((g) => [g, Gender.name(g)]), gender)}
     ${numStore(t("Age"), "profile.age", 14, 80)}
     ${numStore(t("Height"), "profile.heightCm", 120, 220, t("cm"))}
     ${numStore(t("Weight"), "profile.weightKg", 35, 180, t("kg"))}
     ${numStore(t("Max reps in one set"), "profile.maxReps", 1, 120)}
-    ${seg("profile.level", Level.all.map((l) => [l, Level.name(l)]), level)}
+    ${seg("profile.level", Level.all.map((l) => [l, Level.name(l)]), level)}`;
+  const readControls = `
+    ${roRow(t("Gender"), Gender.name(gender))}
+    ${roRow(t("Age"), store["profile.age"])}
+    ${roRow(t("Height"), store["profile.heightCm"], t("cm"))}
+    ${roRow(t("Weight"), store["profile.weightKg"], t("kg"))}
+    ${roRow(t("Max reps in one set"), store["profile.maxReps"])}
+    ${roRow(t("Fitness level"), Level.name(level))}`;
+
+  const bodyCard = `<div class="card" style="padding:16px;display:flex;flex-direction:column;gap:14px">
+    <div class="between">${lbl(t("Your data"), "tracking-1")}
+      ${editing ? "" : `<button class="badge" data-act="editProfile" style="color:var(--accent)">${t("Edit")}</button>`}</div>
+    ${editing ? editControls : readControls}
     <hr class="hr">
     <div class="between">${lbl(t("Your daily goal"))}<span class="money" style="font-size:18px">${recommendedDailyReps(level, store["profile.maxReps"])}</span></div>
+    ${editing ? `<button class="action-btn money" data-act="saveProfile">${t("Save")}</button>` : ""}
   </div>`;
 
   const measurements = `<div class="card" style="padding:16px;display:flex;flex-direction:column;gap:12px">
@@ -1217,6 +1237,8 @@ root.addEventListener("click", async (e) => {
     case "join": openJoin(arg); return;
     case "addMeasure": openMeasure(); return;
     case "unlockPhotos": photosUnlocked = true; render(); return;
+    case "editProfile": profileEditing = true; render(); return;
+    case "saveProfile": profileEditing = false; render(); return;
     case "toggleLang": store.lang = store.lang === "ru" ? "en" : "ru"; render(); return;
     case "closeSheet": closeSheet(); return;
     case "closeFull": closeFull(); return;
