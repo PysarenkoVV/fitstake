@@ -1,0 +1,1349 @@
+/* FitStake — веб-версия iOS-приложения (порт со Swift).
+   Чистый JS без сборки. Состояние в памяти + профиль в localStorage. */
+
+"use strict";
+
+// ==========================================================================
+// Иконки (упрощённые SVG под SF Symbols из приложения)
+// ==========================================================================
+const PATHS = {
+  flame: '<path d="M12 2c1 3-2 4-2 7a3 3 0 006 0c0-1 0-2-1-3 3 2 4 5 4 8a7 7 0 11-14 0c0-4 4-6 4-9 0-2 2-2 3-3z"/>',
+  trophy: '<path d="M7 4h10v4a5 5 0 01-10 0V4z"/><path d="M7 6H4v1a3 3 0 003 3M17 6h3v1a3 3 0 01-3 3M9 20h6M12 14v6"/>',
+  chartBar: '<path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/>',
+  person: '<circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 4-6 8-6s8 2 8 6"/>',
+  play: '<path d="M6 4l14 8-14 8z"/>',
+  plus: '<path d="M12 5v14M5 12h14"/>',
+  xmark: '<path d="M6 6l12 12M18 6L6 18"/>',
+  check: '<path d="M4 12l5 5L20 6"/>',
+  checkCircle: '<circle cx="12" cy="12" r="10"/><path d="M8 12l3 3 5-5" stroke="#0a0a0a"/>',
+  seal: '<path d="M12 2l2.4 1.8 3-.2 1 2.8 2.6 1.5-.9 2.9.9 2.9-2.6 1.5-1 2.8-3-.2L12 22l-2.4-1.8-3 .2-1-2.8L3 16.3l.9-2.9L3 10.5l2.6-1.5 1-2.8 3 .2z"/><path d="M8.5 12l2.5 2.5 4.5-4.5" stroke="#0a0a0a"/>',
+  search: '<circle cx="11" cy="11" r="7"/><path d="M20 20l-4-4"/>',
+  camera: '<path d="M3 8a2 2 0 012-2h2l1.5-2h7L17 6h2a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V8z"/><circle cx="12" cy="12.5" r="3.5"/>',
+  photo: '<rect x="3" y="4" width="18" height="14" rx="2"/><path d="M3 15l5-5 4 4 3-3 6 6"/><circle cx="8" cy="9" r="1.4"/>',
+  speakerOn: '<path d="M4 9v6h4l5 4V5L8 9H4z"/><path d="M16 8a5 5 0 010 8M18.5 5.5a9 9 0 010 13"/>',
+  speakerOff: '<path d="M4 9v6h4l5 4V5L8 9H4z"/><path d="M22 9l-5 6M17 9l5 6"/>',
+  record: '<circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="4" class="rec-dot"/>',
+  stop: '<circle cx="12" cy="12" r="10"/><rect x="8" y="8" width="8" height="8" rx="1.5" stroke="#0a0a0a"/>',
+  lock: '<rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V8a4 4 0 018 0v3"/>',
+  lockOpen: '<rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V8a4 4 0 017-2.5"/>',
+  faceid: '<path d="M4 8V6a2 2 0 012-2h2M16 4h2a2 2 0 012 2v2M20 16v2a2 2 0 01-2 2h-2M8 20H6a2 2 0 01-2-2v-2"/><path d="M9 10v1M15 10v1M12 9v4l-1 1M9 15s1 1.5 3 1.5S15 15 15 15"/>',
+  chevronLeft: '<path d="M15 5l-7 7 7 7"/>',
+  share: '<path d="M12 3v13M8 7l4-4 4 4M5 12v7a1 1 0 001 1h12a1 1 0 001-1v-7"/>',
+  personXmark: '<circle cx="9" cy="8" r="3.5"/><path d="M3 21c0-3.5 3-5.5 6-5.5M16 9l5 5M21 9l-5 5"/>',
+  xCircle: '<circle cx="12" cy="12" r="10"/><path d="M9 9l6 6M15 9l-6 6" stroke="#0a0a0a"/>',
+  plusCircle: '<circle cx="12" cy="12" r="10"/><path d="M12 8v8M8 12h8" stroke="#0a0a0a"/>',
+  calendar: '<rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 9h18M8 3v4M16 3v4"/>',
+  dollar: '<circle cx="12" cy="12" r="10"/><path d="M12 7v10M14.5 9.2c-.4-1-1.4-1.4-2.5-1.4-1.4 0-2.5.7-2.5 1.9 0 2.7 5 1.3 5 4 0 1.3-1.2 2-2.5 2-1.2 0-2.2-.5-2.6-1.5" stroke="#0a0a0a"/>',
+  bolt: '<path d="M13 2L4 14h6l-1 8 9-12h-6z"/>',
+  trend: '<path d="M3 17l6-6 4 4 8-8M15 7h6v6"/>',
+};
+
+function icon(name, cls = "") {
+  const filled = ["flame", "trophy", "chartBar", "person", "play", "seal", "camera", "bolt"].includes(name) ? "" : "";
+  return `<svg class="icon ${cls}" viewBox="0 0 24 24" aria-hidden="true">${PATHS[name] || ""}</svg>`;
+}
+// сплошная заливка для «жирных» символов
+function iconF(name, cls = "") {
+  return `<svg class="icon filled ${cls}" viewBox="0 0 24 24" aria-hidden="true">${PATHS[name] || ""}</svg>`;
+}
+
+// ==========================================================================
+// i18n — точный словарь EN→RU из Localizable.xcstrings
+// ==========================================================================
+const RU = {
+  "%lld cm": "%lld см", "%lld days — finished": "%lld дней — пройдено",
+  "%lld in one set × %lld sets": "%lld за подход × %lld подхода", "%lld kg": "%lld кг",
+  "%lld of %lld already did it today": "Сегодня уже сделали: %lld из %lld",
+  "%lld reps today. Day %lld of %lld in the bag.": "%lld повторов сегодня. День %lld из %lld позади.",
+  "%lld reps/day": "%lld повторов в день", "%lld years": "%lld лет", "+%lld more": "и ещё %lld",
+  "1 per 2 weeks": "1 в 2 недели", "1 per challenge": "1 за весь челлендж",
+  "A few times a week": "Пару раз в неделю", "Active challenges: %lld": "Активных: %lld",
+  "After": "После", "Age": "Возраст", "All-time": "За всё время", "All-time reps": "Повторов за всё время",
+  "Almost every day": "Почти каждый день", "Athlete": "Атлет", "Balance": "Баланс", "Before": "До",
+  "Before / After": "До / После", "Before / After photos": "Фото До / После", "Before you start": "Перед стартом",
+  "Beginner": "Новичок", "Both arms must be fully in frame": "В кадре должны быть обе руки целиком",
+  "Both legs must be fully in frame": "В кадре должны быть обе ноги целиком", "Buy-in": "Взнос",
+  "Buy-in: %@": "Взнос: %@",
+  "Buy-in: %lld. Drop out — it stays in the pot for the finishers.": "Взнос: %lld. Вылетел — он остаётся в банке для дошедших.",
+  "Camera access is needed for the photo.": "Для фото нужен доступ к камере.",
+  "Camera access is needed to count your reps.": "Для подсчёта повторов нужен доступ к камере.",
+  "Challenge complete!": "Челлендж пройден!", "Challenge total": "Всего за челлендж", "Challenges": "Челленджи",
+  "Close": "Закрыть", "cm": "см", "Combo": "Комбо", "Continue": "Дальше", "Create": "Создать",
+  "Create Challenge": "Создать челлендж", "Currency": "Валюта", "Daily activity — 30 days": "Дневная активность за 30 дней",
+  "Day %lld of %lld": "День %lld из %lld", "Day 1: %lld → Day %lld: %lld": "День 1: %lld → День %lld: %lld",
+  "Day done!": "День закрыт!", "Do today's combo": "Комбо за сегодня", "Do today's push-ups": "Отжимания за сегодня",
+  "Do today's squats": "Приседания за сегодня", "Done": "Готово", "Done today": "Сегодня выполнено",
+  "Done today: %lld/%lld": "Сегодня: %lld/%lld", "Duration (days)": "Длительность (дней)",
+  "Each bar is one day.": "Каждый столбик — один день.", "Eliminated: %lld": "Выбыло: %lld", "Every": "Каждые",
+  "Every day: ": "Каждый день: ", "Every rep is verified by the camera in real time.": "Каждый повтор проверяет камера в реальном времени.",
+  "Every rep is verified by the camera. Coins on the line. Miss too many days and you're out.": "Каждый повтор проверяет камера. Коины на кону. Пропустил лишний день — вылетел.",
+  "Exercise": "Упражнение", "Exercise journal": "Дневной журнал", "Extra reps": "Экстра-повторы", "Female": "Женский",
+  "Find a challenge": "Найти челлендж", "Finish": "Завершить", "Finish: day %lld": "Финиш: день %lld",
+  "Finished: %lld": "Пройдено: %lld", "Fitness level": "Физуха", "Gender": "Пол", "Get started": "Начать",
+  "Goal reached!": "Цель выполнена!", "Height": "Рост", "Honestly — the daily goal is built from this.": "Честно — из этого посчитаем дневную норму.",
+  "How many push-ups can you do in one set?": "Сколько отжиманий делаешь за один подход?",
+  "I barely train": "Почти не тренируюсь", "Increase by: %lld reps": "Прирост: %lld повторов",
+  "Join for": "Вступить за", "kg": "кг", "Leaderboard": "Таблица итогов", "Let's go": "Погнали",
+  "Male": "Мужской", "Max reps": "Максимум за подход", "Max reps in one set": "Максимум за подход",
+  "Max reps in one set: %lld": "Максимум за подход: %lld", "Measurements": "Замеры", "Members: %lld": "Участников: %lld",
+  "Missed days": "Пропуски дней", "New measurement": "Новый замер",
+  "No measurements yet. They're added after each challenge.": "Замеров пока нет. Они добавляются после каждого челленджа.",
+  "No missed days: skip one and you're out. The pot is split between everyone who finishes.": "Пропускать нельзя: пропустил день — выбыл. Банк делится между всеми, кто дошёл до конца.",
+  "None": "Нельзя", "Not enough coins": "Не хватает коинов", "Off": "Выкл", "Open Settings": "Открыть настройки",
+  "Opens at the finish": "Откроется на финише", "Other": "Другой", "per day": "в день", "per week": "в неделю",
+  "Photo BEFORE": "Фото ДО", "Photos appear here once you join a challenge with a BEFORE photo.": "Фото появятся, когда вступишь в челлендж с фото ДО.",
+  "Point the camera at yourself": "Наведи камеру на себя", "Practice": "Тренировка", "Private": "Приватный",
+  "Prize pool": "Призовой фонд", "Profile": "Профиль", "Progression": "Прогрессия",
+  "Progressive overload": "Режим прогрессивной нагрузки", "Public": "Публичный", "Public challenge": "Публичный челлендж",
+  "Push-ups": "Отжимания", "Push-ups per day": "Отжиманий в день", "Regular": "Занимаюсь", "Reps": "Повторы",
+  "Reps can be split into any number of sets during the day.": "Норму можно набирать любым числом подходов в течение дня.",
+  "reps per day": "повторов в день", "Reps per day": "Повторов в день", "Retake": "Переснять", "Rules": "Правила",
+  "Save": "Сохранить", "Save to profile": "Сохранить в профиль", "Schedule": "Расписание", "Share": "Поделиться",
+  "Share result": "Поделиться результатом", "Show result": "Показать результат", "Squats": "Приседания",
+  "Squats per day": "Приседаний в день", "Stake amount": "Сумма ставки", "Start today's workout": "Начать тренировку дня",
+  "Starting balance": "Стартовый баланс", "Statistics": "Статистика", "Stats": "Статистика", "Take a photo": "Сделать фото",
+  "Test currency — no real money.": "Тестовая валюта — настоящие деньги не участвуют.",
+  "The buy-in is deducted from your balance right away. Test currency — no real money.": "Взнос сразу списывается с баланса. Валюта тестовая — настоящие деньги не участвуют.",
+  "The challenge runs %lld days.": "Челлендж идёт %lld дней.", "The daily goal grows as the challenge goes on.": "Дневная норма растёт по ходу челленджа.",
+  "The goal grows by %lld reps every day — by day %lld it's %lld.": "Норма растёт на %lld повторов каждый день — к дню %lld это %lld.",
+  "The goal grows by %lld reps every week — by day %lld it's %lld.": "Норма растёт на %lld повторов каждую неделю — к дню %lld это %lld.",
+  "The photo stays hidden until the finish — then it appears next to your AFTER photo.": "Фото скрыто до финиша — там оно встанет рядом с фото ПОСЛЕ.",
+  "Title": "Название", "Today": "Сегодня", "Total reps": "Всего повторов", "Total reps over the last 4 weeks.": "Сумма повторов за последние 4 недели.",
+  "Unlock with Face ID": "Открыть по Face ID", "Upload from library": "Загрузить из галереи", "Week %lld": "Неделя %lld",
+  "Weekly volume": "Недельный объём", "Weight": "Вес", "Weight: %lld kg": "Вес: %lld кг",
+  "Yesterday %lld dropped out": "Вчера выбыло: %lld", "You": "Ты",
+  "You can miss 1 day during the whole challenge, more and you're out. The pot is split between everyone who finishes.": "Можно пропустить 1 день за весь челлендж, больше — выбываешь. Банк делится между всеми, кто дошёл до конца.",
+  "You can miss 1 day every 2 weeks, more and you're out. The pot is split between everyone who finishes.": "Можно пропускать 1 день раз в 2 недели, больше — выбываешь. Банк делится между всеми, кто дошёл до конца.",
+  "You take home": "Забираешь", "You'd win": "Заберёшь",
+  "You're not in any challenge yet. Join one and put some coins on the line.": "Ты пока не в игре. Вступи в челлендж и поставь коины на кон.",
+  "Your age": "Твой возраст", "Your Challenges": "Твои челленджи", "Your daily goal": "Твоя дневная норма",
+  "Your data": "Твои данные", "Your fitness level": "Твоя физуха", "Your gender": "Твой пол", "Your height": "Твой рост",
+  "Your starting point — at the finish you'll see how far you've come.": "Твоя точка отсчёта — на финише увидишь, как далеко ушёл.",
+  "Your weight": "Твой вес", "Your whole body must be in frame": "В кадре должно быть всё тело целиком", "Yours": "Твои",
+  "Language": "Язык",
+};
+
+// Перевод + подстановка %lld / %@ по порядку аргументов.
+function t(key, ...args) {
+  let s = store.lang === "ru" && RU[key] != null ? RU[key] : key;
+  let i = 0;
+  s = s.replace(/%lld|%@/g, () => (i < args.length ? String(args[i++]) : ""));
+  return s;
+}
+
+// ==========================================================================
+// Персистентность (аналог @AppStorage)
+// ==========================================================================
+const DEFAULTS = {
+  onboarded: false, "profile.gender": "male", "profile.age": 25, "profile.heightCm": 178,
+  "profile.weightKg": 75, "profile.level": "regular", "profile.maxReps": 15, dailyGoal: 50,
+  currencyUSD: true, voiceEnabled: false, lang: (navigator.language || "en").startsWith("ru") ? "ru" : "en",
+};
+const store = new Proxy({}, {
+  get(_, k) {
+    const raw = localStorage.getItem("fs." + k);
+    if (raw == null) return DEFAULTS[k];
+    try { return JSON.parse(raw); } catch { return raw; }
+  },
+  set(_, k, v) { localStorage.setItem("fs." + k, JSON.stringify(v)); return true; },
+});
+
+// ==========================================================================
+// Валюта: тестовые коины как $ или локальная валюта устройства
+// ==========================================================================
+const REGION_CCY = {
+  RU: "RUB", UA: "UAH", BY: "BYN", KZ: "KZT", GB: "GBP", US: "USD", CA: "CAD", AU: "AUD",
+  JP: "JPY", CN: "CNY", IN: "INR", BR: "BRL", TR: "TRY", PL: "PLN", CH: "CHF", SE: "SEK",
+  NO: "NOK", DK: "DKK", DE: "EUR", FR: "EUR", ES: "EUR", IT: "EUR", NL: "EUR", PT: "EUR",
+};
+const Currency = (() => {
+  let region = "US";
+  try { region = new Intl.Locale(navigator.language).maximize().region || "US"; } catch {}
+  const code = REGION_CCY[region] || "USD";
+  let symbol = "$";
+  try {
+    const parts = new Intl.NumberFormat(navigator.language, { style: "currency", currency: code }).formatToParts(1);
+    symbol = (parts.find((p) => p.type === "currency") || {}).value || code;
+  } catch {}
+  return { code, symbol };
+})();
+
+const fmt = (n) => Number(n).toLocaleString("en-US");
+function coin(value) {
+  const sym = store.currencyUSD ? "$" : Currency.symbol;
+  return `<span class="money">${sym}${fmt(value)}</span>`;
+}
+const showCurrencyToggle = Currency.code !== "USD";
+
+// ==========================================================================
+// Модели и вычисляемые свойства (порт Models.swift)
+// ==========================================================================
+const uid = (() => { let n = 0; return () => "id" + ++n; })();
+
+const Exercise = {
+  displayName: (e) => (e === "pushups" ? t("Push-ups") : t("Squats")),
+  actionText: (e) => (e === "pushups" ? t("Do today's push-ups") : t("Do today's squats")),
+};
+
+const MissPolicy = {
+  displayName: (p) => ({ never: t("None"), oneTotal: t("1 per challenge"), onePerTwoWeeks: t("1 per 2 weeks") }[p]),
+  rulesText: (p) => ({
+    never: t("No missed days: skip one and you're out. The pot is split between everyone who finishes."),
+    oneTotal: t("You can miss 1 day during the whole challenge, more and you're out. The pot is split between everyone who finishes."),
+    onePerTwoWeeks: t("You can miss 1 day every 2 weeks, more and you're out. The pot is split between everyone who finishes."),
+  }[p]),
+  all: ["never", "oneTotal", "onePerTwoWeeks"],
+};
+
+function progIncrements(prog, day) {
+  if (!prog.step || prog.step <= 0 || day <= 1) return 0;
+  return prog.period === "day" ? day - 1 : Math.floor((day - 1) / 7);
+}
+
+const C = {
+  pot: (c) => c.buyIn * c.participants.length,
+  active: (c) => c.participants.filter((p) => p.state === "active"),
+  eliminated: (c) => c.participants.length - C.active(c).length,
+  payout: (c) => Math.floor(C.pot(c) / Math.max(C.active(c).length, 1)),
+  me: (c) => c.participants.find((p) => p.isMe),
+  isJoined: (c) => !!C.me(c),
+  doneTodayCount: (c) => C.active(c).filter((p) => p.doneToday).length,
+  myToday: (c, ex) => c.myTodayReps[ex] || 0,
+  myTodayTotal: (c) => c.goals.reduce((s, g) => s + C.myToday(c, g.exercise), 0),
+  norm: (c, g, day) => g.repsPerDay + c.progression.step * progIncrements(c.progression, day ?? c.currentDay),
+  repsNorm: (c, day) => c.goals.reduce((s, g) => s + C.norm(c, g, day), 0),
+  isTodayDone: (c) => c.goals.every((g) => C.myToday(c, g.exercise) >= C.norm(c, g)),
+  isFinished: (c) => c.currentDay >= c.durationDays && C.isTodayDone(c),
+  actionText: (c) => (c.goals.length > 1 ? t("Do today's combo") : Exercise.actionText(c.goals[0].exercise)),
+  exerciseNames: (c) => c.goals.map((g) => Exercise.displayName(g.exercise)).join(" + "),
+  goalsText: (c) => c.goals.map((g) => `${Exercise.displayName(g.exercise)} ${C.norm(c, g)}`).join(" + "),
+};
+
+// ==========================================================================
+// Мок-данные (до появления бэкенда) — порт AppState.swift
+// ==========================================================================
+const MOCK_NAMES = ["Vova", "Alex", "Dima", "Masha", "Egor", "Kate", "Leo", "Nastya", "Max", "Ira", "Tim", "Olya", "Den", "Sveta", "Roma"];
+
+function mockParticipants(total, eliminated, othersDoneToday, includeMe, repsPerDay) {
+  const result = [];
+  if (includeMe) result.push({ id: uid(), name: "", isMe: true, state: "active", doneToday: false, todayReps: 0 });
+  const othersCount = total - result.length;
+  for (let i = 0; i < othersCount; i++) {
+    const base = MOCK_NAMES[i % MOCK_NAMES.length];
+    const name = i < MOCK_NAMES.length ? base : `${base} ${Math.floor(i / MOCK_NAMES.length) + 1}`;
+    result.push({ id: uid(), name, isMe: false, state: "active", doneToday: false, todayReps: 0 });
+  }
+  let toEliminate = eliminated, index = result.length - 1;
+  while (toEliminate > 0 && index >= 0) {
+    if (!result[index].isMe) { result[index].state = "eliminated"; toEliminate--; }
+    index--;
+  }
+  let toMark = othersDoneToday;
+  for (const p of result) {
+    if (toMark <= 0) break;
+    if (!p.isMe && p.state === "active") { p.doneToday = true; toMark--; }
+  }
+  const extra = [0, 35, 10, 20];
+  let doneIndex = 0;
+  result.forEach((p, i) => {
+    if (p.isMe || p.state !== "active") return;
+    if (p.doneToday) { p.todayReps = repsPerDay + Math.floor(repsPerDay * extra[doneIndex % extra.length] / 100); doneIndex++; }
+    else p.todayReps = (i * 37 + 11) % repsPerDay;
+  });
+  return result;
+}
+
+function newChallenge(o) {
+  return Object.assign({
+    id: uid(), missPolicy: "oneTotal", progression: { step: 0, period: "day" },
+    myTodayReps: {}, myTotalReps: 0, startWeight: null, startMaxReps: null,
+    beforePhoto: null, afterPhoto: null, isCompleted: false,
+  }, o);
+}
+
+function mockChallenges() {
+  return [
+    newChallenge({ title: "100 Push-ups / 30 Days", goals: [{ exercise: "pushups", repsPerDay: 100 }], durationDays: 30, buyIn: 50, isPublic: true, currentDay: 12, yesterdayDropouts: 4, participants: mockParticipants(47, 9, 34, true, 100), myTotalReps: 1140 }),
+    newChallenge({ title: "Combo 100 + 50", goals: [{ exercise: "pushups", repsPerDay: 100 }, { exercise: "squats", repsPerDay: 50 }], durationDays: 30, buyIn: 75, isPublic: true, currentDay: 3, yesterdayDropouts: 1, participants: mockParticipants(19, 2, 8, true, 150), myTotalReps: 260 }),
+    newChallenge({ title: "Morning 20", goals: [{ exercise: "pushups", repsPerDay: 20 }], durationDays: 14, buyIn: 20, isPublic: false, missPolicy: "never", currentDay: 14, yesterdayDropouts: 0, participants: mockParticipants(4, 0, 2, true, 20), myTotalReps: 260, startWeight: 78, startMaxReps: 12 }),
+    newChallenge({ title: "Push-up Sprint 50", goals: [{ exercise: "pushups", repsPerDay: 50 }], durationDays: 7, buyIn: 100, isPublic: true, progression: { step: 5, period: "day" }, currentDay: 2, yesterdayDropouts: 1, participants: mockParticipants(23, 2, 11, false, 55) }),
+    newChallenge({ title: "Squats 100 / Day", goals: [{ exercise: "squats", repsPerDay: 100 }], durationDays: 14, buyIn: 25, isPublic: true, missPolicy: "onePerTwoWeeks", currentDay: 4, yesterdayDropouts: 2, participants: mockParticipants(31, 5, 18, false, 100) }),
+    newChallenge({ title: "Beginner 10 / Day", goals: [{ exercise: "pushups", repsPerDay: 10 }], durationDays: 21, buyIn: 10, isPublic: true, currentDay: 5, yesterdayDropouts: 3, participants: mockParticipants(156, 12, 96, false, 10) }),
+  ];
+}
+
+const DAY = 86400000;
+function startOfDay(d) { const x = new Date(d); x.setHours(0, 0, 0, 0); return x.getTime(); }
+
+function mockHistory(joined) {
+  const today = startOfDay(Date.now());
+  const out = [];
+  for (let back = 29; back >= 1; back--) {
+    const date = today - back * DAY;
+    if (back % 9 === 0) { out.push({ id: uid(), date, entries: [] }); continue; }
+    const entries = joined.map((ch, offset) => {
+      const seed = back * 7 + offset * 3, norm = C.repsNorm(ch);
+      let reps;
+      switch (seed % 6) {
+        case 0: reps = Math.floor(norm * 7 / 10); break;
+        case 1: case 2: reps = norm + Math.floor(norm / 5); break;
+        default: reps = norm;
+      }
+      return { id: uid(), title: ch.title, norm, reps };
+    });
+    out.push({ id: uid(), date, entries });
+  }
+  return out;
+}
+
+// ==========================================================================
+// AppState
+// ==========================================================================
+const app = {
+  balance: 500,
+  transactions: [{ id: uid(), kind: "start", amount: 500, date: Date.now() }],
+  challenges: mockChallenges(),
+  history: [],
+  measurements: [],
+  totalPushups: 1240,
+};
+app.history = mockHistory(app.challenges.filter(C.isJoined));
+{
+  const w = store["profile.weightKg"], m = store["profile.maxReps"];
+  if (store.onboarded && w > 0 && m > 0) app.measurements = [{ id: uid(), date: Date.now(), weight: w, maxReps: m }];
+}
+
+function spend(amount, title) {
+  if (app.balance < amount) return false;
+  app.balance -= amount;
+  app.transactions.unshift({ id: uid(), kind: "buyIn", challenge: title, amount: -amount, date: Date.now() });
+  return true;
+}
+
+function logEntry(title, norm, reps) {
+  const today = startOfDay(Date.now());
+  let last = app.history[app.history.length - 1];
+  if (!last || startOfDay(last.date) !== today) { last = { id: uid(), date: today, entries: [] }; app.history.push(last); }
+  const e = last.entries.find((x) => x.title === title);
+  if (e) { e.reps += reps; if (norm != null) e.norm = norm; }
+  else last.entries.push({ id: uid(), title, norm, reps });
+}
+
+function joinChallenge(ch, weight, maxReps, beforePhoto) {
+  if (C.isJoined(ch) || !spend(ch.buyIn, ch.title)) return false;
+  ch.participants.unshift({ id: uid(), name: "", isMe: true, state: "active", doneToday: false, todayReps: 0 });
+  ch.startWeight = weight; ch.startMaxReps = maxReps; ch.beforePhoto = beforePhoto || null;
+  return true;
+}
+
+function createChallenge(o) {
+  if (!spend(o.buyIn, o.title)) return false;
+  app.challenges.unshift(newChallenge(Object.assign({ currentDay: 1, yesterdayDropouts: 0, participants: [{ id: uid(), name: "", isMe: true, state: "active", doneToday: false, todayReps: 0 }] }, o)));
+  return true;
+}
+
+// Плюсует подход; возвращает true, если дневная норма закрылась впервые.
+function addReps(ch, counts) {
+  const total = Object.values(counts).reduce((a, b) => a + b, 0);
+  if (total <= 0) return false;
+  const me = C.me(ch);
+  if (!me) return false;
+  const wasDone = C.isTodayDone(ch);
+  app.totalPushups += total;
+  logEntry(ch.title, C.repsNorm(ch), total);
+  for (const [ex, reps] of Object.entries(counts)) if (reps > 0) ch.myTodayReps[ex] = (ch.myTodayReps[ex] || 0) + reps;
+  ch.myTotalReps += total;
+  me.todayReps = C.myTodayTotal(ch);
+  if (C.isTodayDone(ch)) me.doneToday = true;
+  return !wasDone && C.isTodayDone(ch);
+}
+
+function completeChallenge(ch, afterPhoto, weight, maxReps) {
+  ch.afterPhoto = afterPhoto || null; ch.isCompleted = true;
+  addMeasurement(weight, maxReps);
+}
+function addMeasurement(weight, maxReps) { app.measurements.push({ id: uid(), date: Date.now(), weight, maxReps }); }
+
+// ==========================================================================
+// Онбординг: уровни и расчёт нормы
+// ==========================================================================
+const Gender = { all: ["male", "female", "other"], name: (g) => ({ male: t("Male"), female: t("Female"), other: t("Other") }[g]) };
+const Level = {
+  all: ["beginner", "regular", "athlete"],
+  name: (l) => ({ beginner: t("Beginner"), regular: t("Regular"), athlete: t("Athlete") }[l]),
+  subtitle: (l) => ({ beginner: t("I barely train"), regular: t("A few times a week"), athlete: t("Almost every day") }[l]),
+  sets: (l) => ({ beginner: 2, regular: 3, athlete: 4 }[l]),
+};
+function recommendedDailyReps(level, maxReps) {
+  const rounded = Math.floor((maxReps * Level.sets(level) + 5) / 10) * 10;
+  return Math.min(Math.max(rounded, 10), 300);
+}
+
+// ==========================================================================
+// UI-состояние и рендер (см. app-ui.js — экраны ниже в этом же файле)
+// ==========================================================================
+const ui = { screen: "onboarding", tab: "yours", detailId: null, sheet: null, full: null, onbStep: 0, form: null };
+
+function esc(s) { return String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c])); }
+
+const root = document.getElementById("app");
+let scrollMemo = {};
+
+function render() {
+  if (ui.screen === "onboarding") { root.innerHTML = Onboarding(); afterRender(); return; }
+  let html = "";
+  if (ui.detailId) html = DetailScreen(ui.detailId);
+  else {
+    html = `<div class="screen" id="scroller">${{ yours: YoursTab, challenges: ChallengesTab, stats: StatsTab, profile: ProfileTab }[ui.tab]()}</div>`;
+  }
+  html += TabBar();
+  if (ui.sheet) html += ui.sheet();
+  if (ui.full) html += ui.full();
+  root.innerHTML = html;
+  afterRender();
+}
+
+function go(tab) { ui.tab = tab; ui.detailId = null; render(); window.scrollTo(0, 0); }
+function openDetail(id) { ui.detailId = id; render(); window.scrollTo(0, 0); }
+function back() { ui.detailId = null; render(); window.scrollTo(0, 0); }
+function toast(msg) {
+  const el = document.createElement("div");
+  el.textContent = msg;
+  el.style.cssText = "position:fixed;left:50%;bottom:calc(80px + env(safe-area-inset-bottom));transform:translateX(-50%);background:#222;color:#fff;padding:12px 18px;border-radius:12px;z-index:200;font-weight:600;box-shadow:0 8px 24px rgba(0,0,0,.5)";
+  document.body.appendChild(el);
+  setTimeout(() => el.remove(), 1900);
+}
+
+// ==========================================================================
+// Мелкие компоненты
+// ==========================================================================
+function bar(frac, money) {
+  const f = Math.max(0, Math.min(1, frac || 0)) * 100;
+  return `<div class="progress ${money ? "money" : ""}"><span style="width:${f}%"></span></div>`;
+}
+function badge(text, color) { return `<span class="badge" style="color:${color}">${esc(text)}</span>`; }
+function lbl(text, extra = "") { return `<span class="label secondary ${extra}" style="font-size:11px">${esc(text)}</span>`; }
+
+function screenHeader(title, right = "") {
+  return `<div class="between" style="padding-top:8px;margin-bottom:2px">
+    <h1 class="screen-title">${esc(title)}</h1>
+    <div class="row gap8">${right}${langToggle()}</div>
+  </div>`;
+}
+function langToggle() {
+  const en = store.lang === "en", tag = (a, on) => `<span style="color:${on ? "#fff" : "var(--text-secondary)"}">${a}</span>`;
+  return `<button class="badge" data-act="toggleLang" style="color:var(--text-secondary)">${tag("EN", en)}·${tag("RU", !en)}</button>`;
+}
+
+function TabBar() {
+  const tabs = [["yours", t("Yours"), "trophy"], ["challenges", t("Challenges"), "flame"], ["stats", t("Stats"), "chartBar"], ["profile", t("Profile"), "person"]];
+  return `<nav class="tabbar">${tabs.map(([k, name, ic]) =>
+    `<button data-act="tab:${k}" class="${ui.tab === k && !ui.detailId ? "active" : ""}">${iconF(ic)}<span>${esc(name)}</span></button>`).join("")}</nav>`;
+}
+
+// ==========================================================================
+// Карточка челленджа
+// ==========================================================================
+function ChallengeCard(c, withPlay) {
+  const joined = C.isJoined(c);
+  const doneBorder = joined && C.isTodayDone(c) ? "done" : "";
+  const todayRows = c.goals.map((g) => {
+    const reps = C.myToday(c, g.exercise), norm = C.norm(c, g), done = reps >= norm;
+    return `<div style="display:flex;flex-direction:column;gap:5px">
+      <div class="between" style="align-items:baseline">
+        ${lbl(Exercise.displayName(g.exercise), "tracking-1")}
+        <span class="money ${done ? "c-money" : "c-white"}" style="font-size:28px">${reps} / ${norm}</span>
+      </div>${bar(reps / norm, done)}</div>`;
+  }).join("");
+
+  const joinedFooter = `
+    ${todayRows}
+    <div class="between" style="align-items:baseline">
+      <div><div>${lbl(t("Challenge total"), "tracking-1")}</div><div class="money" style="font-size:20px">${c.myTotalReps}</div></div>
+      <div style="text-align:right"><div>${lbl(t("Prize pool"), "tracking-1")}</div><div class="c-money" style="font-size:16px">${coin(C.pot(c))}</div></div>
+    </div>`;
+  const openFooter = `
+    <div class="between" style="align-items:baseline">
+      <div><div>${lbl(t("Prize pool"), "tracking-1")}</div><div class="c-money" style="font-size:26px">${coin(C.pot(c))}</div></div>
+      <div style="text-align:right"><div>${lbl(t("You'd win"), "tracking-1")}</div><div class="money" style="font-size:20px">${coin(C.payout(c))}</div></div>
+    </div>`;
+
+  const canPlay = joined && !C.isTodayDone(c);
+  const playBtn = canPlay ? (withPlay
+    ? `<button data-act="play:${c.id}" style="width:36px;height:36px;border-radius:50%;background:var(--accent);color:#000;display:flex;align-items:center;justify-content:center">${iconF("play")}</button>`
+    : `<span style="width:36px;height:36px;border-radius:50%;background:var(--accent);color:#000;display:flex;align-items:center;justify-content:center">${iconF("play")}</span>`) : "";
+
+  return `<div class="card ${doneBorder}" data-act="open:${c.id}" style="padding:20px;display:flex;flex-direction:column;gap:14px">
+    <div class="between" style="align-items:flex-start">
+      <div style="font-size:20px;font-weight:700">${esc(c.title)}</div>
+      ${badge(c.isPublic ? t("Public") : t("Private"), c.isPublic ? "var(--text-secondary)" : "var(--purple)")}
+    </div>
+    <div class="between">
+      ${!joined ? lbl(C.goalsText(c)) : "<span></span>"}
+      ${lbl(t("Day %lld of %lld", c.currentDay, c.durationDays))}
+    </div>
+    ${bar(c.currentDay / c.durationDays)}
+    ${joined ? joinedFooter : openFooter}
+    <hr class="hr">
+    <div class="between label" style="font-size:11px">
+      <span class="secondary">${t("Members: %lld", c.participants.length)}${C.eliminated(c) > 0 ? ` &nbsp;<span style="color:var(--red)">${t("Eliminated: %lld", C.eliminated(c))}</span>` : ""}</span>
+      ${playBtn}
+    </div>
+  </div>`;
+}
+
+// ==========================================================================
+// Вкладка «Твои»
+// ==========================================================================
+function YoursTab() {
+  const mine = app.challenges.filter(C.isJoined);
+  const doneToday = mine.filter(C.isTodayDone).length;
+  const nextUp = mine.find((c) => !C.isTodayDone(c));
+  const statsCard = `<div class="card center" style="padding:24px 16px">
+    ${lbl(t("All-time reps"), "tracking-15")}
+    <div class="money" style="font-size:56px;margin:6px 0">${app.totalPushups}</div>
+    ${mine.length ? `<div class="row label" style="justify-content:center;gap:18px;font-size:10px">
+      <span class="secondary">${t("Active challenges: %lld", mine.length)}</span>
+      <span style="color:${doneToday === mine.length ? "var(--money)" : "#fff"}">${t("Done today: %lld/%lld", doneToday, mine.length)}</span></div>` : ""}
+  </div>`;
+  const empty = `<div class="card center" style="padding:24px;display:flex;flex-direction:column;align-items:center;gap:14px">
+    ${icon("flame", "")}
+    <div class="secondary" style="font-weight:500">${t("You're not in any challenge yet. Join one and put some coins on the line.")}</div>
+    <button class="action-btn" data-act="findChallenge">${icon("search")}${t("Find a challenge")}</button>
+  </div>`;
+  return screenHeader(t("Your Challenges")) + `<div class="stack">
+    ${statsCard}
+    ${nextUp ? `<button class="action-btn" data-act="play:${nextUp.id}">${iconF("play")}${t("Start today's workout")}</button>` : ""}
+    ${mine.length ? mine.map((c) => ChallengeCard(c, true)).join("") : empty}
+  </div>`;
+}
+
+// ==========================================================================
+// Вкладка «Челленджи»
+// ==========================================================================
+function ChallengesTab() {
+  const createPill = `<button class="pill-btn" data-act="create">${icon("plus")}${t("Create")}</button>`;
+  return screenHeader(t("Challenges"), createPill) + `<div class="stack">
+    ${app.challenges.map((c) => ChallengeCard(c, false)).join("")}
+    <button class="action-btn" data-act="create">${icon("plus")}${t("Create Challenge")}</button>
+  </div>`;
+}
+
+// ==========================================================================
+// Детали челленджа
+// ==========================================================================
+function DetailScreen(id) {
+  const c = app.challenges.find((x) => x.id === id);
+  if (!c) { ui.detailId = null; return ChallengesTab(); }
+  const joined = C.isJoined(c);
+  const nav = `<div class="navbar"><button class="icon-btn" data-act="back">${icon("chevronLeft")}</button><div class="title">${esc(c.title)}</div><div style="width:32px"></div></div>`;
+  let body;
+  if (joined) {
+    body = [
+      totalCard(c), todayCard(c),
+      C.isFinished(c) ? `<button class="action-btn money" data-act="showResult:${c.id}">${iconF("trophy")}${t("Show result")}</button>` : "",
+      callToAction(c), potCard(c), socialCard(c), rulesCard(c),
+      c.beforePhoto ? beforeAfterCard(c) : "", participantsCard(c), callToAction(c),
+    ].join("");
+  } else {
+    body = [potCard(c), callToAction(c), rulesCard(c), participantsCard(c)].join("");
+  }
+  return `<div class="fullscreen" id="detail-scroll" style="z-index:1">${nav}<div class="screen" style="padding-top:14px">${body}</div></div>`;
+}
+
+function potCard(c) {
+  return `<div class="card" style="padding:16px;display:flex;flex-direction:column;gap:14px">
+    <div class="between" style="align-items:baseline">
+      <div>${lbl(t("Prize pool"), "tracking-1")}<div class="c-money" style="font-size:38px">${coin(C.pot(c))}</div></div>
+      <div style="text-align:right">${lbl(t("You'd win"), "tracking-1")}<div class="money" style="font-size:24px">${coin(C.payout(c))}</div></div>
+    </div>
+    ${bar(c.currentDay / c.durationDays)}
+    <div class="wrap label secondary" style="font-size:10px">
+      <span>${esc(C.exerciseNames(c))}</span><span>${t("Day %lld of %lld", c.currentDay, c.durationDays)}</span>
+      <span>${t("Members: %lld", c.participants.length)}</span>
+      ${C.eliminated(c) > 0 ? `<span style="color:var(--red)">${t("Eliminated: %lld", C.eliminated(c))}</span>` : ""}
+    </div>
+  </div>`;
+}
+function totalCard(c) {
+  return `<div class="card center" style="padding:24px 16px">
+    ${lbl(t("Challenge total"), "tracking-15")}
+    <div class="money" style="font-size:56px;margin:6px 0">${c.myTotalReps}</div>
+    ${lbl(C.exerciseNames(c), "tracking-1")}
+  </div>`;
+}
+function todayCard(c) {
+  const done = C.isTodayDone(c);
+  let inner;
+  if (c.goals.length === 1) {
+    const g = c.goals[0], reps = C.myToday(c, g.exercise), norm = C.norm(c, g), d = reps >= norm;
+    inner = `<div class="between" style="align-items:baseline">${lbl(t("Today"), "tracking-1")}<span class="money ${d ? "c-money" : "c-white"}" style="font-size:24px">${reps} / ${norm}</span></div>${bar(reps / norm, d)}`;
+  } else {
+    inner = lbl(t("Today"), "tracking-1") + c.goals.map((g) => {
+      const reps = C.myToday(c, g.exercise), norm = C.norm(c, g), d = reps >= norm;
+      return `<div class="between" style="align-items:baseline"><span style="font-weight:600;font-size:15px">${esc(Exercise.displayName(g.exercise))}</span><span class="money ${d ? "c-money" : "c-white"}" style="font-size:18px">${reps} / ${norm}</span></div>${bar(reps / norm, d)}`;
+    }).join("");
+  }
+  return `<div class="card ${done ? "done" : ""}" style="padding:16px;display:flex;flex-direction:column;gap:10px">${inner}</div>`;
+}
+function socialCard(c) {
+  return `<div class="card" style="padding:16px;display:flex;flex-direction:column;gap:10px">
+    <div class="row gap8" style="font-weight:700;font-size:15px">${icon("flame", "")}<span>${t("%lld of %lld already did it today", C.doneTodayCount(c), C.active(c).length)}</span></div>
+    ${c.yesterdayDropouts > 0 ? `<div class="row gap8" style="font-weight:700;font-size:15px"><span style="color:var(--red);display:flex">${icon("personXmark")}</span><span>${t("Yesterday %lld dropped out", c.yesterdayDropouts)}</span></div>` : ""}
+  </div>`;
+}
+function callToAction(c) {
+  if (C.isJoined(c)) {
+    const done = C.isTodayDone(c);
+    return `<button class="action-btn ${done ? "money" : ""}" data-act="play:${c.id}">${iconF(done ? "plusCircle" : "flame")}${done ? t("Extra reps") : C.actionText(c)}</button>`;
+  }
+  return `<button class="action-btn" data-act="join:${c.id}">${t("Join for")} ${coin(c.buyIn)}</button>`;
+}
+function ruleRow(ic, html) { return `<div class="rule-row">${icon(ic)}<div>${html}</div></div>`; }
+function rulesCard(c) {
+  const rows = [ruleRow("flame", `<b>${t("Every day: ")}${esc(C.goalsText(c))}</b>`)];
+  if (c.progression.step > 0) {
+    const step = c.progression.step, fin = C.repsNorm(c, c.durationDays);
+    rows.push(ruleRow("trend", c.progression.period === "day"
+      ? t("The goal grows by %lld reps every day — by day %lld it's %lld.", step, c.durationDays, fin)
+      : t("The goal grows by %lld reps every week — by day %lld it's %lld.", step, c.durationDays, fin)));
+  }
+  rows.push(ruleRow("chartBar", t("Reps can be split into any number of sets during the day.")));
+  rows.push(ruleRow("camera", t("Every rep is verified by the camera in real time.")));
+  rows.push(ruleRow("calendar", t("The challenge runs %lld days.", c.durationDays)));
+  rows.push(ruleRow("personXmark", MissPolicy.rulesText(c.missPolicy)));
+  rows.push(ruleRow("dollar", t("Buy-in: %lld. Drop out — it stays in the pot for the finishers.", c.buyIn)));
+  return `<div class="card" style="padding:16px;display:flex;flex-direction:column;gap:12px">${lbl(t("Rules"), "tracking-1")}${rows.join("")}</div>`;
+}
+function beforeAfterCard(c) {
+  return `<div class="card" style="padding:16px;display:flex;flex-direction:column;gap:12px">${lbl(t("Before / After"), "tracking-1")}
+    <div class="grid2">
+      <div style="display:flex;flex-direction:column;gap:6px">
+        <div class="photo-slot locked">${c.beforePhoto ? `<img src="${c.beforePhoto}">` : ""}<div class="lock-overlay">${iconF("lock")}<span class="label" style="font-size:9px">${t("Opens at the finish")}</span></div></div>
+        ${lbl(t("Before"))}
+      </div>
+      <div style="display:flex;flex-direction:column;gap:6px">
+        <div class="photo-slot">${icon("camera")}<span class="label" style="font-size:9px">${t("Finish: day %lld", c.durationDays)}</span></div>
+        ${lbl(t("After"))}
+      </div>
+    </div></div>`;
+}
+function participantsCard(c) {
+  const ranked = c.participants.slice().sort((a, b) => {
+    if ((a.state === "eliminated") !== (b.state === "eliminated")) return a.state === "eliminated" ? 1 : -1;
+    if (a.todayReps !== b.todayReps) return b.todayReps - a.todayReps;
+    return a.isMe ? -1 : 1;
+  });
+  const norm = C.repsNorm(c);
+  const top = ranked.slice(0, 10);
+  const myRank = ranked.findIndex((p) => p.isMe) + 1;
+  const myBelow = myRank > top.length && myRank > 0;
+  const hidden = ranked.length - top.length - (myBelow ? 1 : 0);
+  const rankBadge = (r) => (r === 1 ? "🥇" : r === 2 ? "🥈" : r === 3 ? "🥉" : `<span class="rank">${r}.</span>`);
+  const row = (p, rank) => {
+    const done = p.todayReps >= norm;
+    return `<div class="row gap12" style="opacity:${p.state === "eliminated" ? 0.45 : 1}">
+      <div class="rank" style="width:28px">${rankBadge(rank)}</div>
+      <div class="avatar">${p.isMe ? icon("person") : esc(p.name.slice(0, 1))}</div>
+      <div style="flex:1;display:flex;flex-direction:column;gap:6px">
+        <span style="${p.isMe ? "font-weight:700" : ""}">${p.isMe ? t("You") : esc(p.name)}</span>
+        ${p.state === "active" ? bar(p.todayReps / norm, done) : ""}
+      </div>
+      ${p.state === "eliminated" ? `<span style="color:var(--red);display:flex">${iconF("xCircle")}</span>` : `<span class="money ${done ? "c-money" : ""}" style="font-size:14px;color:${done ? "" : "rgba(255,255,255,.85)"}">${p.todayReps} / ${norm}</span>`}
+    </div>`;
+  };
+  return `<div class="card" style="padding:16px;display:flex;flex-direction:column;gap:14px">${lbl(t("Leaderboard"), "tracking-1")}
+    ${top.map((p, i) => row(p, i + 1)).join("")}
+    ${hidden > 0 ? `<span class="label secondary">${t("+%lld more", hidden)}</span>` : ""}
+    ${myBelow ? `<hr class="hr">${row(C.me(c), myRank)}` : ""}
+  </div>`;
+}
+
+// ==========================================================================
+// Статистика
+// ==========================================================================
+function StatsTab() {
+  const joined = app.challenges.filter(C.isJoined);
+  const dot = (color, title) => `<div class="row gap8"><span class="chart-dot" style="background:${color}"></span><span class="label" style="font-size:11px;letter-spacing:1px">${esc(title)}</span></div>`;
+
+  // Недельный объём
+  const reps = app.history.slice(-28).map((d) => d.entries.reduce((s, e) => s + e.reps, 0));
+  const padded = new Array(Math.max(0, 28 - reps.length)).fill(0).concat(reps);
+  const weeks = [0, 1, 2, 3].map((w) => padded.slice(w * 7, w * 7 + 7).reduce((a, b) => a + b, 0));
+
+  // Активность по дням
+  const days = app.history.slice(-30).map((d) => ({ date: d.date, reps: d.entries.reduce((s, e) => s + e.reps, 0) }));
+
+  const weeklyCard = `<div class="card" style="padding:16px;display:flex;flex-direction:column;gap:4px">
+    ${dot("var(--money)", t("Weekly volume"))}
+    <div class="form-footer">${t("Total reps over the last 4 weeks.")}</div>
+    ${weeklyChart(weeks)}</div>`;
+  const dailyCard = `<div class="card" style="padding:16px;display:flex;flex-direction:column;gap:4px">
+    ${dot("var(--accent)", t("Daily activity — 30 days"))}
+    <div class="form-footer">${t("Each bar is one day.")}</div>
+    ${dailyChart(days)}</div>`;
+
+  // Журнал
+  const today = startOfDay(Date.now());
+  const past = app.history.filter((d) => startOfDay(d.date) !== today && d.entries.length).slice(-7).reverse();
+  const last = app.history[app.history.length - 1];
+  const todayPractice = last && startOfDay(last.date) === today ? last.entries.filter((e) => e.title == null) : [];
+  const entryRow = (title, reps, norm, done) => `<div class="entry-row">
+    <span style="color:${done ? "var(--money)" : "var(--text-secondary)"};display:flex">${iconF(done ? "checkCircle" : "flame")}</span>
+    <span style="flex:1;font-weight:500;font-size:15px">${esc(title)}</span>
+    <span class="money ${done ? "c-money" : ""}" style="font-size:14px;color:${done ? "" : "rgba(255,255,255,.85)"}">${norm != null ? `${reps} / ${norm}` : `+${reps}`}</span></div>`;
+  const dayChip = (txt) => `<span class="day-chip">${esc(txt)}</span>`;
+  let journal = lbl(t("Exercise journal"), "tracking-1") + dayChip(t("Today"));
+  journal += joined.map((c) => entryRow(c.title, C.myTodayTotal(c), C.repsNorm(c), C.isTodayDone(c))).join("");
+  journal += todayPractice.map((e) => entryRow(t("Practice"), e.reps, null, false)).join("");
+  for (const d of past) {
+    journal += dayChip(new Date(d.date).toLocaleDateString(store.lang === "ru" ? "ru-RU" : "en-US", { day: "numeric", month: "short" }));
+    journal += d.entries.map((e) => entryRow(e.title || t("Practice"), e.reps, e.norm, e.norm != null && e.reps >= e.norm)).join("");
+  }
+  const journalCard = `<div class="card" style="padding:16px;display:flex;flex-direction:column;gap:10px">${journal}</div>`;
+
+  return screenHeader(t("Statistics")) + `<div class="stack">${weeklyCard}${dailyCard}${journalCard}</div>`;
+}
+function weeklyChart(weeks) {
+  const W = 300, H = 150, pad = 20, max = Math.max(...weeks, 1);
+  const xs = weeks.map((_, i) => pad + i * ((W - pad * 2) / 3));
+  const ys = weeks.map((v) => H - 12 - (v / max) * (H - 30));
+  const line = xs.map((x, i) => `${i ? "L" : "M"}${x.toFixed(1)},${ys[i].toFixed(1)}`).join(" ");
+  const area = `${line} L${xs[xs.length - 1]},${H} L${xs[0]},${H} Z`;
+  return `<svg class="chart" viewBox="0 0 ${W} ${H + 20}" preserveAspectRatio="none">
+    <defs><linearGradient id="wg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#4dc280" stop-opacity="0.35"/><stop offset="1" stop-color="#4dc280" stop-opacity="0"/></linearGradient></defs>
+    <path d="${area}" fill="url(#wg)"/>
+    <path d="${line}" fill="none" stroke="#4dc280" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+    ${xs.map((x, i) => `<text x="${x}" y="${H + 14}" fill="rgba(255,255,255,.55)" font-size="10" font-family="monospace" text-anchor="middle">${t("Week %lld", i + 1)}</text>`).join("")}
+  </svg>`;
+}
+function dailyChart(days) {
+  const W = 300, H = 150, pad = 6, max = Math.max(...days.map((d) => d.reps), 1);
+  const bw = (W - pad * 2) / days.length;
+  return `<svg class="chart" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none">
+    <defs><linearGradient id="dg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ff5e1f"/><stop offset="1" stop-color="#ff5e1f" stop-opacity="0.2"/></linearGradient></defs>
+    ${days.map((d, i) => {
+      const h = (d.reps / max) * (H - 10);
+      return `<rect x="${(pad + i * bw + bw * 0.2).toFixed(1)}" y="${(H - h).toFixed(1)}" width="${(bw * 0.6).toFixed(1)}" height="${h.toFixed(1)}" rx="2" fill="url(#dg)"/>`;
+    }).join("")}
+  </svg>`;
+}
+
+// ==========================================================================
+// Профиль
+// ==========================================================================
+let photosUnlocked = false;
+function ProfileTab() {
+  const level = store["profile.level"], gender = store["profile.gender"];
+  const withPhotos = app.challenges.filter((c) => c.beforePhoto);
+  const finished = app.challenges.filter((c) => c.isCompleted).length;
+  const activeCount = app.challenges.filter(C.isJoined).length;
+
+  const summary = `<div class="card center" style="padding:24px 16px">
+    ${lbl(t("All-time reps"), "tracking-15")}
+    <div class="money" style="font-size:52px;margin:6px 0">${app.totalPushups}</div>
+    <div class="row label" style="justify-content:center;gap:18px;font-size:10px">
+      <span class="secondary">${t("Active challenges: %lld", activeCount)}</span><span class="secondary">${t("Finished: %lld", finished)}</span></div>
+  </div>`;
+
+  const seg = (key, opts, cur) => `<div class="segmented" data-store="${key}">${opts.map(([v, n]) => `<button data-act="seg" data-store="${key}" data-val="${v}" class="${cur === v ? "active" : ""}">${esc(n)}</button>`).join("")}</div>`;
+  const numStore = (label, key, min, max, unit) => `<div class="settings-row"><span>${esc(label)}</span>
+    <div class="stepper"><button data-act="dec" data-store="${key}" data-min="${min}" data-max="${max}">−</button>
+      <input class="mono" type="number" data-store="${key}" value="${store[key]}"><span class="mono secondary" style="font-size:13px;min-width:20px">${unit || ""}</span>
+      <button data-act="inc" data-store="${key}" data-min="${min}" data-max="${max}">+</button></div></div>`;
+
+  const bodyCard = `<div class="card" style="padding:16px;display:flex;flex-direction:column;gap:14px">
+    ${lbl(t("Your data"), "tracking-1")}
+    ${seg("profile.gender", Gender.all.map((g) => [g, Gender.name(g)]), gender)}
+    ${numStore(t("Age"), "profile.age", 14, 80)}
+    ${numStore(t("Height"), "profile.heightCm", 120, 220, t("cm"))}
+    ${numStore(t("Weight"), "profile.weightKg", 35, 180, t("kg"))}
+    ${numStore(t("Max reps in one set"), "profile.maxReps", 1, 120)}
+    ${seg("profile.level", Level.all.map((l) => [l, Level.name(l)]), level)}
+    <hr class="hr">
+    <div class="between">${lbl(t("Your daily goal"))}<span class="money" style="font-size:18px">${recommendedDailyReps(level, store["profile.maxReps"])}</span></div>
+  </div>`;
+
+  const measurements = `<div class="card" style="padding:16px;display:flex;flex-direction:column;gap:12px">
+    <div class="between">${lbl(t("Measurements"), "tracking-1")}<button data-act="addMeasure" style="color:var(--accent);display:flex">${iconF("plusCircle")}</button></div>
+    ${app.measurements.length === 0 ? `<div class="form-footer">${t("No measurements yet. They're added after each challenge.")}</div>` :
+      app.measurements.slice().reverse().map((m) => `<div class="between" style="padding:4px 0">
+        <span style="font-size:15px">${new Date(m.date).toLocaleDateString(store.lang === "ru" ? "ru-RU" : "en-US", { day: "numeric", month: "short", year: "numeric" })}</span>
+        <span class="row gap6"><span class="money secondary" style="font-size:14px">${t("%lld kg", m.weight)}</span><span class="secondary">·</span><span class="money" style="font-size:14px">${m.maxReps}</span></span></div>`).join("")}
+  </div>`;
+
+  let photosInner;
+  if (withPhotos.length === 0) photosInner = `<div class="form-footer">${t("Photos appear here once you join a challenge with a BEFORE photo.")}</div>`;
+  else if (photosUnlocked) photosInner = withPhotos.map((c) => `<div style="display:flex;flex-direction:column;gap:8px">
+    <div style="font-weight:600;font-size:15px">${esc(c.title)}</div>
+    <div class="grid2">${photoSlot(c.beforePhoto, t("Before"))}${photoSlot(c.afterPhoto, t("After"))}</div></div>`).join("");
+  else photosInner = `<button class="action-btn" data-act="unlockPhotos">${iconF("faceid")}${t("Unlock with Face ID")}</button>`;
+  const photosCard = `<div class="card" style="padding:16px;display:flex;flex-direction:column;gap:12px">
+    <div class="between">${lbl(t("Before / After photos"), "tracking-1")}<span style="color:${photosUnlocked ? "var(--money)" : "var(--text-secondary)"};display:flex">${iconF(photosUnlocked ? "lockOpen" : "lock")}</span></div>
+    ${photosInner}</div>`;
+
+  const wallet = `<div class="card" style="padding:16px;display:flex;flex-direction:column;gap:14px">
+    <div class="between">${lbl(t("Balance"), "tracking-1")}<span class="c-money" style="font-size:24px">${coin(app.balance)}</span></div>
+    <div class="form-footer">${t("Test currency — no real money.")}</div>
+    ${showCurrencyToggle ? currencyToggle() : ""}
+    <hr class="hr">
+    ${app.transactions.map((tx) => `<div class="between" style="padding:6px 0">
+      <span style="font-size:15px">${tx.kind === "start" ? t("Starting balance") : t("Buy-in: %@", esc(tx.challenge))}</span>
+      <span class="money" style="font-size:15px;color:${tx.amount > 0 ? "var(--money)" : "var(--red)"}">${tx.amount > 0 ? "+" + tx.amount : tx.amount}</span></div>`).join("")}
+  </div>`;
+
+  return screenHeader(t("Profile")) + `<div class="stack">${summary}${bodyCard}${measurements}${photosCard}${wallet}</div>`;
+}
+function photoSlot(dataURL, caption) {
+  return `<div style="display:flex;flex-direction:column;gap:5px"><div class="photo-slot" style="height:150px">${dataURL ? `<img src="${dataURL}">` : icon("camera")}</div>${lbl(caption)}</div>`;
+}
+function currencyToggle() {
+  return `<div class="segmented"><button data-act="seg" data-store="currencyUSD" data-val="true" class="${store.currencyUSD ? "active" : ""}">$ USD</button>
+    <button data-act="seg" data-store="currencyUSD" data-val="false" class="${!store.currencyUSD ? "active" : ""}">${Currency.symbol} ${Currency.code}</button></div>`;
+}
+
+// ==========================================================================
+// Онбординг
+// ==========================================================================
+const LAST_STEP = 7;
+function Onboarding() {
+  const step = ui.onbStep, gender = store["profile.gender"], level = store["profile.level"], maxReps = store["profile.maxReps"];
+  const goal = recommendedDailyReps(level, maxReps);
+
+  const optionCard = (title, subtitle, selected, act) =>
+    `<button class="card ${selected ? "selected" : ""}" data-act="${act}" style="padding:16px;width:100%;display:flex;align-items:center;gap:10px;text-align:left">
+      <div style="flex:1"><div class="display" style="font-size:20px">${esc(title)}</div>${subtitle ? `<div class="form-footer" style="margin-top:2px">${esc(subtitle)}</div>` : ""}</div>
+      <span style="color:${selected ? "var(--accent)" : "var(--text-secondary)"};display:flex">${selected ? iconF("checkCircle") : icon("plusCircle").replace("M12 8v8M8 12h8", "")}</span>
+    </button>`;
+  const question = (title, subtitle, content) => `<div style="padding-top:24px;display:flex;flex-direction:column;gap:8px;height:100%">
+    <div class="display" style="font-size:30px">${esc(title)}</div>${subtitle ? `<div class="form-footer">${esc(subtitle)}</div>` : ""}
+    <div style="flex:1;display:flex;flex-direction:column;justify-content:center;gap:10px">${content}</div></div>`;
+  const wheel = (key, min, max, fmtFn) => {
+    let opts = "";
+    for (let v = min; v <= max; v++) opts += `<div class="opt ${v === store[key] ? "active" : ""}" data-val="${v}">${esc(fmtFn(v))}</div>`;
+    return `<div class="wheel" data-wheel="${key}" data-min="${min}" data-max="${max}"><div class="pad"></div>${opts}<div class="pad"></div></div>`;
+  };
+
+  let content;
+  if (step === 0) content = `<div class="center" style="height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px">
+    <div style="color:var(--accent);width:76px;height:76px;display:flex">${iconF("flame")}</div>
+    <div class="display" style="font-size:46px">FitStake</div>
+    <div class="form-footer" style="max-width:320px;font-weight:500">${t("Every rep is verified by the camera. Coins on the line. Miss too many days and you're out.")}</div></div>`;
+  else if (step === 1) content = question(t("Your gender"), null, Gender.all.map((g) => optionCard(Gender.name(g), null, gender === g, `onbSet:profile.gender:${g}`)).join(""));
+  else if (step === 2) content = question(t("Your age"), null, wheel("profile.age", 14, 80, (v) => t("%lld years", v)));
+  else if (step === 3) content = question(t("Your height"), null, wheel("profile.heightCm", 120, 220, (v) => t("%lld cm", v)));
+  else if (step === 4) content = question(t("Your weight"), null, wheel("profile.weightKg", 35, 180, (v) => t("%lld kg", v)));
+  else if (step === 5) content = question(t("Your fitness level"), null, Level.all.map((l) => optionCard(Level.name(l), Level.subtitle(l), level === l, `onbSet:profile.level:${l}`)).join(""));
+  else if (step === 6) content = question(t("How many push-ups can you do in one set?"), t("Honestly — the daily goal is built from this."), wheel("profile.maxReps", 1, 120, (v) => String(v)));
+  else content = `<div class="center" style="height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px">
+    ${lbl(t("Your daily goal"), "tracking-15")}
+    <div class="money" style="font-size:72px">${goal}</div>
+    ${lbl(t("reps per day"), "tracking-1")}
+    <div class="form-footer" style="margin-top:6px">${t("%lld in one set × %lld sets", maxReps, Level.sets(level))}</div>
+    <div class="card" style="padding:16px;width:100%;display:flex;flex-direction:column;gap:10px;margin-top:20px">
+      ${[[t("Gender"), Gender.name(gender)], [t("Age"), t("%lld years", store["profile.age"])], [t("Height"), t("%lld cm", store["profile.heightCm"])], [t("Weight"), t("%lld kg", store["profile.weightKg"])], [t("Fitness level"), Level.name(level)]]
+        .map(([k, v]) => `<div class="between">${lbl(k)}<span style="font-weight:600;font-size:15px">${esc(v)}</span></div>`).join("")}
+    </div></div>`;
+
+  const footerLabel = step === 0 ? t("Get started") : step === LAST_STEP ? t("Let's go") : t("Continue");
+  return `<div style="min-height:100dvh;display:flex;flex-direction:column">
+    <div class="row gap12" style="padding:8px 20px 0;align-items:center">
+      <button data-act="onbBack" style="width:32px;height:32px;display:flex;align-items:center;justify-content:center;color:#fff;opacity:${step > 0 ? 1 : 0}">${icon("chevronLeft")}</button>
+      <div style="flex:1">${bar(step / LAST_STEP)}</div>
+    </div>
+    <div style="flex:1;padding:0 24px;overflow-y:auto">${content}</div>
+    <div style="padding:0 20px 8px;padding-bottom:calc(8px + env(safe-area-inset-bottom))"><button class="action-btn" data-act="onbNext">${footerLabel}</button></div>
+  </div>`;
+}
+
+// ==========================================================================
+// Листы снизу: создать / вступить / замер
+// ==========================================================================
+function sheetShell(title, body, leftIcon) {
+  return `<div class="sheet-backdrop" data-act="closeSheetBg"><div class="sheet" data-stop>
+    <div class="navbar">${leftIcon ? `<button class="icon-btn" data-act="closeSheet">${icon("xmark")}</button>` : "<div style='width:32px'></div>"}<div class="title">${esc(title)}</div><div style="width:32px"></div></div>
+    <div class="sheet-body">${body}</div></div></div>`;
+}
+function fieldStepper(label, key, min, max, by) {
+  return `<div class="settings-row"><span>${esc(label)}</span>
+    <div class="stepper"><button data-act="dec" data-key="${key}" data-min="${min}" data-max="${max}" data-by="${by || 1}">−</button>
+      <input class="mono" type="number" data-model="${key}" value="${ui.form[key]}">
+      <button data-act="inc" data-key="${key}" data-min="${min}" data-max="${max}" data-by="${by || 1}">+</button></div></div>`;
+}
+
+function CreateSheet() {
+  const f = ui.form;
+  const seg = (opts, key, cur) => `<div class="segmented">${opts.map(([v, n]) => `<button data-act="seg" data-key="${key}" data-val="${v}" class="${cur === v ? "active" : ""}">${esc(n)}</button>`).join("")}</div>`;
+  const base = (f.mode === "combo" ? f.pushups + f.squats : f.mode === "squats" ? f.squats : f.pushups);
+  const goalsCount = f.mode === "combo" ? 2 : 1;
+  const inc = f.progOn ? f.progStep * progIncrements({ step: f.progStep, period: f.progPeriod }, Math.min(Math.max(f.duration, 1), 365)) * goalsCount : 0;
+
+  const body = `
+    <div class="form-section">${lbl(t("Title"))}<input class="field" data-model="title" value="${esc(f.title)}" placeholder="100 Push-ups / 30 Days"></div>
+
+    <div class="form-section">${lbl(t("Exercise"))}
+      ${seg([["pushups", t("Push-ups")], ["squats", t("Squats")], ["combo", t("Combo")]], "mode", f.mode)}
+      ${f.mode !== "squats" ? fieldStepper(f.mode === "combo" ? t("Push-ups per day") : t("Reps per day"), "pushups", 10, 500, 10) : ""}
+      ${f.mode !== "pushups" ? fieldStepper(f.mode === "combo" ? t("Squats per day") : t("Reps per day"), "squats", 10, 500, 10) : ""}
+    </div>
+
+    <div class="form-section">${lbl(t("Schedule"))}
+      ${fieldStepper(t("Duration (days)"), "duration", 1, 365, 1)}
+      <div class="settings-row"><span>${t("Missed days")}</span></div>
+      ${seg(MissPolicy.all.map((p) => [p, MissPolicy.displayName(p)]), "miss", f.miss)}
+      <div class="settings-row"><span>${t("Public challenge")}</span><button data-act="toggle" data-key="isPublic" class="toggle ${f.isPublic ? "on" : ""}"></button></div>
+    </div>
+
+    <div class="form-section">${lbl(t("Progression"))}
+      <div class="settings-row"><span>${t("Progressive overload")}</span><button data-act="toggle" data-key="progOn" class="toggle ${f.progOn ? "on" : ""}"></button></div>
+      ${f.progOn ? `${fieldStepper(t("Increase by: %lld reps", "").replace(/\s+/g, " ").trim(), "progStep", 1, 50, 1)}
+        ${seg([["day", t("per day")], ["week", t("per week")]], "progPeriod", f.progPeriod)}
+        <div class="rule-row">${icon("bolt")}<div>${t("Day 1: %lld → Day %lld: %lld", base, Math.min(Math.max(f.duration, 1), 365), base + inc)}</div></div>` : ""}
+      <div class="form-footer">${t("The daily goal grows as the challenge goes on.")}</div>
+    </div>
+
+    <div class="form-section">${lbl(t("Stake amount"))}
+      ${showCurrencyToggle ? currencyToggle() : ""}
+      <div class="row gap8"><span class="secondary money" style="font-size:20px">${store.currencyUSD ? "$" : Currency.symbol}</span><input class="field money" type="number" data-model="buyIn" value="${f.buyIn}" style="font-size:20px"></div>
+      <div class="form-footer">${t("The buy-in is deducted from your balance right away. Test currency — no real money.")}</div>
+    </div>
+
+    <button class="action-btn" data-act="submitCreate" ${f.title.trim() ? "" : "disabled"}>${t("Create")}</button>`;
+  return sheetShell(t("Create Challenge"), body, true);
+}
+
+function JoinSheet() {
+  const f = ui.form, c = app.challenges.find((x) => x.id === f.challengeId);
+  const body = `
+    <div class="form-section">${lbl(t("Before you start"))}
+      ${fieldStepper(t("Weight"), "weight", 35, 180, 1)}
+      ${fieldStepper(t("Max reps in one set"), "maxReps", 1, 120, 1)}
+      <div class="form-footer">${t("Your starting point — at the finish you'll see how far you've come.")}</div>
+    </div>
+    <div class="form-section">${lbl(t("Photo BEFORE"))}
+      ${f.photo ? `<div class="photo-slot" style="height:220px"><img src="${f.photo}"></div>` : ""}
+      <button class="action-btn" data-act="pickPhoto:camera" style="background:var(--white-08);color:#fff">${iconF("camera")}${f.photo ? t("Retake") : t("Take a photo")}</button>
+      <button class="action-btn" data-act="pickPhoto:library" style="background:var(--white-08);color:#fff">${iconF("photo")}${t("Upload from library")}</button>
+      <div class="form-footer">${t("The photo stays hidden until the finish — then it appears next to your AFTER photo.")}</div>
+    </div>
+    <button class="action-btn" data-act="submitJoin">${t("Join for")} ${coin(c.buyIn)}</button>`;
+  return sheetShell(c.title, body, false);
+}
+
+function MeasureSheet() {
+  const body = `${fieldStepper(t("Weight"), "weight", 35, 180, 1)}${fieldStepper(t("Max reps in one set"), "maxReps", 1, 120, 1)}
+    <button class="action-btn" data-act="submitMeasure">${t("Save")}</button>`;
+  return sheetShell(t("New measurement"), body, true);
+}
+
+// ==========================================================================
+// Поздравления
+// ==========================================================================
+function confetti() {
+  const colors = ["#ff5e1f", "#4dc280", "#ffd60a", "#fff", "#a855f7"];
+  let s = "";
+  for (let i = 0; i < 44; i++) {
+    const x = (i * 37) % 100, delay = ((i * 13) % 9) / 10, dur = 1.6 + ((i * 7) % 12) / 10;
+    s += `<i style="left:${x}%;background:${colors[i % colors.length]};animation-duration:${dur}s;animation-delay:${delay}s"></i>`;
+  }
+  return `<div class="confetti">${s}</div>`;
+}
+function DayCompleteFull() {
+  const c = app.challenges.find((x) => x.id === ui.fullId);
+  return `<div class="fullscreen">${confetti()}<div class="celebrate">
+    <div class="c-money pop-in" style="font-size:84px;display:flex">${iconF("seal")}</div>
+    <div class="display" style="font-size:42px">${t("Day done!")}</div>
+    <div class="form-footer" style="max-width:360px">${t("%lld reps today. Day %lld of %lld in the bag.", C.myTodayTotal(c), c.currentDay, c.durationDays)}</div>
+    <div style="flex:0"></div>
+    <button class="action-btn" data-act="shareDay:${c.id}" style="max-width:320px">${iconF("share")}${t("Share")}</button>
+    <button class="text-btn" data-act="closeFull">${t("Close")}</button>
+  </div></div>`;
+}
+function ChallengeCompleteFull() {
+  const f = ui.form, c = app.challenges.find((x) => x.id === f.challengeId);
+  const weightChange = c.startWeight != null ? `${c.startWeight} → ${f.weight} ${t("kg")} (${f.weight - c.startWeight > 0 ? "+" : ""}${f.weight - c.startWeight})` : t("%lld kg", f.weight);
+  const maxChange = c.startMaxReps != null ? `${c.startMaxReps} → ${f.maxReps} (${f.maxReps - c.startMaxReps > 0 ? "+" : ""}${f.maxReps - c.startMaxReps})` : String(f.maxReps);
+  return `<div class="fullscreen">${confetti()}<div class="screen" style="padding-top:24px;display:flex;flex-direction:column;gap:18px;align-items:center;text-align:center">
+    <div class="c-money pop-in" style="font-size:76px;display:flex">${iconF("trophy")}</div>
+    <div class="display" style="font-size:34px">${t("Challenge complete!")}</div>
+    <div class="row gap6">${lbl(t("You take home"))}<span class="c-money money" style="font-size:22px">${coin(C.payout(c))}</span></div>
+
+    <div class="card" style="padding:16px;width:100%;display:flex;flex-direction:column;gap:12px;text-align:left">
+      ${lbl(t("Before / After"), "tracking-1")}
+      <div class="grid2">
+        <div style="display:flex;flex-direction:column;gap:6px"><div class="photo-slot" style="height:190px">${c.beforePhoto ? `<img src="${c.beforePhoto}">` : icon("camera")}</div>${lbl(t("Before"))}</div>
+        <div style="display:flex;flex-direction:column;gap:6px"><div class="photo-slot accent" style="height:190px">${f.photo ? `<img src="${f.photo}">` : iconF("camera")}</div>${lbl(t("After"))}</div>
+      </div>
+      <div class="row gap12">
+        <button class="action-btn" data-act="pickPhoto:camera" style="background:var(--white-08);color:#fff;font-size:14px">${iconF("camera")}${f.photo ? t("Retake") : t("Take a photo")}</button>
+        <button class="action-btn" data-act="pickPhoto:library" style="background:var(--white-08);color:#fff;font-size:14px">${iconF("photo")}${t("Upload from library")}</button>
+      </div>
+    </div>
+
+    <div class="card" style="padding:16px;width:100%;display:flex;flex-direction:column;gap:12px">
+      ${fieldStepper(t("Weight"), "weight", 35, 180, 1)}${fieldStepper(t("Max reps in one set"), "maxReps", 1, 120, 1)}
+    </div>
+
+    <button class="action-btn" data-act="shareResult:${c.id}" style="width:100%">${iconF("share")}${t("Share result")}</button>
+    <button class="action-btn money" data-act="saveResult:${c.id}" style="width:100%">${t("Save to profile")}</button>
+    <button class="text-btn" data-act="closeFull">${t("Close")}</button>
+  </div></div>`;
+}
+
+// ==========================================================================
+// Сессия с камерой (живёт вне цикла render, чтобы не рвать видеопоток)
+// ==========================================================================
+const CAN_RECORD = typeof MediaRecorder !== "undefined" && !!HTMLCanvasElement.prototype.captureStream;
+let liveSession = null;
+
+async function openSession(challengeId) {
+  const c = app.challenges.find((x) => x.id === challengeId);
+  if (!c || liveSession) return;
+  const goals = c.goals.map((g) => ({ exercise: g.exercise, target: C.norm(c, g), start: C.myToday(c, g.exercise) }));
+
+  const overlay = document.createElement("div");
+  overlay.className = "session";
+  overlay.innerHTML = `
+    <video autoplay muted playsinline></video>
+    <canvas class="skeleton"></canvas>
+    <div class="topbar">
+      <div class="between" style="align-items:flex-start">
+        <button class="cam-btn" data-sess="close">${icon("xmark")}</button>
+        <div class="cam-col">
+          <button class="cam-btn" data-sess="voice">${icon(store.voiceEnabled ? "speakerOn" : "speakerOff")}</button>
+          ${CAN_RECORD ? `<button class="cam-btn" data-sess="record">${icon("record")}</button>` : ""}
+        </div>
+      </div>
+      <div class="hint" id="sess-hint"></div>
+    </div>
+    <div class="hud"><div id="sess-counters"></div><div id="sess-bottom" style="width:100%;display:flex;flex-direction:column;align-items:center;gap:10px"></div></div>`;
+  document.body.appendChild(overlay);
+
+  const video = overlay.querySelector("video");
+  const canvas = overlay.querySelector(".skeleton");
+  const hintEl = overlay.querySelector("#sess-hint");
+  const countersEl = overlay.querySelector("#sess-counters");
+  const bottomEl = overlay.querySelector("#sess-bottom");
+
+  // Счётчики: один большой или два в комбо.
+  const combo = goals.length > 1;
+  countersEl.className = combo ? "counters" : "";
+  countersEl.innerHTML = goals.map((g, i) => combo
+    ? `<div class="counter-col"><span class="cap">${esc(Exercise.displayName(g.exercise))}</span><span class="counter-big counter-combo c-white" data-num="${i}">${g.start}</span>${g.target != null ? `<span class="target">/ ${g.target}</span>` : ""}</div>`
+    : `<div class="counter-col"><span class="counter-big c-white" data-num="${i}">${g.start}</span>${g.target != null ? `<span class="target">/ ${g.target}</span>` : ""}<span class="cap">${t("Reps")}</span></div>`).join("");
+  const numEls = goals.map((_, i) => countersEl.querySelector(`[data-num="${i}"]`));
+
+  const sess = new window.PoseSession(goals.map((g) => g.exercise), { voice: store.voiceEnabled });
+  liveSession = { sess, overlay };
+
+  try {
+    await sess.start(video, canvas);
+  } catch (err) {
+    overlay.querySelector(".hud").innerHTML = "";
+    hintEl.style.display = "none";
+    const pv = document.createElement("div");
+    pv.style.cssText = "position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;padding:32px;text-align:center";
+    pv.innerHTML = `<div style="width:44px;height:44px;color:rgba(255,255,255,.7)">${iconF("camera")}</div><div>${t("Camera access is needed to count your reps.")}</div>`;
+    overlay.appendChild(pv);
+  }
+
+  const totalFor = (g, r) => g.start + (r ? r.repCount : 0);
+  const resultFor = (ex) => sess.snapshot.results.find((r) => r.exercise === ex);
+  let prevGoalReached = false, prevBottomKey = "";
+
+  function loop() {
+    if (liveSession !== undefined && liveSession && liveSession.sess === sess) {
+      const results = sess.snapshot.results;
+      const sessionTotal = results.reduce((s, r) => s + r.repCount, 0);
+      const goalReached = goals.every((g) => g.target != null && totalFor(g, resultFor(g.exercise)) >= g.target);
+
+      goals.forEach((g, i) => {
+        const r = resultFor(g.exercise), total = totalFor(g, r);
+        numEls[i].textContent = total;
+        const cls = g.target != null && total >= g.target ? "c-money" : (r && r.status === "down" ? "c-accent" : "c-white");
+        numEls[i].className = numEls[i].className.replace(/c-(money|accent|white)/, cls);
+      });
+
+      // Подсказка
+      let hint = null;
+      if (!results.length) hint = t("Point the camera at yourself");
+      else if (results.some((r) => r.status === "up" || r.status === "down")) hint = null;
+      else if (results.every((r) => r.status === "noBody")) hint = t("Point the camera at yourself");
+      else if (combo) hint = t("Your whole body must be in frame");
+      else hint = goals[0].exercise === "squats" ? t("Both legs must be fully in frame") : t("Both arms must be fully in frame");
+      hintEl.style.display = hint ? "" : "none";
+      if (hint) hintEl.textContent = hint;
+
+      // Нижняя панель: угол + Завершить/Готово
+      const angle = !combo && resultFor(goals[0].exercise) && resultFor(goals[0].exercise).bendAngle != null ? Math.round(resultFor(goals[0].exercise).bendAngle) : null;
+      const key = `${goalReached}|${sessionTotal > 0}|${angle}`;
+      if (key !== prevBottomKey) {
+        prevBottomKey = key;
+        let b = angle != null ? `<span class="angle">${angle}°</span>` : "";
+        if (goalReached) b += `<button class="action-btn money" data-sess="finish" style="max-width:340px">${iconF("checkCircle")}${t("Finish")}</button>`;
+        else if (sessionTotal > 0) b += `<button class="action-btn" data-sess="finish" style="max-width:340px">${icon("check")}${t("Done")}</button>`;
+        bottomEl.innerHTML = b;
+      }
+      if (goalReached && !prevGoalReached) sess.say(t("Goal reached!"));
+      prevGoalReached = goalReached;
+    }
+    if (liveSession && liveSession.sess === sess) requestAnimationFrame(loop);
+  }
+  requestAnimationFrame(loop);
+
+  function finish() {
+    const counts = {};
+    sess.snapshot.results.forEach((r) => (counts[r.exercise] = r.repCount));
+    sess.stop();
+    overlay.remove();
+    liveSession = null;
+    const closed = addReps(c, counts);
+    render();
+    if (closed) { C.isFinished(c) ? openChallengeComplete(c) : openDayComplete(c); }
+  }
+
+  overlay.addEventListener("click", async (e) => {
+    const b = e.target.closest("[data-sess]");
+    if (!b) return;
+    const a = b.dataset.sess;
+    if (a === "close" || a === "finish") finish();
+    else if (a === "voice") { store.voiceEnabled = !store.voiceEnabled; sess.setVoice(store.voiceEnabled); b.innerHTML = icon(store.voiceEnabled ? "speakerOn" : "speakerOff"); b.style.color = store.voiceEnabled ? "var(--accent)" : "rgba(255,255,255,.6)"; }
+    else if (a === "record") {
+      const on = await sess.toggleRecording();
+      b.innerHTML = icon(on ? "stop" : "record");
+      b.style.color = on ? "var(--red)" : "rgba(255,255,255,.85)";
+    }
+  });
+}
+
+// ==========================================================================
+// Шеринг результата (рендер карточки на canvas → Web Share / скачивание)
+// ==========================================================================
+function loadImg(src) { return new Promise((res) => { if (!src) return res(null); const im = new Image(); im.onload = () => res(im); im.onerror = () => res(null); im.src = src; }); }
+
+async function shareCard(data) {
+  const scale = 3, W = 340;
+  const before = await loadImg(data.beforePhoto), after = await loadImg(data.afterPhoto);
+  const hasPhotos = before || after;
+  const H = 90 + (hasPhotos ? 170 : 0) + data.metrics.length * 34 + (data.payout != null ? 50 : 0) + 40;
+  const cv = document.createElement("canvas");
+  cv.width = W * scale; cv.height = H * scale;
+  const g = cv.getContext("2d");
+  g.scale(scale, scale);
+  g.fillStyle = "#171717"; g.fillRect(0, 0, W, H);
+  g.strokeStyle = "rgba(255,94,31,.4)"; g.lineWidth = 1; g.strokeRect(0.5, 0.5, W - 1, H - 1);
+  let y = 30;
+  g.fillStyle = "#ff5e1f"; g.font = "700 13px monospace"; g.fillText("🔥 FITSTAKE", 24, y);
+  y += 34; g.fillStyle = "#fff"; g.font = "900 26px -apple-system,sans-serif"; g.fillText(data.title.toUpperCase().slice(0, 22), 24, y);
+  y += 20; g.fillStyle = "#ff5e1f"; g.font = "700 11px monospace"; g.fillText(String(data.headline).toUpperCase(), 24, y);
+  y += 14;
+  if (hasPhotos) {
+    const pw = (W - 48 - 10) / 2;
+    const drawP = (im, x, cap) => {
+      g.save(); g.beginPath(); g.rect(x, y, pw, 150); g.clip();
+      if (im) { const s = Math.max(pw / im.width, 150 / im.height); g.drawImage(im, x + (pw - im.width * s) / 2, y + (150 - im.height * s) / 2, im.width * s, im.height * s); }
+      else { g.fillStyle = "#0a0a0a"; g.fillRect(x, y, pw, 150); }
+      g.restore();
+      g.fillStyle = "rgba(0,0,0,.6)"; g.fillRect(x + 6, y + 128, 44, 16);
+      g.fillStyle = "#fff"; g.font = "700 9px monospace"; g.fillText(cap, x + 10, y + 139);
+    };
+    drawP(before, 24, "BEFORE"); drawP(after, 24 + pw + 10, "AFTER");
+    y += 170;
+  }
+  y += 6;
+  for (const [k, v] of data.metrics) {
+    g.fillStyle = "rgba(255,255,255,.55)"; g.font = "700 10px monospace"; g.fillText(String(k).toUpperCase(), 24, y + 12);
+    g.fillStyle = "#fff"; g.font = "800 18px monospace"; g.textAlign = "right"; g.fillText(String(v), W - 24, y + 14); g.textAlign = "left";
+    y += 34;
+  }
+  if (data.payout != null) {
+    g.strokeStyle = "rgba(255,255,255,.1)"; g.beginPath(); g.moveTo(24, y + 6); g.lineTo(W - 24, y + 6); g.stroke();
+    y += 24;
+    g.fillStyle = "rgba(255,255,255,.55)"; g.font = "700 10px monospace"; g.fillText((store.lang === "ru" ? "ЗАБИРАЕШЬ" : "YOU TAKE HOME"), 24, y + 8);
+    g.fillStyle = "#4dc280"; g.font = "800 22px monospace"; g.textAlign = "right"; g.fillText((store.currencyUSD ? "$" : Currency.symbol) + fmt(data.payout), W - 24, y + 12); g.textAlign = "left";
+  }
+  const blob = await new Promise((res) => cv.toBlob(res, "image/png"));
+  const file = new File([blob], "fitstake.png", { type: "image/png" });
+  if (navigator.canShare && navigator.canShare({ files: [file] })) {
+    try { await navigator.share({ files: [file], title: "FitStake" }); return; } catch {}
+  }
+  const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = "fitstake.png"; a.click();
+}
+
+// ==========================================================================
+// Открытие/закрытие модалок и поздравлений
+// ==========================================================================
+function openCreate() { ui.form = { title: "", mode: "pushups", pushups: store.dailyGoal, squats: store.dailyGoal, duration: 30, buyIn: 50, isPublic: true, miss: "oneTotal", progOn: false, progStep: 5, progPeriod: "day" }; ui.sheet = CreateSheet; render(); }
+function openJoin(id) { ui.form = { challengeId: id, weight: store["profile.weightKg"], maxReps: store["profile.maxReps"], photo: null }; ui.sheet = JoinSheet; render(); }
+function openMeasure() { ui.form = { weight: store["profile.weightKg"], maxReps: store["profile.maxReps"] }; ui.sheet = MeasureSheet; render(); }
+function closeSheet() { ui.sheet = null; ui.form = null; render(); }
+function openDayComplete(c) { ui.fullId = c.id; ui.full = DayCompleteFull; render(); }
+function openChallengeComplete(c) { ui.form = { challengeId: c.id, weight: store["profile.weightKg"], maxReps: store["profile.maxReps"], photo: null }; ui.full = ChallengeCompleteFull; render(); }
+function closeFull() { ui.full = null; ui.form = null; render(); }
+
+function pickImage(camera) {
+  return new Promise((res) => {
+    const i = document.createElement("input");
+    i.type = "file"; i.accept = "image/*"; if (camera) i.capture = "user";
+    i.onchange = () => { const f = i.files[0]; if (!f) return res(null); const r = new FileReader(); r.onload = () => res(r.result); r.readAsDataURL(f); };
+    i.click();
+  });
+}
+
+// ==========================================================================
+// Обработчики (делегирование)
+// ==========================================================================
+const RANGES = { "profile.age": [14, 80], "profile.heightCm": [120, 220], "profile.weightKg": [35, 180], "profile.maxReps": [1, 120] };
+function storeHook(key) {
+  if (key === "profile.maxReps" || key === "profile.level") store.dailyGoal = recommendedDailyReps(store["profile.level"], store["profile.maxReps"]);
+}
+function parseVal(v) { return v === "true" ? true : v === "false" ? false : v; }
+
+root.addEventListener("click", async (e) => {
+  const el = e.target.closest("[data-act]");
+  if (!el) return;
+  const act = el.dataset.act;
+
+  if (act === "closeSheetBg") { if (e.target.classList.contains("sheet-backdrop")) closeSheet(); return; }
+  const [cmd, arg] = act.split(":");
+
+  switch (cmd) {
+    case "tab": go(arg); return;
+    case "open": openDetail(arg); return;
+    case "back": back(); return;
+    case "play": openSession(arg); return;
+    case "findChallenge": go("challenges"); return;
+    case "create": openCreate(); return;
+    case "join": openJoin(arg); return;
+    case "addMeasure": openMeasure(); return;
+    case "unlockPhotos": photosUnlocked = true; render(); return;
+    case "toggleLang": store.lang = store.lang === "ru" ? "en" : "ru"; render(); return;
+    case "closeSheet": closeSheet(); return;
+    case "closeFull": closeFull(); return;
+    case "showResult": openChallengeComplete(app.challenges.find((c) => c.id === arg)); return;
+  }
+
+  // Форм-контролы
+  if (cmd === "seg") {
+    const key = el.dataset.key, sk = el.dataset.store, val = parseVal(el.dataset.val);
+    if (sk != null) { store[sk] = val; storeHook(sk); } else ui.form[key] = val;
+    render(); return;
+  }
+  if (cmd === "toggle") { ui.form[el.dataset.key] = !ui.form[el.dataset.key]; render(); return; }
+  if (cmd === "inc" || cmd === "dec") {
+    const dir = cmd === "inc" ? 1 : -1, by = +(el.dataset.by || 1), min = +el.dataset.min, max = +el.dataset.max;
+    const key = el.dataset.key, sk = el.dataset.store;
+    let v = (sk != null ? store[sk] : ui.form[key]) || 0;
+    v += dir * by;
+    if (!isNaN(min)) v = Math.max(min, v); if (!isNaN(max)) v = Math.min(max, v);
+    if (sk != null) { store[sk] = v; storeHook(sk); } else ui.form[key] = v;
+    render(); return;
+  }
+
+  if (act.startsWith("pickPhoto")) { const img = await pickImage(arg === "camera"); if (img) { ui.form.photo = img; render(); } return; }
+
+  if (cmd === "submitCreate") {
+    const f = ui.form;
+    if (!f.title.trim()) { toast(t("Title")); return; }
+    const clamp = (n) => Math.min(Math.max(n, 1), 500);
+    const goals = f.mode === "pushups" ? [{ exercise: "pushups", repsPerDay: clamp(f.pushups) }]
+      : f.mode === "squats" ? [{ exercise: "squats", repsPerDay: clamp(f.squats) }]
+      : [{ exercise: "pushups", repsPerDay: clamp(f.pushups) }, { exercise: "squats", repsPerDay: clamp(f.squats) }];
+    const ok = createChallenge({ title: f.title.trim(), goals, durationDays: Math.min(Math.max(f.duration, 1), 365), buyIn: Math.max(f.buyIn, 1), isPublic: f.isPublic, missPolicy: f.miss, progression: f.progOn ? { step: f.progStep, period: f.progPeriod } : { step: 0, period: "day" } });
+    if (ok) closeSheet(); else toast(t("Not enough coins"));
+    return;
+  }
+  if (cmd === "submitJoin") {
+    const f = ui.form, c = app.challenges.find((x) => x.id === f.challengeId);
+    const ok = joinChallenge(c, f.weight, f.maxReps, f.photo);
+    if (ok) closeSheet(); else toast(t("Not enough coins"));
+    return;
+  }
+  if (cmd === "submitMeasure") {
+    addMeasurement(ui.form.weight, ui.form.maxReps);
+    store["profile.weightKg"] = ui.form.weight; store["profile.maxReps"] = ui.form.maxReps; storeHook("profile.maxReps");
+    closeSheet(); return;
+  }
+  if (cmd === "saveResult") {
+    const f = ui.form, c = app.challenges.find((x) => x.id === arg);
+    completeChallenge(c, f.photo, f.weight, f.maxReps);
+    store["profile.weightKg"] = f.weight; store["profile.maxReps"] = f.maxReps;
+    closeFull(); return;
+  }
+  if (cmd === "shareDay") {
+    const c = app.challenges.find((x) => x.id === arg);
+    shareCard({ title: c.title, headline: t("Day %lld of %lld", c.currentDay, c.durationDays), metrics: [[t("Today"), C.myTodayTotal(c)], [t("Challenge total"), c.myTotalReps]] });
+    return;
+  }
+  if (cmd === "shareResult") {
+    const f = ui.form, c = app.challenges.find((x) => x.id === arg);
+    const wc = c.startWeight != null ? `${c.startWeight} → ${f.weight} ${t("kg")}` : t("%lld kg", f.weight);
+    const mc = c.startMaxReps != null ? `${c.startMaxReps} → ${f.maxReps}` : String(f.maxReps);
+    shareCard({ title: c.title, headline: t("%lld days — finished", c.durationDays), metrics: [[t("Total reps"), c.myTotalReps], [t("Weight"), wc], [t("Max reps"), mc]], payout: C.payout(c), beforePhoto: c.beforePhoto, afterPhoto: f.photo });
+    return;
+  }
+
+  // Онбординг
+  if (cmd === "onbBack") { if (ui.onbStep > 0) { ui.onbStep--; render(); } return; }
+  if (cmd === "onbNext") {
+    if (ui.onbStep === LAST_STEP) { store.dailyGoal = recommendedDailyReps(store["profile.level"], store["profile.maxReps"]); store.onboarded = true; ui.screen = "tabs"; render(); }
+    else { ui.onbStep++; render(); }
+    return;
+  }
+  if (cmd === "onbSet") { store[arg] = act.split(":")[2]; render(); return; }
+});
+
+root.addEventListener("input", (e) => {
+  const el = e.target;
+  if (el.dataset.model != null) {
+    const k = el.dataset.model;
+    ui.form[k] = el.type === "number" ? (parseInt(el.value) || 0) : el.value;
+  }
+});
+root.addEventListener("change", (e) => {
+  const el = e.target;
+  if (el.dataset.store != null && el.tagName === "INPUT") {
+    const k = el.dataset.store, r = RANGES[k];
+    let v = parseInt(el.value); if (isNaN(v)) v = store[k];
+    if (r) v = Math.min(Math.max(v, r[0]), r[1]);
+    store[k] = v; storeHook(k); render();
+  }
+});
+
+// ==========================================================================
+// afterRender — привязка колёс онбординга + сохранение скролла
+// ==========================================================================
+function afterRender() {
+  document.querySelectorAll(".wheel").forEach((w) => {
+    const key = w.dataset.wheel, min = +w.dataset.min;
+    w.scrollTop = (store[key] - min) * 44;
+    let timer;
+    w.addEventListener("scroll", () => {
+      const k = Math.round(w.scrollTop / 44), val = min + k;
+      w.querySelectorAll(".opt").forEach((o) => o.classList.toggle("active", +o.dataset.val === val));
+      clearTimeout(timer);
+      timer = setTimeout(() => { store[key] = val; }, 120);
+    }, { passive: true });
+  });
+}
+
+// Сохранение позиции скролла при перерисовках на месте (степперы/тоглы).
+const _render = render;
+render = function () {
+  const sheetTop = document.querySelector(".sheet") && document.querySelector(".sheet").scrollTop;
+  const detailTop = document.querySelector("#detail-scroll") && document.querySelector("#detail-scroll").scrollTop;
+  const winTop = window.scrollY;
+  _render();
+  if (sheetTop != null) { const s = document.querySelector(".sheet"); if (s) s.scrollTop = sheetTop; }
+  if (detailTop != null) { const d = document.querySelector("#detail-scroll"); if (d) d.scrollTop = detailTop; }
+  window.scrollTo(0, winTop);
+};
+
+// ==========================================================================
+// Старт
+// ==========================================================================
+ui.screen = store.onboarded ? "tabs" : "onboarding";
+render();
+
+
+

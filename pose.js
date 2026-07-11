@@ -1,0 +1,352 @@
+/* FitStake — камера, MediaPipe Pose и подсчёт повторов.
+   RepCounter — точный порт RepCounter.swift: угол сгиба локтей/коленей,
+   гистерезис 110°/140°, grace-кадры и анти-чит по ходу корпуса. */
+
+"use strict";
+
+// --- Скелет: суставы, стороны, конфигурация упражнений (порт PoseModel.swift) ---
+const BONES = [
+  ["neck", "leftShoulder"], ["neck", "rightShoulder"], ["neck", "root"],
+  ["leftShoulder", "leftElbow"], ["leftElbow", "leftWrist"],
+  ["rightShoulder", "rightElbow"], ["rightElbow", "rightWrist"],
+  ["root", "leftHip"], ["root", "rightHip"],
+  ["leftHip", "leftKnee"], ["leftKnee", "leftAnkle"],
+  ["rightHip", "rightKnee"], ["rightKnee", "rightAnkle"],
+];
+
+const EX = {
+  pushups: {
+    angleJoints: (s) => ({ a: s + "Shoulder", vertex: s + "Elbow", b: s + "Wrist" }),
+    bodyJoints: ["leftShoulder", "rightShoulder"],
+  },
+  squats: {
+    angleJoints: (s) => ({ a: s + "Hip", vertex: s + "Knee", b: s + "Ankle" }),
+    bodyJoints: ["leftHip", "rightHip"],
+  },
+};
+
+// Индексы landmark-точек BlazePose (33 точки).
+const LM = {
+  leftShoulder: 11, rightShoulder: 12, leftElbow: 13, rightElbow: 14,
+  leftWrist: 15, rightWrist: 16, leftHip: 23, rightHip: 24,
+  leftKnee: 25, rightKnee: 26, leftAnkle: 27, rightAnkle: 28,
+};
+
+// ==========================================================================
+// RepCounter — порт RepCounter.swift
+// ==========================================================================
+class RepCounter {
+  constructor(exercise = "pushups") {
+    this.exercise = exercise;
+    this.count = 0;
+    this.wasDown = false;
+    this.smoothedAngle = null;
+    this.lostFrames = 0;
+    this.tracking = false;
+    this.bodyAtDown = null;
+    this.leftAnchorAtDown = null;
+    this.rightAnchorAtDown = null;
+
+    this.downThreshold = 110;
+    this.upThreshold = 140;
+    this.minConfidence = 0.2;
+    this.smoothing = 0.5;
+    this.graceFrames = 15;
+    this.minBodyTravel = 0.3;
+    this.maxAnchorDrift = 0.7;
+  }
+
+  process(points, size) {
+    const sides = ["left", "right"].filter((s) => this._limbVisible(s, points));
+    if (!(sides.length === 2 || (this.tracking && sides.length > 0))) {
+      if (this.tracking && this.lostFrames < this.graceFrames) {
+        this.lostFrames++;
+        return { status: this.wasDown ? "down" : "up", bendAngle: this.smoothedAngle };
+      }
+      this.tracking = false;
+      this.smoothedAngle = null;
+      this.wasDown = false;
+      this.bodyAtDown = this.leftAnchorAtDown = this.rightAnchorAtDown = null;
+      const anything = Object.values(points).some((p) => p && p.confidence > this.minConfidence);
+      return { status: anything ? "partialBody" : "noBody", bendAngle: null };
+    }
+    this.tracking = true;
+    this.lostFrames = 0;
+
+    const raw = sides.map((s) => this._bendAngle(s, points, size)).reduce((a, b) => a + b, 0) / sides.length;
+    const angle = this.smoothedAngle != null ? this.smoothedAngle + this.smoothing * (raw - this.smoothedAngle) : raw;
+    this.smoothedAngle = angle;
+
+    if (angle < this.downThreshold) {
+      if (!this.wasDown) {
+        this.wasDown = true;
+        this.bodyAtDown = this._bodyMid(points, size);
+        this.leftAnchorAtDown = this._anchor("left", points, size);
+        this.rightAnchorAtDown = this._anchor("right", points, size);
+      }
+    } else if (angle > this.upThreshold && this.wasDown) {
+      this.wasDown = false;
+      if (this._isRealRep(points, size)) this.count++;
+    }
+    return { status: this.wasDown ? "down" : "up", bendAngle: angle };
+  }
+
+  _isRealRep(points, size) {
+    if (!this.bodyAtDown) return false;
+    const bodyNow = this._bodyMid(points, size);
+    if (!bodyNow) return false;
+    const lengths = ["left", "right"].map((s) => this._limbLength(s, points, size)).filter((v) => v != null);
+    if (!lengths.length) return false;
+    const scale = lengths.reduce((a, b) => a + b, 0) / lengths.length;
+    if (scale <= 0) return false;
+    const drifts = [];
+    if (this.leftAnchorAtDown) { const n = this._anchor("left", points, size); if (n) drifts.push(dist(n, this.leftAnchorAtDown)); }
+    if (this.rightAnchorAtDown) { const n = this._anchor("right", points, size); if (n) drifts.push(dist(n, this.rightAnchorAtDown)); }
+    const bodyTravel = dist(bodyNow, this.bodyAtDown);
+    return bodyTravel >= this.minBodyTravel * scale && (drifts.length ? Math.max(...drifts) : 0) <= this.maxAnchorDrift * scale;
+  }
+
+  _bodyMid(points, size) {
+    const [j0, j1] = EX[this.exercise].bodyJoints;
+    const vis = [j0, j1].map((j) => points[j]).filter((p) => p && p.confidence > this.minConfidence).map((p) => px(p, size));
+    if (!vis.length) return null;
+    return { x: vis.reduce((s, p) => s + p.x, 0) / vis.length, y: vis.reduce((s, p) => s + p.y, 0) / vis.length };
+  }
+
+  _anchor(s, points, size) {
+    const j = EX[this.exercise].angleJoints(s).b;
+    const p = points[j];
+    return p && p.confidence > this.minConfidence ? px(p, size) : null;
+  }
+
+  _limbLength(s, points, size) {
+    const j = EX[this.exercise].angleJoints(s);
+    const v = points[j.vertex], e = points[j.b];
+    if (!v || v.confidence <= this.minConfidence || !e || e.confidence <= this.minConfidence) return null;
+    return dist(px(v, size), px(e, size));
+  }
+
+  _limbVisible(s, points) {
+    const j = EX[this.exercise].angleJoints(s);
+    const a = points[j.a], v = points[j.vertex], b = points[j.b];
+    if (!a || !v || !b) return false;
+    return Math.min(a.confidence, v.confidence, b.confidence) > this.minConfidence;
+  }
+
+  _bendAngle(s, points, size) {
+    const j = EX[this.exercise].angleJoints(s);
+    return angleAt(px(points[j.vertex], size), px(points[j.a], size), px(points[j.b], size));
+  }
+}
+
+function px(p, size) { return { x: p.x * size.width, y: p.y * size.height }; }
+function dist(a, b) { return Math.hypot(a.x - b.x, a.y - b.y); }
+function angleAt(vertex, a, b) {
+  const v1 = { x: a.x - vertex.x, y: a.y - vertex.y }, v2 = { x: b.x - vertex.x, y: b.y - vertex.y };
+  const dot = v1.x * v2.x + v1.y * v2.y;
+  const len = Math.hypot(v1.x, v1.y) * Math.hypot(v2.x, v2.y);
+  if (len <= 0) return 180;
+  return Math.acos(Math.max(-1, Math.min(1, dot / len))) * 180 / Math.PI;
+}
+
+// ==========================================================================
+// PoseSession — камера, MediaPipe, скелет, голос, запись
+// ==========================================================================
+let landmarkerPromise = null;
+async function getLandmarker() {
+  if (!landmarkerPromise) {
+    landmarkerPromise = (async () => {
+      const vision = await import("https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14");
+      const fileset = await vision.FilesetResolver.forVisionTasks("https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/wasm");
+      return vision.PoseLandmarker.createFromOptions(fileset, {
+        baseOptions: {
+          modelAssetPath: "https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_lite/float16/1/pose_landmarker_lite.task",
+          delegate: "GPU",
+        },
+        runningMode: "VIDEO",
+        numPoses: 1,
+      });
+    })();
+  }
+  return landmarkerPromise;
+}
+
+class PoseSession {
+  constructor(exercises, opts = {}) {
+    this.exercises = exercises;
+    this.voice = !!opts.voice;
+    this.counters = exercises.map((e) => new RepCounter(e));
+    this.snapshot = { results: exercises.map((e) => ({ exercise: e, repCount: 0, status: "noBody", bendAngle: null })), points: {}, imageSize: { width: 0, height: 0 } };
+    this._running = false;
+    this._stream = null;
+    this._lastCounts = exercises.map(() => 0);
+    this._recording = false;
+    this._recorder = null;
+    this._recCanvas = null;
+    this._lastTs = -1;
+  }
+
+  async start(video, canvas) {
+    this._video = video;
+    this._canvas = canvas;
+    this._ctx = canvas.getContext("2d");
+    this._stream = await navigator.mediaDevices.getUserMedia({
+      video: { facingMode: "user", width: { ideal: 1280 }, height: { ideal: 720 } },
+      audio: false,
+    });
+    video.srcObject = this._stream;
+    await video.play().catch(() => {});
+    await new Promise((res) => {
+      if (video.videoWidth) return res();
+      video.onloadedmetadata = () => res();
+    });
+    this._landmarker = await getLandmarker();
+    this._running = true;
+    this._loop();
+  }
+
+  _loop() {
+    if (!this._running) return;
+    const video = this._video;
+    if (video && video.readyState >= 2 && video.videoWidth) {
+      const size = { width: video.videoWidth, height: video.videoHeight };
+      if (this._canvas.width !== size.width) { this._canvas.width = size.width; this._canvas.height = size.height; }
+
+      let points = {};
+      let ts = performance.now();
+      if (ts <= this._lastTs) ts = this._lastTs + 1;
+      this._lastTs = ts;
+      let landmarks = null;
+      try {
+        const res = this._landmarker.detectForVideo(video, ts);
+        if (res && res.landmarks && res.landmarks.length) landmarks = res.landmarks[0];
+      } catch {}
+
+      if (landmarks) {
+        for (const [name, idx] of Object.entries(LM)) {
+          const p = landmarks[idx];
+          points[name] = { x: p.x, y: p.y, confidence: p.visibility != null ? p.visibility : 1 };
+        }
+        points.neck = mid(points.leftShoulder, points.rightShoulder);
+        points.root = mid(points.leftHip, points.rightHip);
+      }
+
+      const results = this.counters.map((c, i) => {
+        const r = c.process(points, size);
+        if (this.voice && c.count > this._lastCounts[i]) this.say(String(c.count));
+        this._lastCounts[i] = c.count;
+        return { exercise: c.exercise, repCount: c.count, status: r.status, bendAngle: r.bendAngle };
+      });
+      this.snapshot = { results, points, imageSize: size };
+      this._drawSkeleton(points, size);
+      if (this._recording) this._drawRecordFrame(size);
+    }
+    requestAnimationFrame(() => this._loop());
+  }
+
+  _drawSkeleton(points, size) {
+    const ctx = this._ctx;
+    ctx.clearRect(0, 0, size.width, size.height);
+    const on = (p) => p && p.confidence > 0.2;
+    ctx.lineWidth = Math.max(3, size.width / 260);
+    ctx.strokeStyle = "rgba(255,94,31,0.9)";
+    ctx.lineCap = "round";
+    for (const [a, b] of BONES) {
+      const pa = points[a], pb = points[b];
+      if (!on(pa) || !on(pb)) continue;
+      ctx.beginPath();
+      ctx.moveTo(pa.x * size.width, pa.y * size.height);
+      ctx.lineTo(pb.x * size.width, pb.y * size.height);
+      ctx.stroke();
+    }
+    ctx.fillStyle = "#fff";
+    const r = Math.max(4, size.width / 200);
+    for (const name of Object.keys(LM)) {
+      const p = points[name];
+      if (!on(p)) continue;
+      ctx.beginPath();
+      ctx.arc(p.x * size.width, p.y * size.height, r, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
+
+  // --- Голос (аналог SpeechCounter) ---
+  setVoice(on) { this.voice = on; if (!on && window.speechSynthesis) window.speechSynthesis.cancel(); }
+  say(text) {
+    if (!this.voice || !window.speechSynthesis) return;
+    const u = new SpeechSynthesisUtterance(text);
+    u.rate = 1.15;
+    window.speechSynthesis.cancel();
+    window.speechSynthesis.speak(u);
+  }
+
+  // --- Запись ролика: кадр камеры + скелет + счётчик (для шеринга) ---
+  _pickMime() {
+    const list = ["video/webm;codecs=vp9", "video/webm;codecs=vp8", "video/webm", "video/mp4"];
+    return list.find((m) => window.MediaRecorder && MediaRecorder.isTypeSupported(m)) || "";
+  }
+  async toggleRecording() {
+    if (this._recording) {
+      this._recording = false;
+      await new Promise((res) => { this._recorder.onstop = res; this._recorder.stop(); });
+      const blob = new Blob(this._recChunks, { type: this._recorder.mimeType || "video/webm" });
+      shareVideo(blob);
+      return false;
+    }
+    const size = this.snapshot.imageSize;
+    if (!size.width) return false;
+    this._recCanvas = document.createElement("canvas");
+    this._recCanvas.width = size.width; this._recCanvas.height = size.height;
+    this._recCtx = this._recCanvas.getContext("2d");
+    const mime = this._pickMime();
+    this._recChunks = [];
+    this._recorder = new MediaRecorder(this._recCanvas.captureStream(30), mime ? { mimeType: mime } : undefined);
+    this._recorder.ondataavailable = (e) => { if (e.data.size) this._recChunks.push(e.data); };
+    this._recorder.start();
+    this._recording = true;
+    return true;
+  }
+  _drawRecordFrame(size) {
+    const g = this._recCtx;
+    g.save();
+    g.translate(size.width, 0); g.scale(-1, 1);
+    g.drawImage(this._video, 0, 0, size.width, size.height);
+    g.drawImage(this._canvas, 0, 0, size.width, size.height);
+    g.restore();
+    const total = this.snapshot.results.reduce((s, r) => s + r.repCount, 0);
+    const fs = Math.round(size.height * 0.18);
+    g.font = `900 ${fs}px -apple-system, sans-serif`;
+    g.textAlign = "center";
+    g.fillStyle = "rgba(0,0,0,.5)";
+    g.fillText(String(total), size.width / 2 + 3, size.height - fs * 0.6 + 3);
+    g.fillStyle = "#fff";
+    g.fillText(String(total), size.width / 2, size.height - fs * 0.6);
+    g.textAlign = "left";
+  }
+
+  stop() {
+    this._running = false;
+    if (this._recording && this._recorder) { try { this._recorder.stop(); } catch {} this._recording = false; }
+    if (this._stream) this._stream.getTracks().forEach((t) => t.stop());
+    if (window.speechSynthesis) window.speechSynthesis.cancel();
+  }
+}
+
+function mid(a, b) {
+  if (!a || !b) return { x: 0, y: 0, confidence: 0 };
+  return { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2, confidence: Math.min(a.confidence, b.confidence) };
+}
+
+async function shareVideo(blob) {
+  const ext = blob.type.includes("mp4") ? "mp4" : "webm";
+  const file = new File([blob], "fitstake." + ext, { type: blob.type });
+  if (navigator.canShare && navigator.canShare({ files: [file] })) {
+    try { await navigator.share({ files: [file], title: "FitStake" }); return; } catch {}
+  }
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = "fitstake." + ext;
+  a.click();
+}
+
+window.PoseSession = PoseSession;
