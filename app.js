@@ -123,6 +123,10 @@ const RU = {
   "Your starting point — at the finish you'll see how far you've come.": "Твоя точка отсчёта — на финише увидишь, как далеко ушёл.",
   "Your weight": "Твой вес", "Your whole body must be in frame": "В кадре должно быть всё тело целиком", "Yours": "Твои",
   "Language": "Язык", "Edit": "Изменить",
+  "Invite friends": "Пригласить друзей", "Link copied": "Ссылка скопирована",
+  "Your name": "Твоё имя", "Friends will see it in the leaderboard.": "Друзья увидят его в таблице лидеров.",
+  "Join my challenge — 150 push-ups + 50 squats a day!": "Залетай в мой челлендж — 150 отжиманий и 50 приседаний в день!",
+  "In the app: %lld": "В приложении: %lld", "today": "сегодня", "yesterday": "вчера",
 };
 
 // Перевод + подстановка %lld / %@ по порядку аргументов.
@@ -137,7 +141,7 @@ function t(key, ...args) {
 // Персистентность (аналог @AppStorage)
 // ==========================================================================
 const DEFAULTS = {
-  onboarded: false, "profile.gender": "male", "profile.age": 25, "profile.heightCm": 178,
+  onboarded: false, "profile.name": "", "profile.gender": "male", "profile.age": 25, "profile.heightCm": 178,
   "profile.weightKg": 75, "profile.level": "regular", "profile.maxReps": 15, dailyGoal: 50,
   currencyUSD: true, voiceEnabled: false, lang: (navigator.language || "en").startsWith("ru") ? "ru" : "en",
 };
@@ -263,16 +267,31 @@ function newChallenge(o) {
   }, o);
 }
 
+// Единственный общий челлендж: 150 отжиманий + 50 приседаний в день.
+// С включённым Sync участники настоящие; без него — мок-соперники.
+const Sync = window.Sync || { enabled: false, uid: null, state: {}, init: async () => false, registerUser() {}, join() {}, report() {} };
+const SHARED_START = "2026-07-11";
+
+function currentDayFromStart(days) {
+  const s = new Date(SHARED_START + "T00:00:00").getTime();
+  return Math.min(Math.max(Math.floor((startOfDay(Date.now()) - s) / DAY) + 1, 1), days);
+}
+function dateKey(ts) {
+  const d = new Date(ts || Date.now());
+  return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0");
+}
+
 function mockChallenges() {
-  // Один активный челлендж: 150 отжиманий + 50 приседаний в день.
   return [
     newChallenge({
+      id: "main",
       title: "150 Push-ups + 50 Squats",
       goals: [{ exercise: "pushups", repsPerDay: 150 }, { exercise: "squats", repsPerDay: 50 }],
       durationDays: 30, buyIn: 100, isPublic: true,
-      currentDay: 12, yesterdayDropouts: 1,
-      participants: mockParticipants(15, 1, 6, true, 200),
-      myTotalReps: 1760,
+      currentDay: Sync.enabled ? currentDayFromStart(30) : 12,
+      yesterdayDropouts: Sync.enabled ? 0 : 1,
+      participants: Sync.enabled ? [] : mockParticipants(15, 1, 6, true, 200),
+      myTotalReps: Sync.enabled ? 0 : 1760,
     }),
   ];
 }
@@ -310,9 +329,33 @@ const app = {
   challenges: mockChallenges(),
   history: [],
   measurements: [],
-  totalPushups: 1760,
+  totalPushups: Sync.enabled ? 0 : 1760,
 };
-app.history = mockHistory(app.challenges.filter(C.isJoined));
+app.history = Sync.enabled ? [] : mockHistory(app.challenges.filter(C.isJoined));
+
+// Применяет живые данные Firebase к общему челленджу: участники, мой прогресс, история.
+function applySync() {
+  const ch = app.challenges.find((c) => c.id === "main");
+  const parts = Sync.state.participants;
+  if (!ch || !parts) return;
+  const today = dateKey();
+  ch.participants = Object.entries(parts).map(([id, p]) => {
+    const day = (p.days && p.days[today]) || {};
+    const todayReps = Object.values(day).reduce((a, b) => a + b, 0);
+    const doneToday = ch.goals.every((g) => (day[g.exercise] || 0) >= C.norm(ch, g));
+    return { id, name: p.name || "?", isMe: id === Sync.uid, state: "active", doneToday, todayReps, _days: p.days || {}, _total: p.total || 0 };
+  });
+  const me = ch.participants.find((p) => p.isMe);
+  if (me) {
+    ch.myTodayReps = Object.assign({}, me._days[today] || {});
+    ch.myTotalReps = me._total;
+    app.totalPushups = me._total;
+    app.history = Object.entries(me._days).sort(([a], [b]) => (a < b ? -1 : 1)).map(([date, per]) => ({
+      id: date, date: new Date(date + "T00:00:00").getTime(),
+      entries: [{ id: date + "e", title: ch.title, norm: C.repsNorm(ch), reps: Object.values(per).reduce((a, b) => a + b, 0) }],
+    }));
+  }
+}
 {
   const w = store["profile.weightKg"], m = store["profile.maxReps"];
   if (store.onboarded && w > 0 && m > 0) app.measurements = [{ id: uid(), date: Date.now(), weight: w, maxReps: m }];
@@ -336,8 +379,9 @@ function logEntry(title, norm, reps) {
 
 function joinChallenge(ch, weight, maxReps, beforePhoto) {
   if (C.isJoined(ch) || !spend(ch.buyIn, ch.title)) return false;
-  ch.participants.unshift({ id: uid(), name: "", isMe: true, state: "active", doneToday: false, todayReps: 0 });
+  ch.participants.unshift({ id: Sync.uid || uid(), name: "", isMe: true, state: "active", doneToday: false, todayReps: 0, _days: {}, _total: 0 });
   ch.startWeight = weight; ch.startMaxReps = maxReps; ch.beforePhoto = beforePhoto || null;
+  if (ch.id === "main") Sync.join(store["profile.name"]);
   return true;
 }
 
@@ -360,6 +404,7 @@ function addReps(ch, counts) {
   ch.myTotalReps += total;
   me.todayReps = C.myTodayTotal(ch);
   if (C.isTodayDone(ch)) me.doneToday = true;
+  if (ch.id === "main") Sync.report(dateKey(), ch.myTodayReps, ch.myTotalReps);
   return !wasDone && C.isTodayDone(ch);
 }
 
@@ -520,7 +565,35 @@ function YoursTab() {
     ${statsCard}
     ${nextUp ? `<button class="action-btn" data-act="play:${nextUp.id}">${iconF("play")}${t("Start today's workout")}</button>` : ""}
     ${mine.length ? mine.map((c) => ChallengeCard(c, true)).join("") : empty}
+    <button class="action-btn" data-act="invite" style="background:var(--white-08);color:#fff">${icon("share")}${t("Invite friends")}</button>
+    ${friendsCard()}
   </div>`;
+}
+
+// Список всех, кто прошёл онбординг (из Firebase), новые сверху.
+function friendsCard() {
+  const users = Sync.state.users;
+  if (!Sync.enabled || !users) return "";
+  const list = Object.entries(users).sort((a, b) => (b[1].joinedAt || 0) - (a[1].joinedAt || 0));
+  if (!list.length) return "";
+  const relDate = (ts) => {
+    if (!ts) return "";
+    const diff = startOfDay(Date.now()) - startOfDay(ts);
+    if (diff <= 0) return t("today");
+    if (diff === DAY) return t("yesterday");
+    return new Date(ts).toLocaleDateString(store.lang === "ru" ? "ru-RU" : "en-US", { day: "numeric", month: "short" });
+  };
+  const rows = list.slice(0, 15).map(([id, u]) => {
+    const isNew = Date.now() - (u.joinedAt || 0) < 48 * 3600 * 1000;
+    return `<div class="entry-row">
+      <div class="avatar">${id === Sync.uid ? icon("person") : esc((u.name || "?").slice(0, 1))}</div>
+      <span style="flex:1;font-weight:500;font-size:15px">${id === Sync.uid ? t("You") : esc(u.name || "?")}</span>
+      ${isNew ? `<span class="badge" style="color:var(--money)">NEW</span>` : ""}
+      <span class="secondary" style="font-size:13px">${relDate(u.joinedAt)}</span>
+    </div>`;
+  }).join("");
+  return `<div class="card" style="padding:16px;display:flex;flex-direction:column;gap:10px">
+    ${lbl(t("In the app: %lld", list.length), "tracking-1")}${rows}</div>`;
 }
 
 // ==========================================================================
@@ -541,13 +614,15 @@ function DetailScreen(id) {
   const c = app.challenges.find((x) => x.id === id);
   if (!c) { ui.detailId = null; return ChallengesTab(); }
   const joined = C.isJoined(c);
-  const nav = `<div class="navbar"><button class="icon-btn" data-act="back">${icon("chevronLeft")}</button><div class="title">${esc(c.title)}</div><div style="width:32px"></div></div>`;
+  const nav = `<div class="navbar"><button class="icon-btn" data-act="back">${icon("chevronLeft")}</button><div class="title">${esc(c.title)}</div><button class="icon-btn" data-act="invite">${icon("share")}</button></div>`;
   let body;
   if (joined) {
     body = [
       totalCard(c), todayCard(c),
       C.isFinished(c) ? `<button class="action-btn money" data-act="showResult:${c.id}">${iconF("trophy")}${t("Show result")}</button>` : "",
-      callToAction(c), potCard(c), socialCard(c), rulesCard(c),
+      callToAction(c),
+      `<button class="action-btn" data-act="invite" style="background:var(--white-08);color:#fff">${icon("share")}${t("Invite friends")}</button>`,
+      potCard(c), socialCard(c), rulesCard(c),
       c.beforePhoto ? beforeAfterCard(c) : "", participantsCard(c), callToAction(c),
     ].join("");
   } else {
@@ -761,6 +836,7 @@ function ProfileTab() {
   const roRow = (label, value, unit) => `<div class="settings-row"><span>${esc(label)}</span><span class="mono" style="font-weight:700;font-size:15px">${esc(value)}${unit ? ` <span class="secondary" style="font-size:13px">${esc(unit)}</span>` : ""}</span></div>`;
 
   const editControls = `
+    <input class="field" id="profile-name" value="${esc(store["profile.name"] || "")}" placeholder="${esc(t("Your name"))}" maxlength="20">
     ${seg("profile.gender", Gender.all.map((g) => [g, Gender.name(g)]), gender)}
     ${numStore(t("Age"), "profile.age", 14, 80)}
     ${numStore(t("Height"), "profile.heightCm", 120, 220, t("cm"))}
@@ -768,6 +844,7 @@ function ProfileTab() {
     ${numStore(t("Max reps in one set"), "profile.maxReps", 1, 120)}
     ${seg("profile.level", Level.all.map((l) => [l, Level.name(l)]), level)}`;
   const readControls = `
+    ${store["profile.name"] ? roRow(t("Your name"), store["profile.name"]) : ""}
     ${roRow(t("Gender"), Gender.name(gender))}
     ${roRow(t("Age"), store["profile.age"])}
     ${roRow(t("Height"), store["profile.heightCm"], t("cm"))}
@@ -825,7 +902,7 @@ function currencyToggle() {
 // ==========================================================================
 // Онбординг
 // ==========================================================================
-const LAST_STEP = 7;
+const LAST_STEP = 8;
 function Onboarding() {
   const step = ui.onbStep, gender = store["profile.gender"], level = store["profile.level"], maxReps = store["profile.maxReps"];
   const goal = recommendedDailyReps(level, maxReps);
@@ -849,12 +926,14 @@ function Onboarding() {
     <div style="color:var(--accent);width:76px;height:76px;display:flex">${iconF("flame")}</div>
     <div class="display" style="font-size:46px">FitStake</div>
     <div class="form-footer" style="max-width:320px;font-weight:500">${t("Every rep is verified by the camera. Coins on the line. Miss too many days and you're out.")}</div></div>`;
-  else if (step === 1) content = question(t("Your gender"), null, Gender.all.map((g) => optionCard(Gender.name(g), null, gender === g, `onbSet:profile.gender:${g}`)).join(""));
-  else if (step === 2) content = question(t("Your age"), null, wheel("profile.age", 14, 80, (v) => t("%lld years", v)));
-  else if (step === 3) content = question(t("Your height"), null, wheel("profile.heightCm", 120, 220, (v) => t("%lld cm", v)));
-  else if (step === 4) content = question(t("Your weight"), null, wheel("profile.weightKg", 35, 180, (v) => t("%lld kg", v)));
-  else if (step === 5) content = question(t("Your fitness level"), null, Level.all.map((l) => optionCard(Level.name(l), Level.subtitle(l), level === l, `onbSet:profile.level:${l}`)).join(""));
-  else if (step === 6) content = question(t("How many push-ups can you do in one set?"), t("Honestly — the daily goal is built from this."), wheel("profile.maxReps", 1, 120, (v) => String(v)));
+  else if (step === 1) content = question(t("Your name"), t("Friends will see it in the leaderboard."),
+    `<input class="field" id="onb-name" value="${esc(store["profile.name"] || "")}" placeholder="${esc(t("Your name"))}" maxlength="20" autocomplete="name">`);
+  else if (step === 2) content = question(t("Your gender"), null, Gender.all.map((g) => optionCard(Gender.name(g), null, gender === g, `onbSet:profile.gender:${g}`)).join(""));
+  else if (step === 3) content = question(t("Your age"), null, wheel("profile.age", 14, 80, (v) => t("%lld years", v)));
+  else if (step === 4) content = question(t("Your height"), null, wheel("profile.heightCm", 120, 220, (v) => t("%lld cm", v)));
+  else if (step === 5) content = question(t("Your weight"), null, wheel("profile.weightKg", 35, 180, (v) => t("%lld kg", v)));
+  else if (step === 6) content = question(t("Your fitness level"), null, Level.all.map((l) => optionCard(Level.name(l), Level.subtitle(l), level === l, `onbSet:profile.level:${l}`)).join(""));
+  else if (step === 7) content = question(t("How many push-ups can you do in one set?"), t("Honestly — the daily goal is built from this."), wheel("profile.maxReps", 1, 120, (v) => String(v)));
   else content = `<div class="center" style="height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px">
     ${lbl(t("Your daily goal"), "tracking-15")}
     <div class="money" style="font-size:72px">${goal}</div>
@@ -1238,7 +1317,14 @@ root.addEventListener("click", async (e) => {
     case "addMeasure": openMeasure(); return;
     case "unlockPhotos": photosUnlocked = true; render(); return;
     case "editProfile": profileEditing = true; render(); return;
-    case "saveProfile": profileEditing = false; render(); return;
+    case "saveProfile": {
+      const inp = document.getElementById("profile-name");
+      if (inp && inp.value.trim()) store["profile.name"] = inp.value.trim();
+      profileEditing = false;
+      Sync.registerUser(store["profile.name"]);
+      render(); return;
+    }
+    case "invite": shareInvite(); return;
     case "toggleLang": store.lang = store.lang === "ru" ? "en" : "ru"; render(); return;
     case "closeSheet": closeSheet(); return;
     case "closeFull": closeFull(); return;
@@ -1308,8 +1394,21 @@ root.addEventListener("click", async (e) => {
   // Онбординг
   if (cmd === "onbBack") { if (ui.onbStep > 0) { ui.onbStep--; render(); } return; }
   if (cmd === "onbNext") {
-    if (ui.onbStep === LAST_STEP) { store.dailyGoal = recommendedDailyReps(store["profile.level"], store["profile.maxReps"]); store.onboarded = true; ui.screen = "tabs"; render(); }
-    else { ui.onbStep++; render(); }
+    if (ui.onbStep === 1) {
+      const inp = document.getElementById("onb-name");
+      const name = inp ? inp.value.trim() : "";
+      if (!name) { toast(t("Your name")); return; }
+      store["profile.name"] = name;
+    }
+    if (ui.onbStep === LAST_STEP) {
+      store.dailyGoal = recommendedDailyReps(store["profile.level"], store["profile.maxReps"]);
+      store.onboarded = true;
+      Sync.registerUser(store["profile.name"]);
+      ui.screen = "tabs";
+      // Пришёл по ссылке-приглашению — сразу открываем вступление в общий челлендж.
+      if (new URLSearchParams(location.search).has("join")) { ui.tab = "challenges"; render(); openJoin("main"); return; }
+      render();
+    } else { ui.onbStep++; render(); }
     return;
   }
   if (cmd === "onbSet") { store[arg] = act.split(":")[2]; render(); return; }
@@ -1362,10 +1461,31 @@ render = function () {
 };
 
 // ==========================================================================
+// Приглашение друзей
+// ==========================================================================
+const INVITE_URL = "https://pysarenkovv.github.io/fitstake/?join=main";
+async function shareInvite() {
+  const text = t("Join my challenge — 150 push-ups + 50 squats a day!");
+  if (navigator.share) {
+    try { await navigator.share({ title: "FitStake", text, url: INVITE_URL }); return; } catch {}
+  }
+  try { await navigator.clipboard.writeText(INVITE_URL); toast(t("Link copied")); }
+  catch { prompt("URL", INVITE_URL); }
+}
+
+// ==========================================================================
 // Старт
 // ==========================================================================
 ui.screen = store.onboarded ? "tabs" : "onboarding";
 render();
+
+// Живой общий прогресс: подписка на Firebase (если конфиг вставлен).
+Sync.init(() => {
+  applySync();
+  // Не дёргаем перерисовку поверх открытых форм и камеры.
+  if (!ui.sheet && !ui.full && !liveSession) render();
+});
+if (store.onboarded && store["profile.name"]) Sync.registerUser(store["profile.name"]);
 
 
 
