@@ -23,6 +23,19 @@ const EX = {
     angleJoints: (s) => ({ a: s + "Hip", vertex: s + "Knee", b: s + "Ankle" }),
     bodyJoints: ["leftHip", "rightHip"],
   },
+  // Подтягивания: тот же локоть, но кисти на перекладине — ВЫШЕ плеч.
+  // Повтор = вис (прямые руки) → подъём (сгиб <110°) → опускание (>140°).
+  pullups: {
+    angleJoints: (s) => ({ a: s + "Shoulder", vertex: s + "Elbow", b: s + "Wrist" }),
+    bodyJoints: ["leftShoulder", "rightShoulder"],
+    wristAbove: true,
+  },
+  // Брусья/кольца: локоть, кисти в упоре — НИЖЕ плеч.
+  dips: {
+    angleJoints: (s) => ({ a: s + "Shoulder", vertex: s + "Elbow", b: s + "Wrist" }),
+    bodyJoints: ["leftShoulder", "rightShoulder"],
+    wristAbove: false,
+  },
 };
 
 // Индексы landmark-точек BlazePose (33 точки).
@@ -78,7 +91,9 @@ class RepCounter {
     this.smoothedAngle = angle;
 
     if (angle < this.downThreshold) {
-      if (!this.wasDown) {
+      // Ворота позы: у подтягиваний кисти выше плеч, у брусьев ниже —
+      // не даём чужому движению (отжимания от пола и т.п.) войти в повтор.
+      if (!this.wasDown && this._gateOK(points)) {
         this.wasDown = true;
         this.bodyAtDown = this._bodyMid(points, size);
         this.leftAnchorAtDown = this._anchor("left", points, size);
@@ -89,6 +104,22 @@ class RepCounter {
       if (this._isRealRep(points, size)) this.count++;
     }
     return { status: this.wasDown ? "down" : "up", bendAngle: angle };
+  }
+
+  // true, если положение кистей относительно плеч соответствует упражнению
+  // (или упражнению всё равно — pushups/squats).
+  _gateOK(points) {
+    const need = EX[this.exercise].wristAbove;
+    if (need === undefined) return true;
+    let checked = 0;
+    for (const s of ["left", "right"]) {
+      const w = points[s + "Wrist"], sh = points[s + "Shoulder"];
+      if (!w || !sh || w.confidence <= this.minConfidence || sh.confidence <= this.minConfidence) continue;
+      checked++;
+      // y растёт вниз: «выше» = меньший y.
+      if ((w.y < sh.y) !== need) return false;
+    }
+    return checked > 0;
   }
 
   _isRealRep(points, size) {

@@ -229,13 +229,14 @@ img { max-width: 100%; }
 /* сегмент-контрол */
 .segmented {
   display: flex;
+  flex-wrap: wrap; /* 5 упражнений в создании — переносим на вторую строку */
   gap: 2px;
   padding: 2px;
   background: var(--white-08);
   border-radius: 10px;
 }
 .segmented button {
-  flex: 1;
+  flex: 1 1 30%;
   padding: 8px 6px;
   border-radius: 8px;
   color: var(--text-secondary);

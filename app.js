@@ -127,6 +127,8 @@ const RU = {
   "Your name": "Твоё имя", "Friends will see it in the leaderboard.": "Друзья увидят его в таблице лидеров.",
   "Join my challenge — 150 push-ups + 50 squats a day!": "Залетай в мой челлендж — 150 отжиманий и 50 приседаний в день!",
   "In the app: %lld": "В приложении: %lld", "today": "сегодня", "yesterday": "вчера",
+  "Pull-ups": "Подтягивания", "Dips": "Брусья",
+  "Do today's pull-ups": "Подтягивания за сегодня", "Do today's dips": "Брусья за сегодня",
 };
 
 // Перевод + подстановка %lld / %@ по порядку аргументов.
@@ -187,8 +189,8 @@ const showCurrencyToggle = Currency.code !== "USD";
 const uid = (() => { let n = 0; return () => "id" + ++n; })();
 
 const Exercise = {
-  displayName: (e) => (e === "pushups" ? t("Push-ups") : t("Squats")),
-  actionText: (e) => (e === "pushups" ? t("Do today's push-ups") : t("Do today's squats")),
+  displayName: (e) => ({ pushups: t("Push-ups"), squats: t("Squats"), pullups: t("Pull-ups"), dips: t("Dips") }[e] || e),
+  actionText: (e) => ({ pushups: t("Do today's push-ups"), squats: t("Do today's squats"), pullups: t("Do today's pull-ups"), dips: t("Do today's dips") }[e] || e),
 };
 
 const MissPolicy = {
@@ -973,7 +975,7 @@ function fieldStepper(label, key, min, max, by) {
 function CreateSheet() {
   const f = ui.form;
   const seg = (opts, key, cur) => `<div class="segmented">${opts.map(([v, n]) => `<button data-act="seg" data-key="${key}" data-val="${v}" class="${cur === v ? "active" : ""}">${esc(n)}</button>`).join("")}</div>`;
-  const base = (f.mode === "combo" ? f.pushups + f.squats : f.mode === "squats" ? f.squats : f.pushups);
+  const base = f.mode === "combo" ? f.pushups + f.squats : f[f.mode];
   const goalsCount = f.mode === "combo" ? 2 : 1;
   const inc = f.progOn ? f.progStep * progIncrements({ step: f.progStep, period: f.progPeriod }, Math.min(Math.max(f.duration, 1), 365)) * goalsCount : 0;
 
@@ -981,9 +983,10 @@ function CreateSheet() {
     <div class="form-section">${lbl(t("Title"))}<input class="field" data-model="title" value="${esc(f.title)}" placeholder="100 Push-ups / 30 Days"></div>
 
     <div class="form-section">${lbl(t("Exercise"))}
-      ${seg([["pushups", t("Push-ups")], ["squats", t("Squats")], ["combo", t("Combo")]], "mode", f.mode)}
-      ${f.mode !== "squats" ? fieldStepper(f.mode === "combo" ? t("Push-ups per day") : t("Reps per day"), "pushups", 10, 500, 10) : ""}
-      ${f.mode !== "pushups" ? fieldStepper(f.mode === "combo" ? t("Squats per day") : t("Reps per day"), "squats", 10, 500, 10) : ""}
+      ${seg([["pushups", t("Push-ups")], ["squats", t("Squats")], ["pullups", t("Pull-ups")], ["dips", t("Dips")], ["combo", t("Combo")]], "mode", f.mode)}
+      ${f.mode === "combo"
+        ? fieldStepper(t("Push-ups per day"), "pushups", 10, 500, 10) + fieldStepper(t("Squats per day"), "squats", 10, 500, 10)
+        : fieldStepper(t("Reps per day"), f.mode, 5, 500, 5)}
     </div>
 
     <div class="form-section">${lbl(t("Schedule"))}
@@ -1272,7 +1275,7 @@ async function shareCard(data) {
 // ==========================================================================
 // Открытие/закрытие модалок и поздравлений
 // ==========================================================================
-function openCreate() { ui.form = { title: "", mode: "pushups", pushups: store.dailyGoal, squats: store.dailyGoal, duration: 30, buyIn: 50, isPublic: true, miss: "oneTotal", progOn: false, progStep: 5, progPeriod: "day" }; ui.sheet = CreateSheet; render(); }
+function openCreate() { ui.form = { title: "", mode: "pushups", pushups: store.dailyGoal, squats: store.dailyGoal, pullups: 20, dips: 30, duration: 30, buyIn: 50, isPublic: true, miss: "oneTotal", progOn: false, progStep: 5, progPeriod: "day" }; ui.sheet = CreateSheet; render(); }
 function openJoin(id) { ui.form = { challengeId: id, weight: store["profile.weightKg"], maxReps: store["profile.maxReps"], photo: null }; ui.sheet = JoinSheet; render(); }
 function openMeasure() { ui.form = { weight: store["profile.weightKg"], maxReps: store["profile.maxReps"] }; ui.sheet = MeasureSheet; render(); }
 function closeSheet() { ui.sheet = null; ui.form = null; render(); }
@@ -1354,9 +1357,9 @@ root.addEventListener("click", async (e) => {
     const f = ui.form;
     if (!f.title.trim()) { toast(t("Title")); return; }
     const clamp = (n) => Math.min(Math.max(n, 1), 500);
-    const goals = f.mode === "pushups" ? [{ exercise: "pushups", repsPerDay: clamp(f.pushups) }]
-      : f.mode === "squats" ? [{ exercise: "squats", repsPerDay: clamp(f.squats) }]
-      : [{ exercise: "pushups", repsPerDay: clamp(f.pushups) }, { exercise: "squats", repsPerDay: clamp(f.squats) }];
+    const goals = f.mode === "combo"
+      ? [{ exercise: "pushups", repsPerDay: clamp(f.pushups) }, { exercise: "squats", repsPerDay: clamp(f.squats) }]
+      : [{ exercise: f.mode, repsPerDay: clamp(f[f.mode]) }];
     const ok = createChallenge({ title: f.title.trim(), goals, durationDays: Math.min(Math.max(f.duration, 1), 365), buyIn: Math.max(f.buyIn, 1), isPublic: f.isPublic, missPolicy: f.miss, progression: f.progOn ? { step: f.progStep, period: f.progPeriod } : { step: 0, period: "day" } });
     if (ok) closeSheet(); else toast(t("Not enough coins"));
     return;
