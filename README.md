@@ -38,13 +38,16 @@ python3 -m http.server 8000
 
 Открыть http://localhost:8000 — камера на `localhost` работает.
 
-## Чтобы дать друзьям (нужен HTTPS!)
+## Живая версия (для друзей)
 
-Браузер даёт камеру только на `https://` или `localhost`. По локальной сети
-через `http://192.168.x.x` камера **не заработает**.
+**https://pysarenkovv.github.io/fitstake/** — постоянная HTTPS-ссылка, кидай друзьям.
 
-- **GitHub Pages** — залить папку, Settings → Pages (постоянная ссылка).
-- **Туннель на вечер**: `npx localtunnel --port 8000` или `ngrok http 8000`.
+Репозиторий: **github.com/PysarenkoVV/fitstake** (public, GitHub Pages с ветки
+`main`). Обновление = `git commit` + `git push origin main` (Pages пересобирается
+сам за ~минуту; при правках оболочки поднимать `CACHE` в `sw.js`).
+
+Браузер даёт камеру только на `https://` или `localhost` — поэтому и нужен
+хостинг (по локалке `http://192.168.x.x` камера не заработает).
 
 ## На домашний экран iPhone (PWA)
 
