@@ -628,7 +628,7 @@ function DetailScreen(id) {
   } else {
     body = [potCard(c), callToAction(c), rulesCard(c), participantsCard(c)].join("");
   }
-  return `<div class="fullscreen" id="detail-scroll" style="z-index:1">${nav}<div class="screen" style="padding-top:24px">${body}</div></div>`;
+  return `<div class="fullscreen" id="detail-scroll" style="z-index:1">${nav}<div class="screen stack" style="padding-top:24px">${body}</div></div>`;
 }
 
 function potCard(c) {
