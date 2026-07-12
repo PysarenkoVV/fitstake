@@ -15,9 +15,12 @@ const BONES = [
 ];
 
 const EX = {
+  // Отжимания: кисти на полу — НИЖЕ плеч. Гейт отсекает сгибы рук, когда они подняты
+  // (в комбо присед с поднятыми руками иначе засчитывался как ложное отжимание).
   pushups: {
     angleJoints: (s) => ({ a: s + "Shoulder", vertex: s + "Elbow", b: s + "Wrist" }),
     bodyJoints: ["leftShoulder", "rightShoulder"],
+    wristAbove: false,
   },
   squats: {
     angleJoints: (s) => ({ a: s + "Hip", vertex: s + "Knee", b: s + "Ankle" }),
@@ -111,15 +114,14 @@ class RepCounter {
   _gateOK(points) {
     const need = EX[this.exercise].wristAbove;
     if (need === undefined) return true;
-    let checked = 0;
     for (const s of ["left", "right"]) {
       const w = points[s + "Wrist"], sh = points[s + "Shoulder"];
       if (!w || !sh || w.confidence <= this.minConfidence || sh.confidence <= this.minConfidence) continue;
-      checked++;
-      // y растёт вниз: «выше» = меньший y.
+      // y растёт вниз: «выше» = меньший y. Блокируем только при явном нарушении;
+      // если кисти не видны — не мешаем (анти-чит хода корпуса проверит на выходе).
       if ((w.y < sh.y) !== need) return false;
     }
-    return checked > 0;
+    return true;
   }
 
   _isRealRep(points, size) {
