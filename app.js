@@ -129,6 +129,11 @@ const RU = {
   "In the app: %lld": "В приложении: %lld", "today": "сегодня", "yesterday": "вчера",
   "Pull-ups": "Подтягивания", "Dips": "Брусья",
   "Do today's pull-ups": "Подтягивания за сегодня", "Do today's dips": "Брусья за сегодня",
+  "You didn't finish this one.": "В этот раз ты не дошёл.", "Finishers": "Дошли",
+  "A new season starts soon.": "Скоро новый сезон.", "Completed": "Завершён",
+  "Day streak": "Дней подряд", "%lld-day streak": "%lld дней подряд",
+  "Closed": "Закрыт", "Missed": "Пропущен", "Upcoming": "Впереди", "Out": "Выбыл",
+  "Add to Home Screen: Share → Add to Home Screen": "На экран «Домой»: Поделиться → «На экран Домой»",
 };
 
 // Перевод + подстановка %lld / %@ по порядку аргументов.
@@ -302,6 +307,60 @@ function mockChallenges() {
 const DAY = 86400000;
 function startOfDay(d) { const x = new Date(d); x.setHours(0, 0, 0, 0); return x.getTime(); }
 
+// ==========================================================================
+// Прогресс по дням: закрытие / пропуски / выбывание / стрик / финиш.
+// Считается из participants/{uid}/days (синк-режим); детерминировано и тестируемо.
+// ==========================================================================
+function challengeStartKey(c) {
+  if (c.id === "main") return SHARED_START;
+  return c.startedAt ? dateKey(c.startedAt) : null;
+}
+function dayEpoch(startKey, day) { return new Date(startKey + "T00:00:00").getTime() + (day - 1) * DAY; }
+function dayClosed(c, day, dayData) {
+  return c.goals.every((g) => (dayData[g.exercise] || 0) >= C.norm(c, g, day));
+}
+// Прошедшие (не сегодняшние) дни, где дневная норма не закрыта.
+function missedDays(c, days) {
+  const startKey = challengeStartKey(c);
+  if (!startKey) return 0;
+  let missed = 0;
+  for (let day = 1; day < c.currentDay; day++) {
+    if (!dayClosed(c, day, days[dateKey(dayEpoch(startKey, day))] || {})) missed++;
+  }
+  return missed;
+}
+function allowedMisses(policy, throughDays) {
+  if (policy === "never") return 0;
+  if (policy === "onePerTwoWeeks") return Math.floor(Math.max(throughDays - 1, 0) / 14) + 1;
+  return 1; // oneTotal и дефолт
+}
+function eliminatedByMisses(c, days) {
+  return missedDays(c, days) > allowedMisses(c.missPolicy, c.currentDay - 1);
+}
+// Серия закрытых дней подряд от сегодня назад; незакрытое «сегодня» серию не рвёт.
+function streakOf(c, days) {
+  const startKey = challengeStartKey(c);
+  if (!startKey) return 0;
+  let streak = 0;
+  for (let day = c.currentDay; day >= 1; day--) {
+    const closed = dayClosed(c, day, days[dateKey(dayEpoch(startKey, day))] || {});
+    if (closed) streak++;
+    else if (day === c.currentDay) continue; // сегодня ещё в процессе
+    else break;
+  }
+  return streak;
+}
+// Челлендж завершён по календарю: прожиты все дни от старта.
+function challengeEnded(c) {
+  const startKey = challengeStartKey(c);
+  if (!startKey) return false;
+  return startOfDay(Date.now()) >= dayEpoch(startKey, c.durationDays) + DAY;
+}
+function myStreak(c) {
+  const me = C.me(c);
+  return me && me._streak ? me._streak : 0;
+}
+
 function mockHistory(joined) {
   const today = startOfDay(Date.now());
   const out = [];
@@ -341,12 +400,16 @@ function applySync() {
   const ch = app.challenges.find((c) => c.id === "main");
   const parts = Sync.state.participants;
   if (!ch || !parts) return;
+  ch.currentDay = currentDayFromStart(ch.durationDays); // свежий день для расчёта пропусков/стрика
   const today = dateKey();
   ch.participants = Object.entries(parts).map(([id, p]) => {
-    const day = (p.days && p.days[today]) || {};
+    const pdays = p.days || {};
+    const day = pdays[today] || {};
     const todayReps = Object.values(day).reduce((a, b) => a + b, 0);
     const doneToday = ch.goals.every((g) => (day[g.exercise] || 0) >= C.norm(ch, g));
-    return { id, name: p.name || "?", isMe: id === Sync.uid, state: "active", doneToday, todayReps, _days: p.days || {}, _total: p.total || 0 };
+    const eliminated = eliminatedByMisses(ch, pdays);
+    return { id, name: p.name || "?", isMe: id === Sync.uid, state: eliminated ? "eliminated" : "active",
+      doneToday, todayReps, _days: pdays, _total: p.total || 0, _streak: streakOf(ch, pdays) };
   });
   const me = ch.participants.find((p) => p.isMe);
   if (me) {
@@ -510,10 +573,25 @@ function render() {
     html = `<div class="screen" id="scroller">${{ yours: YoursTab, challenges: ChallengesTab, stats: StatsTab, profile: ProfileTab }[ui.tab]()}</div>`;
   }
   html += TabBar();
+  if (!ui.detailId && !ui.sheet && !ui.full) html += pwaHint();
   if (ui.sheet) html += ui.sheet();
   if (ui.full) html += ui.full();
   root.innerHTML = html;
   afterRender();
+}
+
+// Подсказка «на экран Домой» — только iOS Safari вне standalone; закрывается навсегда.
+function pwaHint() {
+  if (localStorage.getItem("fs.pwahint")) return "";
+  const ua = navigator.userAgent || "";
+  const isIOS = /iphone|ipad|ipod/i.test(ua);
+  const standalone = navigator.standalone === true || (window.matchMedia && window.matchMedia("(display-mode: standalone)").matches);
+  if (!isIOS || standalone) return "";
+  return `<div class="pwa-hint">
+    <span style="display:flex;color:var(--accent)">${icon("share")}</span>
+    <span style="flex:1;font-size:13px;font-weight:500">${t("Add to Home Screen: Share → Add to Home Screen")}</span>
+    <button data-act="dismissPwa" style="display:flex;color:var(--text-secondary);padding:4px">${icon("xmark")}</button>
+  </div>`;
 }
 
 function go(tab) { ui.tab = tab; ui.detailId = null; render(); window.scrollTo(0, 0); }
@@ -535,6 +613,7 @@ function bar(frac, money) {
   return `<div class="progress ${money ? "money" : ""}"><span style="width:${f}%"></span></div>`;
 }
 function badge(text, color) { return `<span class="badge" style="color:${color}">${esc(text)}</span>`; }
+function streakPill(n) { return n >= 2 ? `<span class="streak-pill">🔥 ${n}</span>` : ""; }
 function lbl(text, extra = "") { return `<span class="label secondary ${extra}" style="font-size:11px">${esc(text)}</span>`; }
 
 function screenHeader(title, right = "") {
@@ -581,7 +660,7 @@ function ChallengeCard(c, withPlay) {
       <div style="text-align:right"><div>${lbl(t("You'd win"), "tracking-1")}</div><div class="money" style="font-size:20px">${coin(C.payout(c))}</div></div>
     </div>`;
 
-  const canPlay = joined && !C.isTodayDone(c);
+  const canPlay = joined && !C.isTodayDone(c) && !challengeEnded(c);
   const playBtn = canPlay ? (withPlay
     ? `<button data-act="play:${c.id}" style="width:36px;height:36px;border-radius:50%;background:var(--accent);color:#000;display:flex;align-items:center;justify-content:center">${iconF("play")}</button>`
     : `<span style="width:36px;height:36px;border-radius:50%;background:var(--accent);color:#000;display:flex;align-items:center;justify-content:center">${iconF("play")}</span>`) : "";
@@ -589,7 +668,7 @@ function ChallengeCard(c, withPlay) {
   return `<div class="card ${doneBorder}" data-act="open:${c.id}" style="padding:20px;display:flex;flex-direction:column;gap:14px">
     <div class="between" style="align-items:flex-start">
       <div style="font-size:20px;font-weight:700">${esc(c.title)}</div>
-      ${badge(c.isPublic ? t("Public") : t("Private"), c.isPublic ? "var(--text-secondary)" : "var(--purple)")}
+      <div class="row gap6">${joined ? streakPill(myStreak(c)) : ""}${challengeEnded(c) ? badge(t("Completed"), "var(--money)") : badge(c.isPublic ? t("Public") : t("Private"), c.isPublic ? "var(--text-secondary)" : "var(--purple)")}</div>
     </div>
     <div class="between">
       ${!joined ? lbl(C.goalsText(c)) : "<span></span>"}
@@ -611,7 +690,7 @@ function ChallengeCard(c, withPlay) {
 function YoursTab() {
   const mine = app.challenges.filter(C.isJoined);
   const doneToday = mine.filter(C.isTodayDone).length;
-  const nextUp = mine.find((c) => !C.isTodayDone(c));
+  const nextUp = mine.find((c) => !C.isTodayDone(c) && !challengeEnded(c));
   const statsCard = `<div class="card center" style="padding:24px 16px">
     ${lbl(t("All-time reps"), "tracking-15")}
     <div class="money" style="font-size:56px;margin:6px 0">${app.totalPushups}</div>
@@ -680,11 +759,15 @@ function DetailScreen(id) {
   const nav = `<div class="navbar"><button class="icon-btn" data-act="back">${icon("chevronLeft")}</button><div class="title">${esc(c.title)}</div><button class="icon-btn" data-act="invite">${icon("share")}</button></div>`;
   let body;
   if (joined) {
-    body = [
+    const ended = challengeEnded(c);
+    const inviteBtn = `<button class="action-btn" data-act="invite" style="background:var(--white-08);color:#fff">${icon("share")}${t("Invite friends")}</button>`;
+    body = ended ? [
+      finaleCard(c), totalCard(c), participantsCard(c), potCard(c), rulesCard(c),
+      c.beforePhoto ? beforeAfterCard(c) : "", inviteBtn,
+    ].join("") : [
       totalCard(c), todayCard(c),
       C.isFinished(c) ? `<button class="action-btn money" data-act="showResult:${c.id}">${iconF("trophy")}${t("Show result")}</button>` : "",
-      callToAction(c),
-      `<button class="action-btn" data-act="invite" style="background:var(--white-08);color:#fff">${icon("share")}${t("Invite friends")}</button>`,
+      callToAction(c), inviteBtn,
       potCard(c), socialCard(c), rulesCard(c),
       c.beforePhoto ? beforeAfterCard(c) : "", participantsCard(c), callToAction(c),
     ].join("");
@@ -709,10 +792,28 @@ function potCard(c) {
   </div>`;
 }
 function totalCard(c) {
+  const s = myStreak(c);
   return `<div class="card center" style="padding:24px 16px">
     ${lbl(t("Challenge total"), "tracking-15")}
     <div class="money" style="font-size:56px;margin:6px 0">${c.myTotalReps}</div>
-    ${lbl(C.exerciseNames(c), "tracking-1")}
+    ${s >= 2 ? `<div class="row gap6" style="justify-content:center">${streakPill(s)}${lbl(t("Day streak"), "tracking-1")}</div>` : lbl(C.exerciseNames(c), "tracking-1")}
+  </div>`;
+}
+// Экран итогов завершённого челленджа: банк, кто дошёл, что забираешь.
+function finaleCard(c) {
+  const finishers = C.active(c);
+  const iFinished = !!C.me(c) && C.me(c).state === "active";
+  return `<div class="card done" style="padding:22px 16px;display:flex;flex-direction:column;gap:14px;align-items:center;text-align:center">
+    <div class="c-money" style="font-size:52px;display:flex">${iconF("trophy")}</div>
+    <div class="display" style="font-size:28px">${t("Challenge complete!")}</div>
+    ${iFinished
+      ? `<div class="row gap6" style="align-items:baseline">${lbl(t("You take home"))}<span class="c-money money" style="font-size:26px">${coin(C.payout(c))}</span></div>`
+      : `<div class="secondary" style="font-weight:600">${t("You didn't finish this one.")}</div>`}
+    <div class="between" style="width:100%;align-items:baseline">
+      <div>${lbl(t("Finishers"), "tracking-1")}<div class="money" style="font-size:20px">${finishers.length} / ${c.participants.length}</div></div>
+      <div style="text-align:right">${lbl(t("Prize pool"), "tracking-1")}<div class="c-money money" style="font-size:20px">${coin(C.pot(c))}</div></div>
+    </div>
+    ${lbl(t("A new season starts soon."))}
   </div>`;
 }
 function todayCard(c) {
@@ -783,9 +884,10 @@ function participantsCard(c) {
   const myBelow = myRank > top.length && myRank > 0;
   const hidden = ranked.length - top.length - (myBelow ? 1 : 0);
   const rankBadge = (r) => (r === 1 ? "🥇" : r === 2 ? "🥈" : r === 3 ? "🥉" : `<span class="rank">${r}.</span>`);
+  const tappable = Sync.enabled;
   const row = (p, rank) => {
     const done = p.todayReps >= norm;
-    return `<div class="row gap12" style="opacity:${p.state === "eliminated" ? 0.45 : 1}">
+    return `<div ${tappable ? `data-act="participant:${p.id}" ` : ""}class="row gap12" style="opacity:${p.state === "eliminated" ? 0.45 : 1}${tappable ? ";cursor:pointer" : ""}">
       <div class="rank" style="width:28px">${rankBadge(rank)}</div>
       <div class="avatar">${p.isMe ? icon("person") : esc(p.name.slice(0, 1))}</div>
       <div style="flex:1;display:flex;flex-direction:column;gap:6px">
@@ -1104,6 +1206,38 @@ function MeasureSheet() {
   return sheetShell(t("New measurement"), body, true);
 }
 
+// Календарь дней участника: тап по строке лидерборда (данные из Firebase).
+function ParticipantSheet() {
+  const c = app.challenges.find((x) => x.id === "main");
+  const p = c && c.participants.find((x) => x.id === ui.form.participantId);
+  if (!c || !p) return sheetShell(t("Leaderboard"), "", true);
+  const startKey = challengeStartKey(c);
+  const cells = [];
+  for (let day = 1; day <= c.durationDays; day++) {
+    let cls = "future";
+    if (startKey && day <= c.currentDay) {
+      const dd = (p._days || {})[dateKey(dayEpoch(startKey, day))] || {};
+      const sum = Object.values(dd).reduce((a, b) => a + b, 0);
+      if (dayClosed(c, day, dd)) cls = "closed";
+      else if (day === c.currentDay) cls = "current";
+      else cls = sum > 0 ? "partial" : "missed";
+    }
+    cells.push(`<div class="cal-cell ${cls}">${day}</div>`);
+  }
+  const legend = (cls, txt) => `<span class="row gap6" style="font-size:12px"><span class="cal-dot ${cls}"></span><span class="secondary">${esc(txt)}</span></span>`;
+  const name = p.isMe ? t("You") : p.name;
+  const body = `
+    <div class="between" style="align-items:baseline">
+      <div class="row gap8">${lbl(t("Challenge total"), "tracking-1")}${p.state === "eliminated" ? badge(t("Out"), "var(--red)") : streakPill(p._streak || 0)}</div>
+      <span class="money" style="font-size:20px">${p._total || 0}</span>
+    </div>
+    <div class="cal-grid">${cells.join("")}</div>
+    <div class="wrap" style="gap:8px 14px">
+      ${legend("closed", t("Closed"))}${legend("current", t("Today"))}${legend("missed", t("Missed"))}${legend("future", t("Upcoming"))}
+    </div>`;
+  return sheetShell(name, body, true);
+}
+
 // ==========================================================================
 // Поздравления
 // ==========================================================================
@@ -1344,6 +1478,7 @@ async function shareCard(data) {
 function openCreate() { ui.form = { title: "", mode: "pushups", pushups: store.dailyGoal, squats: store.dailyGoal, pullups: 20, dips: 30, duration: 30, buyIn: 50, isPublic: true, miss: "oneTotal", progOn: false, progStep: 5, progPeriod: "day" }; ui.sheet = CreateSheet; render(); }
 function openJoin(id) { ui.form = { challengeId: id, weight: store["profile.weightKg"], maxReps: store["profile.maxReps"], photo: null }; ui.sheet = JoinSheet; render(); }
 function openMeasure() { ui.form = { weight: store["profile.weightKg"], maxReps: store["profile.maxReps"] }; ui.sheet = MeasureSheet; render(); }
+function openParticipant(id) { ui.form = { participantId: id }; ui.sheet = ParticipantSheet; render(); }
 function closeSheet() { ui.sheet = null; ui.form = null; render(); }
 function openDayComplete(c) { ui.fullId = c.id; ui.full = DayCompleteFull; render(); }
 function openChallengeComplete(c) { ui.form = { challengeId: c.id, weight: store["profile.weightKg"], maxReps: store["profile.maxReps"], photo: null }; ui.full = ChallengeCompleteFull; render(); }
@@ -1411,6 +1546,8 @@ root.addEventListener("click", async (e) => {
       render(); return;
     }
     case "invite": shareInvite(); return;
+    case "participant": openParticipant(arg); return;
+    case "dismissPwa": localStorage.setItem("fs.pwahint", "1"); render(); return;
     case "toggleLang": store.lang = store.lang === "ru" ? "en" : "ru"; render(); return;
     case "closeSheet": closeSheet(); return;
     case "closeFull": closeFull(); return;

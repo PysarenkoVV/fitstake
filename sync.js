@@ -1,5 +1,8 @@
 /* FitStake — общий прогресс через Firebase Realtime Database.
    Без конфига (FIREBASE_CONFIG = null) всё выключено и приложение живёт локально.
+   uid = стабильный идентификатор анонимной авторизации Firebase (auth.uid).
+   Правила БД (database.rules.json): читать может каждый, писать — только в свой узел
+   ($uid === auth.uid). Пишем строго по адресам .../{uid}, поэтому чужой прогресс не подделать.
    Схема:
      fitstake/users/{uid}: { name, joinedAt }                — все, кто прошёл онбординг
      fitstake/challenge_main/participants/{uid}:
@@ -11,29 +14,34 @@
 window.Sync = (() => {
   const CFG = window.FIREBASE_CONFIG;
   const enabled = !!(CFG && CFG.apiKey);
+  const V = "https://www.gstatic.com/firebasejs/10.12.2/";
 
-  let uid = localStorage.getItem("fs.uid");
-  if (!uid) {
-    uid = (crypto.randomUUID ? crypto.randomUUID() : "u" + Date.now() + Math.random().toString(36).slice(2));
-    localStorage.setItem("fs.uid", uid);
-  }
+  let uid = null; // заполняется после анонимного входа
 
   const state = { users: null, participants: null };
   let db = null, F = null, onChange = null;
-  // Операции, вызванные до того, как init() дозагрузил SDK, — выполняем после подключения.
+  // Операции, вызванные до готовности auth+db, — выполняем после подключения.
   const queued = [];
-  function ready(fn) { db ? fn() : queued.push(fn); }
+  function ready(fn) { (db && uid) ? fn() : queued.push(fn); }
   function write(path, upd) { F.update(F.ref(db, path), upd).catch(() => {}); }
 
   async function init(cb) {
     onChange = cb;
     if (!enabled) return false;
     try {
-      const appMod = await import("https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js");
-      const dbMod = await import("https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js");
+      const [appMod, dbMod, authMod] = await Promise.all([
+        import(V + "firebase-app.js"),
+        import(V + "firebase-database.js"),
+        import(V + "firebase-auth.js"),
+      ]);
       const fbApp = appMod.initializeApp(CFG);
       db = dbMod.getDatabase(fbApp);
       F = dbMod;
+      // Анонимный вход: uid стабилен между визитами (сессию Firebase хранит сам),
+      // повторный вызов возвращает того же пользователя.
+      const auth = authMod.getAuth(fbApp);
+      const cred = await authMod.signInAnonymously(auth);
+      uid = cred.user.uid;
       F.onValue(F.ref(db, "fitstake/users"), (snap) => {
         state.users = snap.val() || {};
         if (onChange) onChange();
@@ -50,14 +58,15 @@ window.Sync = (() => {
     }
   }
 
-  // Регистрация в списке «кто в приложении»; joinedAt пишется один раз.
+  // Регистрация в списке «кто в приложении»; joinedAt пишется один раз на этот uid.
   function registerUser(name) {
     if (!enabled) return;
     ready(() => {
       const upd = { name: name || "Player" };
-      if (!localStorage.getItem("fs.registered")) {
+      const regKey = "fs.reg." + uid;
+      if (!localStorage.getItem(regKey)) {
         upd.joinedAt = Date.now();
-        localStorage.setItem("fs.registered", "1");
+        localStorage.setItem(regKey, "1");
       }
       write("fitstake/users/" + uid, upd);
     });
@@ -86,5 +95,5 @@ window.Sync = (() => {
     });
   }
 
-  return { enabled, uid, state, init, registerUser, join, report };
+  return { enabled, state, init, registerUser, join, report, get uid() { return uid; } };
 })();
