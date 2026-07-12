@@ -122,7 +122,7 @@ const RU = {
   "Your data": "Твои данные", "Your fitness level": "Твоя физуха", "Your gender": "Твой пол", "Your height": "Твой рост",
   "Your starting point — at the finish you'll see how far you've come.": "Твоя точка отсчёта — на финише увидишь, как далеко ушёл.",
   "Your weight": "Твой вес", "Your whole body must be in frame": "В кадре должно быть всё тело целиком", "Yours": "Твои",
-  "Language": "Язык", "Edit": "Изменить",
+  "Language": "Язык", "Edit": "Изменить", "Increase by": "Прирост",
   "Invite friends": "Пригласить друзей", "Link copied": "Ссылка скопирована",
   "Your name": "Твоё имя", "Friends will see it in the leaderboard.": "Друзья увидят его в таблице лидеров.",
   "Join my challenge — 150 push-ups + 50 squats a day!": "Залетай в мой челлендж — 150 отжиманий и 50 приседаний в день!",
@@ -186,7 +186,8 @@ const showCurrencyToggle = Currency.code !== "USD";
 // ==========================================================================
 // Модели и вычисляемые свойства (порт Models.swift)
 // ==========================================================================
-const uid = (() => { let n = 0; return () => "id" + ++n; })();
+// Случайный суффикс — чтобы id новых объектов не совпадали с восстановленными из localStorage.
+const uid = (() => { let n = 0; const salt = Math.random().toString(36).slice(2, 6); return () => "id" + ++n + salt; })();
 
 const Exercise = {
   displayName: (e) => ({ pushups: t("Push-ups"), squats: t("Squats"), pullups: t("Pull-ups"), dips: t("Dips") }[e] || e),
@@ -358,9 +359,68 @@ function applySync() {
     }));
   }
 }
+// ---- Персистентность: баланс, челленджи, история и замеры живут в localStorage ----
+const SAVE_KEY = "fs.state";
+function snapshotApp() {
+  return { balance: app.balance, transactions: app.transactions, challenges: app.challenges,
+    history: app.history, measurements: app.measurements, totalPushups: app.totalPushups, dayKey: app.dayKey };
+}
+let saveTimer = null;
+function saveApp() {
+  clearTimeout(saveTimer);
+  saveTimer = setTimeout(() => {
+    try { localStorage.setItem(SAVE_KEY, JSON.stringify(snapshotApp())); }
+    catch {
+      // квота переполнена — сохраняем без фото
+      const slim = snapshotApp();
+      slim.challenges = slim.challenges.map((c) => Object.assign({}, c, { beforePhoto: null, afterPhoto: null }));
+      try { localStorage.setItem(SAVE_KEY, JSON.stringify(slim)); } catch {}
+    }
+  }, 250);
+}
+(function restoreApp() {
+  app.dayKey = dateKey();
+  let saved = null;
+  try { saved = JSON.parse(localStorage.getItem(SAVE_KEY)); } catch {}
+  if (!saved || !Array.isArray(saved.challenges) || !saved.challenges.length) return;
+  app.balance = saved.balance != null ? saved.balance : app.balance;
+  app.transactions = saved.transactions || app.transactions;
+  app.challenges = saved.challenges;
+  app.history = saved.history || [];
+  app.measurements = saved.measurements || [];
+  app.totalPushups = saved.totalPushups || 0;
+  app.dayKey = saved.dayKey || dateKey();
+  // Конфигурация общего челленджа всегда из кода — старое сохранение не должно блокировать обновления.
+  const tpl = mockChallenges()[0];
+  const main = app.challenges.find((c) => c.id === "main");
+  if (!main) app.challenges.unshift(tpl);
+  else {
+    Object.assign(main, { title: tpl.title, goals: tpl.goals, durationDays: tpl.durationDays, buyIn: tpl.buyIn, isPublic: tpl.isPublic });
+    if (Sync.enabled) main.currentDay = currentDayFromStart(main.durationDays);
+  }
+})();
 {
   const w = store["profile.weightKg"], m = store["profile.maxReps"];
-  if (store.onboarded && w > 0 && m > 0) app.measurements = [{ id: uid(), date: Date.now(), weight: w, maxReps: m }];
+  if (store.onboarded && w > 0 && m > 0 && !app.measurements.length) app.measurements = [{ id: uid(), date: Date.now(), weight: w, maxReps: m }];
+}
+
+// ---- Смена дня: приложение может жить открытым сутками — сбрасываем «сегодня» и двигаем номер дня ----
+function rolloverIfNeeded() {
+  const now = dateKey();
+  if (app.dayKey === now) return false;
+  const from = new Date(app.dayKey + "T00:00:00").getTime();
+  const diff = Math.max(1, Math.round((startOfDay(Date.now()) - from) / DAY));
+  app.dayKey = now;
+  for (const c of app.challenges) {
+    c.myTodayReps = {};
+    for (const p of c.participants) { p.doneToday = false; p.todayReps = 0; }
+    if (c.id === "main" && Sync.enabled) c.currentDay = currentDayFromStart(c.durationDays);
+    else if (c.startedAt) c.currentDay = Math.min(Math.floor((startOfDay(Date.now()) - startOfDay(c.startedAt)) / DAY) + 1, c.durationDays);
+    else c.currentDay = Math.min(c.currentDay + diff, c.durationDays);
+  }
+  applySync(); // с Firebase «сегодня» пересоберётся из данных нового дня
+  saveApp();
+  return true;
 }
 
 function spend(amount, title) {
@@ -389,7 +449,7 @@ function joinChallenge(ch, weight, maxReps, beforePhoto) {
 
 function createChallenge(o) {
   if (!spend(o.buyIn, o.title)) return false;
-  app.challenges.unshift(newChallenge(Object.assign({ currentDay: 1, yesterdayDropouts: 0, participants: [{ id: uid(), name: "", isMe: true, state: "active", doneToday: false, todayReps: 0 }] }, o)));
+  app.challenges.unshift(newChallenge(Object.assign({ currentDay: 1, yesterdayDropouts: 0, startedAt: startOfDay(Date.now()), participants: [{ id: uid(), name: "", isMe: true, state: "active", doneToday: false, todayReps: 0 }] }, o)));
   return true;
 }
 
@@ -442,6 +502,7 @@ const root = document.getElementById("app");
 let scrollMemo = {};
 
 function render() {
+  rolloverIfNeeded();
   if (ui.screen === "onboarding") { root.innerHTML = Onboarding(); afterRender(); return; }
   let html = "";
   if (ui.detailId) html = DetailScreen(ui.detailId);
@@ -748,13 +809,17 @@ function StatsTab() {
   const joined = app.challenges.filter(C.isJoined);
   const dot = (color, title) => `<div class="row gap8"><span class="chart-dot" style="background:${color}"></span><span class="label" style="font-size:11px;letter-spacing:1px">${esc(title)}</span></div>`;
 
+  // Суммы по календарным дням: в истории бывают пропуски, слайс «по записям» сдвигал графики
+  const byDay = new Map(app.history.map((d) => [startOfDay(d.date), d.entries.reduce((s, e) => s + e.reps, 0)]));
+  const today0 = startOfDay(Date.now());
+  const series = (n) => { const out = []; for (let back = n - 1; back >= 0; back--) out.push(byDay.get(today0 - back * DAY) || 0); return out; };
+
   // Недельный объём
-  const reps = app.history.slice(-28).map((d) => d.entries.reduce((s, e) => s + e.reps, 0));
-  const padded = new Array(Math.max(0, 28 - reps.length)).fill(0).concat(reps);
+  const padded = series(28);
   const weeks = [0, 1, 2, 3].map((w) => padded.slice(w * 7, w * 7 + 7).reduce((a, b) => a + b, 0));
 
   // Активность по дням
-  const days = app.history.slice(-30).map((d) => ({ date: d.date, reps: d.entries.reduce((s, e) => s + e.reps, 0) }));
+  const days = series(30).map((reps, i) => ({ date: today0 - (29 - i) * DAY, reps }));
 
   const weeklyCard = `<div class="card" style="padding:16px;display:flex;flex-direction:column;gap:4px">
     ${dot("var(--money)", t("Weekly volume"))}
@@ -816,6 +881,7 @@ function dailyChart(days) {
 // ==========================================================================
 let photosUnlocked = false;
 let profileEditing = false;
+let profileNameDraft = null; // черновик имени — переживает перерисовки от степперов
 function ProfileTab() {
   const level = store["profile.level"], gender = store["profile.gender"];
   const withPhotos = app.challenges.filter((c) => c.beforePhoto);
@@ -838,7 +904,7 @@ function ProfileTab() {
   const roRow = (label, value, unit) => `<div class="settings-row"><span>${esc(label)}</span><span class="mono" style="font-weight:700;font-size:15px">${esc(value)}${unit ? ` <span class="secondary" style="font-size:13px">${esc(unit)}</span>` : ""}</span></div>`;
 
   const editControls = `
-    <input class="field" id="profile-name" value="${esc(store["profile.name"] || "")}" placeholder="${esc(t("Your name"))}" maxlength="20">
+    <input class="field" id="profile-name" value="${esc(profileNameDraft != null ? profileNameDraft : (store["profile.name"] || ""))}" placeholder="${esc(t("Your name"))}" maxlength="20">
     ${seg("profile.gender", Gender.all.map((g) => [g, Gender.name(g)]), gender)}
     ${numStore(t("Age"), "profile.age", 14, 80)}
     ${numStore(t("Height"), "profile.heightCm", 120, 220, t("cm"))}
@@ -998,7 +1064,7 @@ function CreateSheet() {
 
     <div class="form-section">${lbl(t("Progression"))}
       <div class="settings-row"><span>${t("Progressive overload")}</span><button data-act="toggle" data-key="progOn" class="toggle ${f.progOn ? "on" : ""}"></button></div>
-      ${f.progOn ? `${fieldStepper(t("Increase by: %lld reps", "").replace(/\s+/g, " ").trim(), "progStep", 1, 50, 1)}
+      ${f.progOn ? `${fieldStepper(t("Increase by"), "progStep", 1, 50, 1)}
         ${seg([["day", t("per day")], ["week", t("per week")]], "progPeriod", f.progPeriod)}
         <div class="rule-row">${icon("bolt")}<div>${t("Day 1: %lld → Day %lld: %lld", base, Math.min(Math.max(f.duration, 1), 365), base + inc)}</div></div>` : ""}
       <div class="form-footer">${t("The daily goal grows as the challenge goes on.")}</div>
@@ -1135,7 +1201,7 @@ async function openSession(challengeId) {
     : `<div class="counter-col"><span class="counter-big c-white" data-num="${i}">${g.start}</span>${g.target != null ? `<span class="target">/ ${g.target}</span>` : ""}<span class="cap">${t("Reps")}</span></div>`).join("");
   const numEls = goals.map((_, i) => countersEl.querySelector(`[data-num="${i}"]`));
 
-  const sess = new window.PoseSession(goals.map((g) => g.exercise), { voice: store.voiceEnabled });
+  const sess = new window.PoseSession(goals.map((g) => g.exercise), { voice: store.voiceEnabled, lang: store.lang === "ru" ? "ru-RU" : "en-US" });
   liveSession = { sess, overlay };
 
   try {
@@ -1287,8 +1353,24 @@ function pickImage(camera) {
   return new Promise((res) => {
     const i = document.createElement("input");
     i.type = "file"; i.accept = "image/*"; if (camera) i.capture = "user";
-    i.onchange = () => { const f = i.files[0]; if (!f) return res(null); const r = new FileReader(); r.onload = () => res(r.result); r.readAsDataURL(f); };
+    i.onchange = () => { const f = i.files[0]; if (!f) return res(null); const r = new FileReader(); r.onload = () => downscale(r.result).then(res); r.readAsDataURL(f); };
     i.click();
+  });
+}
+// Ужимаем фото до 1000px JPEG: снимки с камеры (10+ МБ в base64) тормозят шер-карточку и не влезают в localStorage.
+function downscale(dataURL) {
+  return new Promise((res) => {
+    const im = new Image();
+    im.onload = () => {
+      const k = Math.min(1, 1000 / Math.max(im.width, im.height, 1));
+      if (k === 1 && dataURL.length < 500000) return res(dataURL);
+      const cv = document.createElement("canvas");
+      cv.width = Math.max(1, Math.round(im.width * k)); cv.height = Math.max(1, Math.round(im.height * k));
+      cv.getContext("2d").drawImage(im, 0, 0, cv.width, cv.height);
+      res(cv.toDataURL("image/jpeg", 0.82));
+    };
+    im.onerror = () => res(dataURL);
+    im.src = dataURL;
   });
 }
 
@@ -1319,11 +1401,12 @@ root.addEventListener("click", async (e) => {
     case "join": openJoin(arg); return;
     case "addMeasure": openMeasure(); return;
     case "unlockPhotos": photosUnlocked = true; render(); return;
-    case "editProfile": profileEditing = true; render(); return;
+    case "editProfile": profileEditing = true; profileNameDraft = null; render(); return;
     case "saveProfile": {
       const inp = document.getElementById("profile-name");
-      if (inp && inp.value.trim()) store["profile.name"] = inp.value.trim();
-      profileEditing = false;
+      const name = (inp ? inp.value : (profileNameDraft || "")).trim();
+      if (name) store["profile.name"] = name;
+      profileEditing = false; profileNameDraft = null;
       Sync.registerUser(store["profile.name"]);
       render(); return;
     }
@@ -1366,6 +1449,7 @@ root.addEventListener("click", async (e) => {
   }
   if (cmd === "submitJoin") {
     const f = ui.form, c = app.challenges.find((x) => x.id === f.challengeId);
+    if (C.isJoined(c)) { closeSheet(); return; } // уже вступил (повторный заход по ссылке)
     const ok = joinChallenge(c, f.weight, f.maxReps, f.photo);
     if (ok) closeSheet(); else toast(t("Not enough coins"));
     return;
@@ -1409,7 +1493,7 @@ root.addEventListener("click", async (e) => {
       Sync.registerUser(store["profile.name"]);
       ui.screen = "tabs";
       // Пришёл по ссылке-приглашению — сразу открываем вступление в общий челлендж.
-      if (new URLSearchParams(location.search).has("join")) { ui.tab = "challenges"; render(); openJoin("main"); return; }
+      if (JOIN_INTENT) { ui.tab = "challenges"; render(); openJoin("main"); return; }
       render();
     } else { ui.onbStep++; render(); }
     return;
@@ -1419,6 +1503,7 @@ root.addEventListener("click", async (e) => {
 
 root.addEventListener("input", (e) => {
   const el = e.target;
+  if (el.id === "profile-name") { profileNameDraft = el.value; return; }
   if (el.dataset.model != null) {
     const k = el.dataset.model;
     ui.form[k] = el.type === "number" ? (parseInt(el.value) || 0) : el.value;
@@ -1439,11 +1524,11 @@ root.addEventListener("change", (e) => {
 // ==========================================================================
 function afterRender() {
   document.querySelectorAll(".wheel").forEach((w) => {
-    const key = w.dataset.wheel, min = +w.dataset.min;
+    const key = w.dataset.wheel, min = +w.dataset.min, max = +w.dataset.max;
     w.scrollTop = (store[key] - min) * 44;
     let timer;
     w.addEventListener("scroll", () => {
-      const k = Math.round(w.scrollTop / 44), val = min + k;
+      const val = Math.min(Math.max(min + Math.round(w.scrollTop / 44), min), max);
       w.querySelectorAll(".opt").forEach((o) => o.classList.toggle("active", +o.dataset.val === val));
       clearTimeout(timer);
       timer = setTimeout(() => { store[key] = val; }, 120);
@@ -1461,6 +1546,7 @@ render = function () {
   if (sheetTop != null) { const s = document.querySelector(".sheet"); if (s) s.scrollTop = sheetTop; }
   if (detailTop != null) { const d = document.querySelector("#detail-scroll"); if (d) d.scrollTop = detailTop; }
   window.scrollTo(0, winTop);
+  saveApp();
 };
 
 // ==========================================================================
@@ -1479,7 +1565,12 @@ async function shareInvite() {
 // ==========================================================================
 // Старт
 // ==========================================================================
+// Пришли по ссылке-приглашению: запоминаем и чистим URL, чтобы обновление страницы не повторяло действие.
+const JOIN_INTENT = new URLSearchParams(location.search).has("join");
+if (JOIN_INTENT && history.replaceState) history.replaceState(null, "", location.pathname);
 ui.screen = store.onboarded ? "tabs" : "onboarding";
+// Уже онбордился — открываем общий челлендж (там кнопка вступления, если ещё не внутри).
+if (store.onboarded && JOIN_INTENT) { ui.tab = "challenges"; ui.detailId = "main"; }
 render();
 
 // Живой общий прогресс: подписка на Firebase (если конфиг вставлен).
@@ -1489,6 +1580,10 @@ Sync.init(() => {
   if (!ui.sheet && !ui.full && !liveSession) render();
 });
 if (store.onboarded && store["profile.name"]) Sync.registerUser(store["profile.name"]);
+
+// Сторожок смены дня: интервал + возврат PWA из фона.
+setInterval(() => { if (rolloverIfNeeded() && !ui.sheet && !ui.full && !liveSession) render(); }, 30000);
+document.addEventListener("visibilitychange", () => { if (!document.hidden && rolloverIfNeeded() && !ui.sheet && !ui.full && !liveSession) render(); });
 
 
 

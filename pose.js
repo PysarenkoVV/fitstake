@@ -206,6 +206,7 @@ class PoseSession {
   constructor(exercises, opts = {}) {
     this.exercises = exercises;
     this.voice = !!opts.voice;
+    this.lang = opts.lang || "en-US";
     this.counters = exercises.map((e) => new RepCounter(e));
     this.snapshot = { results: exercises.map((e) => ({ exercise: e, repCount: 0, status: "noBody", bendAngle: null })), points: {}, imageSize: { width: 0, height: 0 } };
     this._running = false;
@@ -307,6 +308,7 @@ class PoseSession {
     if (!this.voice || !window.speechSynthesis) return;
     const u = new SpeechSynthesisUtterance(text);
     u.rate = 1.15;
+    u.lang = this.lang;
     window.speechSynthesis.cancel();
     window.speechSynthesis.speak(u);
   }

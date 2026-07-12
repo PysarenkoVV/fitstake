@@ -1,5 +1,5 @@
 // FitStake PWA — сеть первична, кэш как офлайн-запас оболочки.
-const CACHE = "fitstake-v6";
+const CACHE = "fitstake-v7";
 const SHELL = [
   ".",
   "index.html",
@@ -35,6 +35,7 @@ self.addEventListener("fetch", (event) => {
         caches.open(CACHE).then((c) => c.put(request, copy)).catch(() => {});
         return res;
       })
-      .catch(() => caches.match(request).then((r) => r || caches.match("index.html")))
+      // index.html как фолбэк — только для навигации, иначе js/css получили бы HTML вместо кода.
+      .catch(() => caches.match(request).then((r) => r || (request.mode === "navigate" ? caches.match("index.html") : new Response("", { status: 504 }))))
   );
 });
