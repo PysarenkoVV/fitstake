@@ -1174,7 +1174,7 @@ function Onboarding() {
   const footerLabel = step === 0 ? t("Get started") : step === LAST_STEP ? t("Let's go") : t("Continue");
   const footer = authStep ? "" : `<div style="padding:0 20px 8px;padding-bottom:calc(8px + env(safe-area-inset-bottom))"><button class="action-btn" data-act="onbNext">${footerLabel}</button></div>`;
   return `<div style="min-height:100dvh;display:flex;flex-direction:column">
-    <div class="row gap12" style="padding:8px 20px 0;align-items:center">
+    <div class="row gap12" style="padding:max(10px,env(safe-area-inset-top)) 20px 0;align-items:center">
       <button data-act="onbBack" style="width:32px;height:32px;display:flex;align-items:center;justify-content:center;color:#fff;opacity:${step > 0 ? 1 : 0}">${icon("chevronLeft")}</button>
       <div style="flex:1">${bar(step / LAST_STEP)}</div>
     </div>
@@ -1281,7 +1281,7 @@ function CreateWizard() {
     : `<div style="padding:0 20px 8px;padding-bottom:calc(8px + env(safe-area-inset-bottom))"><button class="action-btn" data-act="createNext">${label}</button></div>`;
 
   return `<div class="fullscreen"><div style="min-height:100dvh;display:flex;flex-direction:column">
-    <div class="row gap12" style="padding:8px 20px 0;align-items:center">
+    <div class="row gap12" style="padding:max(10px,env(safe-area-inset-top)) 20px 0;align-items:center">
       <button data-act="createBack" style="width:32px;height:32px;display:flex;align-items:center;justify-content:center;color:#fff">${icon(step > 0 ? "chevronLeft" : "xmark")}</button>
       <div style="flex:1">${bar(step / CREATE_LAST)}</div>
     </div>
