@@ -37,7 +37,14 @@ const PATHS = {
   dollar: '<circle cx="12" cy="12" r="10"/><path d="M12 7v10M14.5 9.2c-.4-1-1.4-1.4-2.5-1.4-1.4 0-2.5.7-2.5 1.9 0 2.7 5 1.3 5 4 0 1.3-1.2 2-2.5 2-1.2 0-2.2-.5-2.6-1.5" stroke="#0a0a0a"/>',
   bolt: '<path d="M13 2L4 14h6l-1 8 9-12h-6z"/>',
   trend: '<path d="M3 17l6-6 4 4 8-8M15 7h6v6"/>',
+  // Упражнения (силуэты сбоку): отжимания у пола, присед, вис на турнике, брусья.
+  exPushups: '<circle cx="5" cy="9.5" r="1.8"/><path d="M6.8 10 L19 14.5"/><path d="M8.5 10.6 L8.5 17"/><path d="M3 17.5 H21"/>',
+  exSquats: '<circle cx="12" cy="5" r="1.8"/><path d="M12 6.8 L11 12 L16.5 12.5 L16 19"/><path d="M11.5 8.6 L16 8"/>',
+  exPullups: '<path d="M3 4 H21"/><path d="M9 4 L10 9 M15 4 L14 9"/><circle cx="12" cy="7.6" r="1.8"/><path d="M12 9.4 L12 16 M12 16 L10.5 20 M12 16 L13.5 20"/>',
+  exDips: '<path d="M2 8 H9 M15 8 H22"/><circle cx="12" cy="6" r="1.8"/><path d="M12 7.8 L12 15"/><path d="M12 9 L9 8 M12 9 L15 8"/><path d="M12 15 L10.5 19 M12 15 L13.5 19"/>',
 };
+const EXERCISE_ICON = { pushups: "exPushups", squats: "exSquats", pullups: "exPullups", dips: "exDips" };
+function exIcon(ex, cls = "") { return icon(EXERCISE_ICON[ex] || "flame", cls); }
 
 function icon(name, cls = "") {
   return `<svg class="icon ${cls}" viewBox="0 0 24 24" aria-hidden="true">${PATHS[name] || ""}</svg>`;
@@ -855,7 +862,7 @@ function todayCard(c) {
   } else {
     inner = lbl(t("Today"), "tracking-1") + c.goals.map((g) => {
       const reps = C.myToday(c, g.exercise), norm = C.norm(c, g), d = reps >= norm;
-      return `<div class="between" style="align-items:baseline"><span style="font-weight:600;font-size:15px">${esc(Exercise.displayName(g.exercise))}</span><span class="money ${d ? "c-money" : "c-white"}" style="font-size:18px">${reps} / ${norm}</span></div>${bar(reps / norm, d)}`;
+      return `<div class="between"><span class="row gap8" style="font-weight:600;font-size:15px"><span style="display:flex;color:var(--text-secondary)">${exIcon(g.exercise)}</span>${esc(Exercise.displayName(g.exercise))}</span><span class="money ${d ? "c-money" : "c-white"}" style="font-size:18px">${reps} / ${norm}</span></div>${bar(reps / norm, d)}`;
     }).join("");
   }
   return `<div class="card ${done ? "done" : ""}" style="padding:16px;display:flex;flex-direction:column;gap:10px">${inner}</div>`;
@@ -1250,7 +1257,8 @@ function CreateWizard() {
   const emptyCircle = icon("plusCircle").replace("M12 8v8M8 12h8", "");
   const checkCard = (ex) => {
     const on = f["sel_" + ex];
-    return `<button class="card ${on ? "selected" : ""}" data-act="toggle" data-key="sel_${ex}" style="padding:16px;width:100%;display:flex;align-items:center;gap:10px;text-align:left">
+    return `<button class="card ${on ? "selected" : ""}" data-act="toggle" data-key="sel_${ex}" style="padding:16px;width:100%;display:flex;align-items:center;gap:12px;text-align:left">
+      <span style="display:flex;color:${on ? "var(--accent)" : "var(--text-secondary)"}">${exIcon(ex)}</span>
       <div style="flex:1"><div class="display" style="font-size:20px">${esc(Exercise.displayName(ex))}</div></div>
       <span style="color:${on ? "var(--accent)" : "var(--text-secondary)"};display:flex">${on ? iconF("checkCircle") : emptyCircle}</span>
     </button>`;
@@ -1569,48 +1577,97 @@ async function openSession(challengeId) {
 // Шеринг результата (рендер карточки на canvas → Web Share / скачивание)
 // ==========================================================================
 function loadImg(src) { return new Promise((res) => { if (!src) return res(null); const im = new Image(); im.onload = () => res(im); im.onerror = () => res(null); im.src = src; }); }
+// Перенос текста по словам (до maxLines строк, последняя — с многоточием).
+function wrapLines(ctx, text, maxW, maxLines) {
+  const words = String(text).split(/\s+/).filter(Boolean);
+  const lines = []; let cur = "";
+  for (const w of words) {
+    const test = cur ? cur + " " + w : w;
+    if (ctx.measureText(test).width > maxW && cur) { lines.push(cur); cur = w; } else cur = test;
+  }
+  if (cur) lines.push(cur);
+  if (lines.length > maxLines) {
+    lines.length = maxLines;
+    let last = lines[maxLines - 1];
+    while (last && ctx.measureText(last + "…").width > maxW) last = last.replace(/\s*\S$/, "");
+    lines[maxLines - 1] = last + "…";
+  }
+  return lines;
+}
+function roundRectPath(g, x, y, w, h, r) {
+  g.beginPath(); g.moveTo(x + r, y);
+  g.arcTo(x + w, y, x + w, y + h, r); g.arcTo(x + w, y + h, x, y + h, r);
+  g.arcTo(x, y + h, x, y, r); g.arcTo(x, y, x + w, y, r); g.closePath();
+}
 
 async function shareCard(data) {
-  const scale = 3, W = 340;
+  const scale = 3, W = 380, pad = 28;
   const before = await loadImg(data.beforePhoto), after = await loadImg(data.afterPhoto);
-  const hasPhotos = before || after;
-  const H = 90 + (hasPhotos ? 170 : 0) + data.metrics.length * 34 + (data.payout != null ? 50 : 0) + 40;
+  const hasPhotos = !!(before || after);
   const cv = document.createElement("canvas");
-  cv.width = W * scale; cv.height = H * scale;
   const g = cv.getContext("2d");
+  // Заголовок переносим до 2 строк — считаем ДО установки размеров (они сбросят контекст).
+  g.font = "900 26px -apple-system,system-ui,sans-serif";
+  const titleLines = wrapLines(g, String(data.title).toUpperCase(), W - pad * 2, 2);
+
+  const H = (pad + 6) + 34 + titleLines.length * 30 + 2 + 22
+    + (hasPhotos ? 166 : 0) + data.metrics.length * 38 + (data.payout != null ? 52 : 0) + 34;
+  cv.width = W * scale; cv.height = H * scale;
   g.scale(scale, scale);
-  g.fillStyle = "#171717"; g.fillRect(0, 0, W, H);
-  g.strokeStyle = "rgba(255,94,31,.4)"; g.lineWidth = 1; g.strokeRect(0.5, 0.5, W - 1, H - 1);
-  let y = 30;
-  g.fillStyle = "#ff5e1f"; g.font = "700 13px monospace"; g.fillText("🔥 FITSTAKE", 24, y);
-  y += 34; g.fillStyle = "#fff"; g.font = "900 26px -apple-system,sans-serif"; g.fillText(data.title.toUpperCase().slice(0, 22), 24, y);
-  y += 20; g.fillStyle = "#ff5e1f"; g.font = "700 11px monospace"; g.fillText(String(data.headline).toUpperCase(), 24, y);
-  y += 14;
+
+  g.fillStyle = "#141414"; g.fillRect(0, 0, W, H);
+  roundRectPath(g, 1, 1, W - 2, H - 2, 22);
+  g.strokeStyle = "rgba(255,94,31,.55)"; g.lineWidth = 1.5; g.stroke();
+
+  g.textAlign = "left";
+  let y = pad + 6;
+  g.fillStyle = "#ff5e1f"; g.font = "800 14px -apple-system,system-ui,sans-serif";
+  g.fillText("🔥 FITSTAKE", pad, y + 4);
+  y += 34;
+  g.fillStyle = "#fff"; g.font = "900 26px -apple-system,system-ui,sans-serif";
+  for (const line of titleLines) { g.fillText(line, pad, y); y += 30; }
+  y += 2;
+  g.fillStyle = "#ff5e1f"; g.font = "700 11px monospace";
+  g.fillText(String(data.headline).toUpperCase(), pad, y + 8);
+  y += 22;
+
   if (hasPhotos) {
-    const pw = (W - 48 - 10) / 2;
+    const ph = 150, pw = (W - pad * 2 - 10) / 2;
     const drawP = (im, x, cap) => {
-      g.save(); g.beginPath(); g.rect(x, y, pw, 150); g.clip();
-      if (im) { const s = Math.max(pw / im.width, 150 / im.height); g.drawImage(im, x + (pw - im.width * s) / 2, y + (150 - im.height * s) / 2, im.width * s, im.height * s); }
-      else { g.fillStyle = "#0a0a0a"; g.fillRect(x, y, pw, 150); }
+      g.save(); roundRectPath(g, x, y, pw, ph, 12); g.clip();
+      if (im) { const s = Math.max(pw / im.width, ph / im.height); g.drawImage(im, x + (pw - im.width * s) / 2, y + (ph - im.height * s) / 2, im.width * s, im.height * s); }
+      else { g.fillStyle = "#0a0a0a"; g.fillRect(x, y, pw, ph); }
       g.restore();
-      g.fillStyle = "rgba(0,0,0,.6)"; g.fillRect(x + 6, y + 128, 44, 16);
-      g.fillStyle = "#fff"; g.font = "700 9px monospace"; g.fillText(cap, x + 10, y + 139);
+      g.fillStyle = "rgba(0,0,0,.6)"; g.fillRect(x + 8, y + ph - 22, 52, 16);
+      g.fillStyle = "#fff"; g.font = "700 9px monospace"; g.textAlign = "left"; g.fillText(cap, x + 12, y + ph - 10);
     };
-    drawP(before, 24, "BEFORE"); drawP(after, 24 + pw + 10, "AFTER");
-    y += 170;
+    drawP(before, pad, "BEFORE"); drawP(after, pad + pw + 10, "AFTER");
+    y += 166;
   }
-  y += 6;
-  for (const [k, v] of data.metrics) {
-    g.fillStyle = "rgba(255,255,255,.55)"; g.font = "700 10px monospace"; g.fillText(String(k).toUpperCase(), 24, y + 12);
-    g.fillStyle = "#fff"; g.font = "800 18px monospace"; g.textAlign = "right"; g.fillText(String(v), W - 24, y + 14); g.textAlign = "left";
-    y += 34;
+
+  for (let i = 0; i < data.metrics.length; i++) {
+    const [k, v] = data.metrics[i];
+    g.fillStyle = "rgba(255,255,255,.62)"; g.font = "700 10px monospace"; g.textAlign = "left";
+    g.fillText(String(k).toUpperCase(), pad, y + 14);
+    g.fillStyle = "#fff"; g.font = "800 19px monospace"; g.textAlign = "right";
+    g.fillText(String(v), W - pad, y + 16); g.textAlign = "left";
+    if (i < data.metrics.length - 1) { g.strokeStyle = "rgba(255,255,255,.08)"; g.lineWidth = 1; g.beginPath(); g.moveTo(pad, y + 30); g.lineTo(W - pad, y + 30); g.stroke(); }
+    y += 38;
   }
+
   if (data.payout != null) {
-    g.strokeStyle = "rgba(255,255,255,.1)"; g.beginPath(); g.moveTo(24, y + 6); g.lineTo(W - 24, y + 6); g.stroke();
-    y += 24;
-    g.fillStyle = "rgba(255,255,255,.55)"; g.font = "700 10px monospace"; g.fillText((store.lang === "ru" ? "ЗАБИРАЕШЬ" : "YOU TAKE HOME"), 24, y + 8);
-    g.fillStyle = "#4dc280"; g.font = "800 22px monospace"; g.textAlign = "right"; g.fillText((store.currencyUSD ? "$" : Currency.symbol) + fmt(data.payout), W - 24, y + 12); g.textAlign = "left";
+    g.strokeStyle = "rgba(255,255,255,.12)"; g.lineWidth = 1; g.beginPath(); g.moveTo(pad, y + 4); g.lineTo(W - pad, y + 4); g.stroke();
+    y += 22;
+    g.fillStyle = "rgba(255,255,255,.62)"; g.font = "700 10px monospace"; g.textAlign = "left";
+    g.fillText(store.lang === "ru" ? "ЗАБИРАЕШЬ" : "YOU TAKE HOME", pad, y + 8);
+    g.fillStyle = "#4dc280"; g.font = "800 23px monospace"; g.textAlign = "right";
+    g.fillText((store.currencyUSD ? "$" : Currency.symbol) + fmt(data.payout), W - pad, y + 12); g.textAlign = "left";
+    y += 30;
   }
+
+  g.fillStyle = "rgba(255,255,255,.4)"; g.font = "600 11px monospace"; g.textAlign = "left";
+  g.fillText(store.lang === "ru" ? "Прими вызов на FitStake" : "Take the challenge on FitStake", pad, H - pad + 4);
+
   const blob = await new Promise((res) => cv.toBlob(res, "image/png"));
   const file = new File([blob], "fitstake.png", { type: "image/png" });
   if (navigator.canShare && navigator.canShare({ files: [file] })) {
