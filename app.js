@@ -85,7 +85,7 @@ const RU = {
   "Conditions": "Условия", "Name your challenge": "Название челленджа", "Pick at least one exercise": "Выбери хотя бы одно упражнение",
   "Save & share": "Сохранить и поделиться", "New challenge": "Новый челлендж", "%lld / day": "%lld / день", "%lld days": "%lld дней",
   "Duration": "Длительность", "Progression": "Прогрессия", "Yes": "Да", "No": "Нет", "%lld-day challenge": "Челлендж на %lld дней", "Buy-in": "Взнос",
-  "Next exercise": "Следующее упражнение",
+  "Next exercise": "Следующее упражнение", "Where to start?": "С чего начать?",
   "Day %lld of %lld": "День %lld из %lld", "Day 1: %lld → Day %lld: %lld": "День 1: %lld → День %lld: %lld",
   "Day done!": "День закрыт!", "Do today's combo": "Комбо за сегодня", "Do today's push-ups": "Отжимания за сегодня",
   "Do today's squats": "Приседания за сегодня", "Done": "Готово", "Done today": "Сегодня выполнено",
@@ -862,7 +862,7 @@ function todayCard(c) {
   } else {
     inner = lbl(t("Today"), "tracking-1") + c.goals.map((g) => {
       const reps = C.myToday(c, g.exercise), norm = C.norm(c, g), d = reps >= norm;
-      return `<div class="between"><span class="row gap8" style="font-weight:600;font-size:15px"><span style="display:flex;color:var(--text-secondary)">${exIcon(g.exercise)}</span>${esc(Exercise.displayName(g.exercise))}</span><span class="money ${d ? "c-money" : "c-white"}" style="font-size:18px">${reps} / ${norm}</span></div>${bar(reps / norm, d)}`;
+      return `<div class="between"><span class="row gap8" style="font-weight:600;font-size:15px"><span style="display:flex;color:var(--text-secondary)">${exIcon(g.exercise)}</span>${esc(Exercise.displayName(g.exercise))}</span><span class="row gap12"><span class="money ${d ? "c-money" : "c-white"}" style="font-size:18px">${reps} / ${norm}</span><button data-act="play:${c.id}:${g.exercise}" style="color:var(--accent);display:flex;padding:2px">${iconF("play")}</button></span></div>${bar(reps / norm, d)}`;
     }).join("");
   }
   return `<div class="card ${done ? "done" : ""}" style="padding:16px;display:flex;flex-direction:column;gap:10px">${inner}</div>`;
@@ -876,9 +876,24 @@ function socialCard(c) {
 function callToAction(c) {
   if (C.isJoined(c)) {
     const done = C.isTodayDone(c);
-    return `<button class="action-btn ${done ? "money" : ""}" data-act="play:${c.id}">${iconF(done ? "plusCircle" : "flame")}${done ? t("Extra reps") : C.actionText(c)}</button>`;
+    // Комбо — большая кнопка открывает выбор, с какого упражнения начать; одиночное — сразу старт.
+    const act = c.goals.length > 1 ? `startPick:${c.id}` : `play:${c.id}`;
+    return `<button class="action-btn ${done ? "money" : ""}" data-act="${act}">${iconF(done ? "plusCircle" : "flame")}${done ? t("Extra reps") : C.actionText(c)}</button>`;
   }
   return `<button class="action-btn" data-act="join:${c.id}">${t("Join for")} ${coin(c.buyIn)}</button>`;
+}
+// Лист выбора «с чего начать» для комбо: строки-упражнения, тап → запуск именно его.
+function StartPicker() {
+  const c = app.challenges.find((x) => x.id === ui.form.challengeId);
+  if (!c) return "";
+  const rows = c.goals.map((g) => {
+    const reps = C.myToday(c, g.exercise), norm = C.norm(c, g), done = reps >= norm;
+    return `<button class="between" data-act="play:${c.id}:${g.exercise}" style="width:100%;padding:14px 4px;gap:12px">
+      <span class="row gap12"><span style="display:flex;color:var(--accent)">${exIcon(g.exercise)}</span><span style="font-weight:600;font-size:16px">${esc(Exercise.displayName(g.exercise))}</span></span>
+      <span class="row gap12"><span class="money ${done ? "c-money" : "secondary"}" style="font-size:15px">${reps} / ${norm}</span><span style="color:var(--accent);display:flex">${iconF("play")}</span></span>
+    </button>`;
+  }).join("");
+  return sheetShell(t("Where to start?"), rows, true);
 }
 function ruleRow(ic, html) { return `<div class="rule-row">${icon(ic)}<div>${html}</div></div>`; }
 function rulesCard(c) {
@@ -1438,7 +1453,7 @@ function ChallengeCompleteFull() {
 const CAN_RECORD = typeof MediaRecorder !== "undefined" && !!HTMLCanvasElement.prototype.captureStream;
 let liveSession = null;
 
-async function openSession(challengeId) {
+async function openSession(challengeId, startExercise) {
   const c = app.challenges.find((x) => x.id === challengeId);
   if (!c || liveSession) return;
   const goals = c.goals.map((g) => ({ exercise: g.exercise, target: C.norm(c, g), start: C.myToday(c, g.exercise) }));
@@ -1468,10 +1483,13 @@ async function openSession(challengeId) {
   const bottomEl = overlay.querySelector("#sess-bottom");
 
   // Комбо теперь последовательное: активно одно упражнение за раз, счётчик показываем один.
+  // startExercise — с какого упражнения начать (кнопка play у строки / выбор с большой кнопки).
   const combo = goals.length > 1;
   let active = 0;
+  if (startExercise) { const i = goals.findIndex((g) => g.exercise === startExercise); if (i >= 0) active = i; }
 
   const sess = new window.PoseSession(goals.map((g) => g.exercise), { voice: store.voiceEnabled, lang: store.lang === "ru" ? "ru-RU" : "en-US" });
+  sess.setActive(active);
   liveSession = { sess, overlay };
 
   try {
@@ -1526,13 +1544,20 @@ async function openSession(challengeId) {
       hintEl.style.display = hint ? "" : "none";
       if (hint) hintEl.textContent = hint;
 
-      // Нижняя панель: угол + [→ следующее упражнение] + Завершить/Готово
+      // Нижняя панель: угол + навигация по упражнениям (назад/вперёд) + Завершить/Готово
       const angle = ar && ar.bendAngle != null ? Math.round(ar.bendAngle) : null;
-      const key = `${active}|${curReached}|${allReached}|${sessionTotal > 0}|${angle}|${hasNext}`;
+      const hasPrev = combo && active > 0;
+      const key = `${active}|${curReached}|${allReached}|${sessionTotal > 0}|${angle}|${hasNext}|${hasPrev}`;
       if (key !== prevBottomKey) {
         prevBottomKey = key;
+        const pill = "display:inline-flex;align-items:center;gap:4px;padding:10px 16px;border-radius:999px;background:rgba(255,255,255,.16);color:#fff;font-weight:600;font-size:14px";
         let b = angle != null ? `<span class="angle">${angle}°</span>` : "";
-        if (hasNext) b += `<button data-sess="next" style="display:inline-flex;align-items:center;gap:4px;padding:10px 18px;border-radius:999px;background:rgba(255,255,255,.16);color:#fff;font-weight:600;font-size:14px">${esc(Exercise.displayName(goals[active + 1].exercise))}${icon("chevronRight")}</button>`;
+        if (hasPrev || hasNext) {
+          b += `<div class="row gap8" style="justify-content:center">`
+            + (hasPrev ? `<button data-sess="prev" style="${pill}">${icon("chevronLeft")}${esc(Exercise.displayName(goals[active - 1].exercise))}</button>` : "")
+            + (hasNext ? `<button data-sess="next" style="${pill}">${esc(Exercise.displayName(goals[active + 1].exercise))}${icon("chevronRight")}</button>` : "")
+            + `</div>`;
+        }
         if (allReached) b += `<button class="action-btn money" data-sess="finish" style="max-width:340px">${iconF("checkCircle")}${t("Finish")}</button>`;
         else if (sessionTotal > 0) b += `<button class="action-btn" data-sess="finish" style="max-width:340px">${icon("check")}${t("Done")}</button>`;
         bottomEl.innerHTML = b;
@@ -1563,6 +1588,9 @@ async function openSession(challengeId) {
     if (a === "close" || a === "finish") finish();
     else if (a === "next") {
       if (active < goals.length - 1) { active++; sess.setActive(active); renderCounter(); prevBottomKey = ""; prevGoalReached = false; }
+    }
+    else if (a === "prev") {
+      if (active > 0) { active--; sess.setActive(active); renderCounter(); prevBottomKey = ""; prevGoalReached = false; }
     }
     else if (a === "voice") { store.voiceEnabled = !store.voiceEnabled; sess.setVoice(store.voiceEnabled); b.innerHTML = icon(store.voiceEnabled ? "speakerOn" : "speakerOff"); b.style.color = store.voiceEnabled ? "var(--accent)" : "rgba(255,255,255,.6)"; }
     else if (a === "record") {
@@ -1687,6 +1715,7 @@ function openCreate() {
 }
 function openJoin(id) { ui.form = { challengeId: id, weight: store["profile.weightKg"], maxReps: store["profile.maxReps"], photo: null }; ui.sheet = JoinSheet; render(); }
 function openMeasure() { ui.form = { weight: store["profile.weightKg"], maxReps: store["profile.maxReps"] }; ui.sheet = MeasureSheet; render(); }
+function openStartPicker(id) { ui.form = { challengeId: id }; ui.sheet = StartPicker; render(); }
 function openParticipant(id) { ui.form = { participantId: id }; ui.sheet = ParticipantSheet; render(); }
 function closeSheet() { ui.sheet = null; ui.form = null; render(); }
 function openDayComplete(c) { ui.fullId = c.id; ui.full = DayCompleteFull; render(); }
@@ -1739,7 +1768,8 @@ root.addEventListener("click", async (e) => {
     case "tab": go(arg); return;
     case "open": openDetail(arg); return;
     case "back": back(); return;
-    case "play": openSession(arg); return;
+    case "play": { const startEx = act.split(":")[2]; if (ui.sheet) closeSheet(); openSession(arg, startEx); return; }
+    case "startPick": openStartPicker(arg); return;
     case "findChallenge": go("challenges"); return;
     case "create": openCreate(); return;
     case "join": openJoin(arg); return;
