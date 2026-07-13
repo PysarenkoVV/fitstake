@@ -22,9 +22,14 @@ const EX = {
     bodyJoints: ["leftShoulder", "rightShoulder"],
     wristAbove: false,
   },
+  // Приседания: сгиб колена сам по себе надёжен (стоя его не подделать), а анти-чит
+  // корпуса при съёмке снизу сжимает ход таза и ложно резал реальные приседы —
+  // поэтому пороги мягче (стопы у края кадра к тому же шумят).
   squats: {
     angleJoints: (s) => ({ a: s + "Hip", vertex: s + "Knee", b: s + "Ankle" }),
     bodyJoints: ["leftHip", "rightHip"],
+    minBodyTravel: 0.12,
+    maxAnchorDrift: 1.0,
   },
   // Подтягивания: тот же локоть, но кисти на перекладине — ВЫШЕ плеч.
   // Повтор = вис (прямые руки) → подъём (сгиб <110°) → опускание (>140°).
@@ -68,8 +73,10 @@ class RepCounter {
     this.minConfidence = 0.2;
     this.smoothing = 0.5;
     this.graceFrames = 15;
-    this.minBodyTravel = 0.3;
-    this.maxAnchorDrift = 0.7;
+    // Пороги анти-чита можно ослаблять по упражнению (см. EX).
+    const cfg = EX[exercise] || {};
+    this.minBodyTravel = cfg.minBodyTravel != null ? cfg.minBodyTravel : 0.3;
+    this.maxAnchorDrift = cfg.maxAnchorDrift != null ? cfg.maxAnchorDrift : 0.7;
   }
 
   process(points, size) {
@@ -152,11 +159,17 @@ class RepCounter {
     return p && p.confidence > this.minConfidence ? px(p, size) : null;
   }
 
+  // Скелетный масштаб стороны. Обычно вершина→опора (предплечье/голень), но если
+  // опора не видна (стопы в тени/за кадром при приседе), берём вершина→a (плечо/бедро) —
+  // иначе повтор не засчитывался из-за отсутствия масштаба, хотя колени/бёдра видны.
   _limbLength(s, points, size) {
     const j = EX[this.exercise].angleJoints(s);
-    const v = points[j.vertex], e = points[j.b];
-    if (!v || v.confidence <= this.minConfidence || !e || e.confidence <= this.minConfidence) return null;
-    return dist(px(v, size), px(e, size));
+    const v = points[j.vertex];
+    if (!v || v.confidence <= this.minConfidence) return null;
+    const b = points[j.b], a = points[j.a];
+    if (b && b.confidence > this.minConfidence) return dist(px(v, size), px(b, size));
+    if (a && a.confidence > this.minConfidence) return dist(px(v, size), px(a, size));
+    return null;
   }
 
   _limbVisible(s, points) {
@@ -271,19 +284,22 @@ class PoseSession {
         this._lastCounts[i] = c.count;
         return { exercise: c.exercise, repCount: c.count, status: r.status, bendAngle: r.bendAngle };
       });
+      // Всё нужное в кадре — все счётчики трекаются (не noBody/partialBody). Скелет зеленеет.
+      const ready = results.length > 0 && results.every((r) => r.status === "up" || r.status === "down");
       this.snapshot = { results, points, imageSize: size };
-      this._drawSkeleton(points, size);
+      this._drawSkeleton(points, size, ready);
       if (this._recording) this._drawRecordFrame(size);
     }
     requestAnimationFrame(() => this._loop());
   }
 
-  _drawSkeleton(points, size) {
+  _drawSkeleton(points, size, ready) {
     const ctx = this._ctx;
     ctx.clearRect(0, 0, size.width, size.height);
     const on = (p) => p && p.confidence > 0.2;
     ctx.lineWidth = Math.max(3, size.width / 260);
-    ctx.strokeStyle = "rgba(255,94,31,0.9)";
+    // Зелёный, когда всё нужное в кадре — видно, что позиция правильная; иначе оранжевый.
+    ctx.strokeStyle = ready ? "rgba(77,194,128,0.95)" : "rgba(255,94,31,0.9)";
     ctx.lineCap = "round";
     for (const [a, b] of BONES) {
       const pa = points[a], pb = points[b];
