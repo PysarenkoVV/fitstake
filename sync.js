@@ -1,6 +1,9 @@
-/* FitStake — общий прогресс через Firebase Realtime Database.
+/* FitStake — общий прогресс через Firebase Realtime Database + аккаунты.
    Без конфига (FIREBASE_CONFIG = null) всё выключено и приложение живёт локально.
-   uid = стабильный идентификатор анонимной авторизации Firebase (auth.uid).
+   uid = auth.uid. По умолчанию анонимный вход (приложение работает сразу);
+   пользователь может создать аккаунт (email+пароль) — тогда прогресс синхронизируется
+   между устройствами, потому что uid один и тот же везде.
+   Аноним → аккаунт делаем через linkWithCredential: uid и весь прогресс сохраняются.
    Правила БД (database.rules.json): читать может каждый, писать — только в свой узел
    ($uid === auth.uid). Пишем строго по адресам .../{uid}, поэтому чужой прогресс не подделать.
    Схема:
@@ -16,10 +19,12 @@ window.Sync = (() => {
   const enabled = !!(CFG && CFG.apiKey);
   const V = "https://www.gstatic.com/firebasejs/10.12.2/";
 
-  let uid = null; // заполняется после анонимного входа
+  let uid = null;              // текущий auth.uid (аноним или аккаунт)
+  let accountEmail = null;     // email, если вошёл в аккаунт; null у анонима
+  let isAnon = true;
 
   const state = { users: null, participants: null };
-  let db = null, F = null, onChange = null;
+  let db = null, F = null, A = null, authInstance = null, onChange = null;
   // Операции, вызванные до готовности auth+db, — выполняем после подключения.
   const queued = [];
   function ready(fn) { (db && uid) ? fn() : queued.push(fn); }
@@ -37,11 +42,9 @@ window.Sync = (() => {
       const fbApp = appMod.initializeApp(CFG);
       db = dbMod.getDatabase(fbApp);
       F = dbMod;
-      // Анонимный вход: uid стабилен между визитами (сессию Firebase хранит сам),
-      // повторный вызов возвращает того же пользователя.
-      const auth = authMod.getAuth(fbApp);
-      const cred = await authMod.signInAnonymously(auth);
-      uid = cred.user.uid;
+      A = authMod;
+      authInstance = authMod.getAuth(fbApp);
+      // Подписки на данные — пути фиксированы, от uid не зависят.
       F.onValue(F.ref(db, "fitstake/users"), (snap) => {
         state.users = snap.val() || {};
         if (onChange) onChange();
@@ -50,12 +53,77 @@ window.Sync = (() => {
         state.participants = snap.val() || {};
         if (onChange) onChange();
       });
-      queued.splice(0).forEach((fn) => fn());
+      // Состояние авторизации. Нет пользователя — входим анонимно (приложение работает сразу).
+      authMod.onAuthStateChanged(authInstance, (user) => {
+        if (user) {
+          uid = user.uid;
+          isAnon = !!user.isAnonymous;
+          accountEmail = user.isAnonymous ? null : (user.email || null);
+          queued.splice(0).forEach((fn) => fn());
+          if (onChange) onChange();
+        } else {
+          uid = null;
+          accountEmail = null;
+          isAnon = true;
+          authMod.signInAnonymously(authInstance).catch(() => {});
+        }
+      });
       return true;
     } catch (e) {
       console.warn("Sync off:", e);
       return false;
     }
+  }
+
+  // Создать аккаунт или войти. Если сейчас аноним — привязываем email к нему,
+  // сохраняя uid и весь прогресс. Если email уже занят — входим в существующий аккаунт.
+  async function signUpOrIn(email, password) {
+    if (!enabled || !A || !authInstance) return { ok: false, error: "offline" };
+    const cur = authInstance.currentUser;
+    try {
+      if (cur && cur.isAnonymous) {
+        const credential = A.EmailAuthProvider.credential(email, password);
+        await A.linkWithCredential(cur, credential);
+      } else {
+        await A.createUserWithEmailAndPassword(authInstance, email, password);
+      }
+      refreshAuthState(); // link не всегда триггерит onAuthStateChanged — обновляем сами
+      return { ok: true };
+    } catch (e) {
+      const code = (e && e.code) || "";
+      // Аккаунт с этим email уже есть (например, регистрировал на другом устройстве) — входим.
+      if (code === "auth/email-already-in-use" || code === "auth/credential-already-in-use") {
+        try {
+          await A.signInWithEmailAndPassword(authInstance, email, password);
+          return { ok: true };
+        } catch (e2) {
+          return { ok: false, error: authError(e2) };
+        }
+      }
+      return { ok: false, error: authError(e) };
+    }
+  }
+
+  async function signOutUser() {
+    if (A && authInstance) { try { await A.signOut(authInstance); } catch {} }
+    // onAuthStateChanged(null) вернёт анонимный вход.
+  }
+
+  function refreshAuthState() {
+    const u = authInstance && authInstance.currentUser;
+    if (!u) return;
+    uid = u.uid;
+    isAnon = !!u.isAnonymous;
+    accountEmail = u.isAnonymous ? null : (u.email || null);
+  }
+
+  function authError(e) {
+    const c = (e && e.code) || "";
+    if (c.includes("wrong-password") || c.includes("invalid-credential")) return "wrong-password";
+    if (c.includes("weak-password")) return "weak-password";
+    if (c.includes("invalid-email")) return "invalid-email";
+    if (c.includes("network")) return "network";
+    return "error";
   }
 
   // Регистрация в списке «кто в приложении»; joinedAt пишется один раз на этот uid.
@@ -95,5 +163,10 @@ window.Sync = (() => {
     });
   }
 
-  return { enabled, state, init, registerUser, join, report, get uid() { return uid; } };
+  return {
+    enabled, state, init, registerUser, join, report, signUpOrIn, signOutUser,
+    get uid() { return uid; },
+    get email() { return accountEmail; },
+    get isAnonymous() { return isAnon; },
+  };
 })();

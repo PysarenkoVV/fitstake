@@ -133,6 +133,13 @@ const RU = {
   "A new season starts soon.": "Скоро новый сезон.", "Completed": "Завершён",
   "Day streak": "Дней подряд", "%lld-day streak": "%lld дней подряд",
   "Closed": "Закрыт", "Missed": "Пропущен", "Upcoming": "Впереди", "Out": "Выбыл",
+  "Account": "Аккаунт", "Email": "Почта", "Password": "Пароль", "Log out": "Выйти",
+  "Log in / Sign up": "Войти / Создать", "Signed in": "Вход выполнен",
+  "Sign in to sync progress across your devices": "Войди, чтобы прогресс сохранялся на всех устройствах",
+  "Synced across your devices": "Прогресс синхронизируется на всех устройствах",
+  "Enter email and password": "Введи почту и пароль", "Wrong password": "Неверный пароль",
+  "Password too short (min 6)": "Пароль слишком короткий (мин. 6)", "Invalid email": "Неверная почта",
+  "Network error": "Ошибка сети", "Couldn't sign in": "Не удалось войти",
   "Add to Home Screen: Share → Add to Home Screen": "На экран «Домой»: Поделиться → «На экран Домой»",
 };
 
@@ -1067,7 +1074,7 @@ function ProfileTab() {
       <span class="money" style="font-size:15px;color:${tx.amount > 0 ? "var(--money)" : "var(--red)"}">${tx.amount > 0 ? "+" + tx.amount : tx.amount}</span></div>`).join("")}
   </div>`;
 
-  return screenHeader(t("Profile")) + `<div class="stack">${summary}${bodyCard}${measurements}${photosCard}${wallet}</div>`;
+  return screenHeader(t("Profile")) + `<div class="stack">${summary}${bodyCard}${measurements}${photosCard}${accountCard()}${wallet}</div>`;
 }
 function photoSlot(dataURL, caption) {
   return `<div style="display:flex;flex-direction:column;gap:5px"><div class="photo-slot" style="height:150px">${dataURL ? `<img src="${dataURL}">` : icon("camera")}</div>${lbl(caption)}</div>`;
@@ -1075,6 +1082,20 @@ function photoSlot(dataURL, caption) {
 function currencyToggle() {
   return `<div class="segmented"><button data-act="seg" data-store="currencyUSD" data-val="true" class="${store.currencyUSD ? "active" : ""}">$ USD</button>
     <button data-act="seg" data-store="currencyUSD" data-val="false" class="${!store.currencyUSD ? "active" : ""}">${Currency.symbol} ${Currency.code}</button></div>`;
+}
+// Аккаунт: вход по email/паролю — прогресс синхронизируется между устройствами.
+function accountCard() {
+  if (!Sync.enabled) return "";
+  const email = Sync.email;
+  const header = `<div class="between">${lbl(t("Account"), "tracking-1")}${email ? `<span class="badge" style="color:var(--money)">${esc(email)}</span>` : ""}</div>`;
+  const inner = email
+    ? `<div class="form-footer">${t("Synced across your devices")}</div>
+       <button class="action-btn" data-act="signOut" style="background:var(--white-08);color:#fff">${t("Log out")}</button>`
+    : `<div class="form-footer">${t("Sign in to sync progress across your devices")}</div>
+       <input class="field" id="auth-email" type="email" inputmode="email" autocomplete="email" placeholder="${esc(t("Email"))}">
+       <input class="field" id="auth-pass" type="password" autocomplete="current-password" placeholder="${esc(t("Password"))}">
+       <button class="action-btn" data-act="submitAuth">${t("Log in / Sign up")}</button>`;
+  return `<div class="card" style="padding:16px;display:flex;flex-direction:column;gap:12px">${header}${inner}</div>`;
 }
 
 // ==========================================================================
@@ -1556,6 +1577,7 @@ root.addEventListener("click", async (e) => {
     case "invite": shareInvite(); return;
     case "participant": openParticipant(arg); return;
     case "dismissPwa": localStorage.setItem("fs.pwahint", "1"); render(); return;
+    case "signOut": Sync.signOutUser().then(() => render()); return;
     case "toggleLang": store.lang = store.lang === "ru" ? "en" : "ru"; render(); return;
     case "closeSheet": closeSheet(); return;
     case "closeFull": closeFull(); return;
@@ -1597,6 +1619,24 @@ root.addEventListener("click", async (e) => {
     if (C.isJoined(c)) { closeSheet(); return; } // уже вступил (повторный заход по ссылке)
     const ok = joinChallenge(c, f.weight, f.maxReps, f.photo);
     if (ok) closeSheet(); else toast(t("Not enough coins"));
+    return;
+  }
+  if (cmd === "submitAuth") {
+    const emailEl = document.getElementById("auth-email"), passEl = document.getElementById("auth-pass");
+    const email = ((emailEl && emailEl.value) || "").trim(), pass = (passEl && passEl.value) || "";
+    if (!email || !pass) { toast(t("Enter email and password")); return; }
+    el.disabled = true;
+    const res = await Sync.signUpOrIn(email, pass);
+    if (res.ok) {
+      if (store["profile.name"]) Sync.registerUser(store["profile.name"]);
+      track("account_linked", {});
+      toast(t("Signed in"));
+      render();
+    } else {
+      el.disabled = false;
+      const key = { "wrong-password": "Wrong password", "weak-password": "Password too short (min 6)", "invalid-email": "Invalid email", "network": "Network error" }[res.error] || "Couldn't sign in";
+      toast(t(key));
+    }
     return;
   }
   if (cmd === "submitMeasure") {
