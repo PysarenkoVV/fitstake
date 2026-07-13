@@ -38,11 +38,15 @@ const EX = {
     bodyJoints: ["leftShoulder", "rightShoulder"],
     wristAbove: true,
   },
-  // Брусья/кольца: локоть, кисти в упоре — НИЖЕ плеч.
+  // Брусья/кольца: локоть, кисти в упоре — НИЖЕ плеч. Пороги анти-чита мягче:
+  // при съёмке снизу вертикальный ход корпуса сжимается, а кольца/кисти дрейфуют —
+  // строгие пороги (как у отжиманий) резали реальные глубокие дипсы.
   dips: {
     angleJoints: (s) => ({ a: s + "Shoulder", vertex: s + "Elbow", b: s + "Wrist" }),
     bodyJoints: ["leftShoulder", "rightShoulder"],
     wristAbove: false,
+    minBodyTravel: 0.1,
+    maxAnchorDrift: 1.4,
   },
 };
 
@@ -67,6 +71,7 @@ class RepCounter {
     this.bodyAtDown = null;
     this.leftAnchorAtDown = null;
     this.rightAnchorAtDown = null;
+    this.feetAtDown = null;
 
     this.downThreshold = 110;
     this.upThreshold = 140;
@@ -89,7 +94,7 @@ class RepCounter {
       this.tracking = false;
       this.smoothedAngle = null;
       this.wasDown = false;
-      this.bodyAtDown = this.leftAnchorAtDown = this.rightAnchorAtDown = null;
+      this.bodyAtDown = this.leftAnchorAtDown = this.rightAnchorAtDown = this.feetAtDown = null;
       const anything = Object.values(points).some((p) => p && p.confidence > this.minConfidence);
       return { status: anything ? "partialBody" : "noBody", bendAngle: null };
     }
@@ -108,6 +113,7 @@ class RepCounter {
         this.bodyAtDown = this._bodyMid(points, size);
         this.leftAnchorAtDown = this._anchor("left", points, size);
         this.rightAnchorAtDown = this._anchor("right", points, size);
+        this.feetAtDown = this._feetMid(points, size);
       }
     } else if (angle > this.upThreshold && this.wasDown) {
       this.wasDown = false;
@@ -143,7 +149,20 @@ class RepCounter {
     if (this.leftAnchorAtDown) { const n = this._anchor("left", points, size); if (n) drifts.push(dist(n, this.leftAnchorAtDown)); }
     if (this.rightAnchorAtDown) { const n = this._anchor("right", points, size); if (n) drifts.push(dist(n, this.rightAnchorAtDown)); }
     const bodyTravel = dist(bodyNow, this.bodyAtDown);
+    // Анти-чит подтягиваний: в реальном висе стопы поднимаются/опускаются ВМЕСТЕ с корпусом.
+    // Если корпус ходит, а стопы стоят на месте — это присед со стойкой на полу, держась за
+    // кольца/турник (стопы на земле), а не вис. Не засчитываем. Стопы не видны — не мешаем.
+    if (this.exercise === "pullups" && this.feetAtDown) {
+      const feetNow = this._feetMid(points, size);
+      if (feetNow && dist(feetNow, this.feetAtDown) < 0.35 * bodyTravel) return false;
+    }
     return bodyTravel >= this.minBodyTravel * scale && (drifts.length ? Math.max(...drifts) : 0) <= this.maxAnchorDrift * scale;
+  }
+
+  _feetMid(points, size) {
+    const vis = ["leftAnkle", "rightAnkle"].map((j) => points[j]).filter((p) => p && p.confidence > this.minConfidence).map((p) => px(p, size));
+    if (!vis.length) return null;
+    return { x: vis.reduce((s, p) => s + p.x, 0) / vis.length, y: vis.reduce((s, p) => s + p.y, 0) / vis.length };
   }
 
   _bodyMid(points, size) {
