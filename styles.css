@@ -8,7 +8,7 @@
   --accent: #ff5e1f;       /* огонь: действия, вызов */
   --money: #4dc280;        /* кэш: банк, выигрыш, выполнено */
   --text: #ffffff;
-  --text-secondary: rgba(255, 255, 255, 0.55);
+  --text-secondary: rgba(255, 255, 255, 0.64);
   --white-04: rgba(255, 255, 255, 0.04);
   --white-08: rgba(255, 255, 255, 0.08);
   --white-14: rgba(255, 255, 255, 0.14);
@@ -273,7 +273,7 @@ img { max-width: 100%; }
   position: relative;
   width: 51px; height: 31px;
   border-radius: 999px;
-  background: var(--white-14);
+  background: rgba(255, 255, 255, 0.24);
   transition: background 0.2s;
   flex: none;
 }

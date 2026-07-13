@@ -826,7 +826,7 @@ function totalCard(c) {
   return `<div class="card center" style="padding:24px 16px">
     ${lbl(t("Challenge total"), "tracking-15")}
     <div class="money" style="font-size:56px;margin:6px 0">${c.myTotalReps}</div>
-    ${s >= 2 ? `<div class="row gap6" style="justify-content:center">${streakPill(s)}${lbl(t("Day streak"), "tracking-1")}</div>` : lbl(C.exerciseNames(c), "tracking-1")}
+    ${s >= 2 ? `<div class="row gap6" style="justify-content:center">${streakPill(s)}${lbl(t("Day streak"), "tracking-1")}</div>` : `<div class="secondary" style="font-size:13px;font-weight:600">${esc(C.exerciseNames(c))}</div>`}
   </div>`;
 }
 // Экран итогов завершённого челленджа: банк, кто дошёл, что забираешь.
