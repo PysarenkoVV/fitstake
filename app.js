@@ -140,6 +140,8 @@ const RU = {
   "Enter email and password": "Введи почту и пароль", "Wrong password": "Неверный пароль",
   "Password too short (min 6)": "Пароль слишком короткий (мин. 6)", "Invalid email": "Неверная почта",
   "Network error": "Ошибка сети", "Couldn't sign in": "Не удалось войти",
+  "Create your account": "Создай аккаунт",
+  "So your progress is saved and syncs across your devices": "Чтобы прогресс сохранялся и синхронизировался между устройствами",
   "Continue with Google": "Продолжить с Google", "or": "или",
   "Allow popups and try again": "Разреши всплывающие окна и попробуй снова",
   "Enable Google in Firebase (Sign-in method)": "Включи Google в Firebase (Sign-in method)",
@@ -1088,7 +1090,15 @@ function currencyToggle() {
   return `<div class="segmented"><button data-act="seg" data-store="currencyUSD" data-val="true" class="${store.currencyUSD ? "active" : ""}">$ USD</button>
     <button data-act="seg" data-store="currencyUSD" data-val="false" class="${!store.currencyUSD ? "active" : ""}">${Currency.symbol} ${Currency.code}</button></div>`;
 }
-// Аккаунт: вход по email/паролю — прогресс синхронизируется между устройствами.
+// Форма входа (Google + email/пароль) — общая для профиля и онбординга.
+function authForm() {
+  return `<button class="action-btn" data-act="googleAuth" style="background:#fff;color:#1f1f1f">${t("Continue with Google")}</button>
+    <div class="form-footer" style="text-align:center;opacity:.5">${t("or")}</div>
+    <input class="field" id="auth-email" type="email" inputmode="email" autocomplete="email" placeholder="${esc(t("Email"))}">
+    <input class="field" id="auth-pass" type="password" autocomplete="current-password" placeholder="${esc(t("Password"))}">
+    <button class="action-btn" data-act="submitAuth">${t("Log in / Sign up")}</button>`;
+}
+// Аккаунт в профиле: у вошедшего — email + выход; у анонима — форма входа.
 function accountCard() {
   if (!Sync.enabled) return "";
   const email = Sync.email;
@@ -1096,19 +1106,15 @@ function accountCard() {
   const inner = email
     ? `<div class="form-footer">${t("Synced across your devices")}</div>
        <button class="action-btn" data-act="signOut" style="background:var(--white-08);color:#fff">${t("Log out")}</button>`
-    : `<div class="form-footer">${t("Sign in to sync progress across your devices")}</div>
-       <button class="action-btn" data-act="googleAuth" style="background:#fff;color:#1f1f1f">${t("Continue with Google")}</button>
-       <div class="form-footer" style="text-align:center;opacity:.5">${t("or")}</div>
-       <input class="field" id="auth-email" type="email" inputmode="email" autocomplete="email" placeholder="${esc(t("Email"))}">
-       <input class="field" id="auth-pass" type="password" autocomplete="current-password" placeholder="${esc(t("Password"))}">
-       <button class="action-btn" data-act="submitAuth">${t("Log in / Sign up")}</button>`;
+    : `<div class="form-footer">${t("Sign in to sync progress across your devices")}</div>${authForm()}`;
   return `<div class="card" style="padding:16px;display:flex;flex-direction:column;gap:12px">${header}${inner}</div>`;
 }
 
 // ==========================================================================
 // Онбординг
 // ==========================================================================
-const LAST_STEP = 8;
+// С Firebase последний шаг — обязательный вход (9); без Firebase онбординг кончается итогом (8).
+const LAST_STEP = (window.Sync && window.Sync.enabled) ? 9 : 8;
 function Onboarding() {
   const step = ui.onbStep, gender = store["profile.gender"], level = store["profile.level"], maxReps = store["profile.maxReps"];
   const goal = recommendedDailyReps(level, maxReps);
@@ -1140,7 +1146,7 @@ function Onboarding() {
   else if (step === 5) content = question(t("Your weight"), null, wheel("profile.weightKg", 35, 180, (v) => t("%lld kg", v)));
   else if (step === 6) content = question(t("Your fitness level"), null, Level.all.map((l) => optionCard(Level.name(l), Level.subtitle(l), level === l, `onbSet:profile.level:${l}`)).join(""));
   else if (step === 7) content = question(t("How many push-ups can you do in one set?"), t("Honestly — the daily goal is built from this."), wheel("profile.maxReps", 1, 120, (v) => String(v)));
-  else content = `<div class="center" style="height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px">
+  else if (step === 8) content = `<div class="center" style="height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px">
     ${lbl(t("Your daily goal"), "tracking-15")}
     <div class="money" style="font-size:72px">${goal}</div>
     ${lbl(t("reps per day"), "tracking-1")}
@@ -1149,16 +1155,34 @@ function Onboarding() {
       ${[[t("Gender"), Gender.name(gender)], [t("Age"), t("%lld years", store["profile.age"])], [t("Height"), t("%lld cm", store["profile.heightCm"])], [t("Weight"), t("%lld kg", store["profile.weightKg"])], [t("Fitness level"), Level.name(level)]]
         .map(([k, v]) => `<div class="between">${lbl(k)}<span style="font-weight:600;font-size:15px">${esc(v)}</span></div>`).join("")}
     </div></div>`;
+  // Шаг 9 (только с Firebase): обязательный вход — без аккаунта в приложение не пускаем.
+  else content = question(t("Create your account"), t("So your progress is saved and syncs across your devices."), authForm());
 
+  // На шаге входа CTA — сами кнопки формы, отдельной кнопки «дальше» нет.
+  const authStep = Sync.enabled && step === LAST_STEP;
   const footerLabel = step === 0 ? t("Get started") : step === LAST_STEP ? t("Let's go") : t("Continue");
+  const footer = authStep ? "" : `<div style="padding:0 20px 8px;padding-bottom:calc(8px + env(safe-area-inset-bottom))"><button class="action-btn" data-act="onbNext">${footerLabel}</button></div>`;
   return `<div style="min-height:100dvh;display:flex;flex-direction:column">
     <div class="row gap12" style="padding:8px 20px 0;align-items:center">
       <button data-act="onbBack" style="width:32px;height:32px;display:flex;align-items:center;justify-content:center;color:#fff;opacity:${step > 0 ? 1 : 0}">${icon("chevronLeft")}</button>
       <div style="flex:1">${bar(step / LAST_STEP)}</div>
     </div>
     <div style="flex:1;padding:0 24px;overflow-y:auto">${content}</div>
-    <div style="padding:0 20px 8px;padding-bottom:calc(8px + env(safe-area-inset-bottom))"><button class="action-btn" data-act="onbNext">${footerLabel}</button></div>
+    ${footer}
   </div>`;
+}
+
+// Завершение онбординга: с Firebase вызывается после успешного входа, без — по кнопке на итоге.
+function finishOnboarding() {
+  store.dailyGoal = recommendedDailyReps(store["profile.level"], store["profile.maxReps"]);
+  store.onboarded = true;
+  Sync.registerUser(store["profile.name"]);
+  phIdentify();
+  track("onboarding_completed", { level: store["profile.level"], daily_goal: store.dailyGoal });
+  ui.screen = "tabs";
+  // Пришёл по ссылке-приглашению — сразу открываем вступление в общий челлендж.
+  if (JOIN_INTENT) { ui.tab = "challenges"; render(); openJoin("main"); return; }
+  render();
 }
 
 // ==========================================================================
@@ -1635,8 +1659,9 @@ root.addEventListener("click", async (e) => {
     el.disabled = true;
     const res = await Sync.signUpOrIn(email, pass);
     if (res.ok) {
-      if (store["profile.name"]) Sync.registerUser(store["profile.name"]);
       track("account_linked", { method: "email" });
+      if (ui.screen === "onboarding") { finishOnboarding(); return; }
+      if (store["profile.name"]) Sync.registerUser(store["profile.name"]);
       toast(t("Signed in"));
       render();
     } else {
@@ -1650,8 +1675,9 @@ root.addEventListener("click", async (e) => {
     el.disabled = true;
     const res = await Sync.signInGoogle();
     if (res.ok) {
-      if (store["profile.name"]) Sync.registerUser(store["profile.name"]);
       track("account_linked", { method: "google" });
+      if (ui.screen === "onboarding") { finishOnboarding(); return; }
+      if (store["profile.name"]) Sync.registerUser(store["profile.name"]);
       toast(t("Signed in"));
       render();
     } else {
@@ -1702,17 +1728,10 @@ root.addEventListener("click", async (e) => {
       if (!name) { toast(t("Your name")); return; }
       store["profile.name"] = name;
     }
-    if (ui.onbStep === LAST_STEP) {
-      store.dailyGoal = recommendedDailyReps(store["profile.level"], store["profile.maxReps"]);
-      store.onboarded = true;
-      Sync.registerUser(store["profile.name"]);
-      phIdentify();
-      track("onboarding_completed", { level: store["profile.level"], daily_goal: store.dailyGoal });
-      ui.screen = "tabs";
-      // Пришёл по ссылке-приглашению — сразу открываем вступление в общий челлендж.
-      if (JOIN_INTENT) { ui.tab = "challenges"; render(); openJoin("main"); return; }
-      render();
-    } else { ui.onbStep++; render(); }
+    // LAST_STEP без Firebase — это итог (кнопка завершает). С Firebase LAST_STEP это вход
+    // без кнопки onbNext, поэтому сюда попадаем только когда входа не требуется.
+    if (ui.onbStep === LAST_STEP) { finishOnboarding(); }
+    else { ui.onbStep++; render(); }
     return;
   }
   if (cmd === "onbSet") { store[arg] = act.split(":")[2]; render(); return; }
@@ -1795,6 +1814,8 @@ render();
 Sync.init(() => {
   applySync();
   phIdentify(); // uid из auth готов — связываем аналитику с игроком
+  // Без инкогнито: онбордился, но остался анонимом (или вышел) — на обязательный вход.
+  if (Sync.enabled && Sync.isAnonymous && store.onboarded && ui.screen === "tabs") { ui.screen = "onboarding"; ui.onbStep = LAST_STEP; }
   // Не дёргаем перерисовку поверх открытых форм и камеры.
   if (!ui.sheet && !ui.full && !liveSession) render();
 });
