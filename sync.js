@@ -104,6 +104,32 @@ window.Sync = (() => {
     }
   }
 
+  // Вход через Google (popup — остаёмся внутри установленной PWA, без redirect).
+  // Аноним → linkWithPopup: uid и весь прогресс сохраняются. Иначе — обычный вход.
+  async function signInGoogle() {
+    if (!enabled || !A || !authInstance) return { ok: false, error: "offline" };
+    const provider = new A.GoogleAuthProvider();
+    const cur = authInstance.currentUser;
+    try {
+      if (cur && cur.isAnonymous) await A.linkWithPopup(cur, provider);
+      else await A.signInWithPopup(authInstance, provider);
+      refreshAuthState();
+      return { ok: true };
+    } catch (e) {
+      const code = (e && e.code) || "";
+      // Этот Google-аккаунт уже привязан к другому uid — просто входим в него.
+      if (code === "auth/credential-already-in-use") {
+        try {
+          const cred = A.GoogleAuthProvider.credentialFromError(e);
+          if (cred) { await A.signInWithCredential(authInstance, cred); refreshAuthState(); return { ok: true }; }
+        } catch {}
+      }
+      if (code === "auth/popup-closed-by-user" || code === "auth/cancelled-popup-request") return { ok: false, error: "cancelled" };
+      if (code === "auth/popup-blocked") return { ok: false, error: "popup-blocked" };
+      return { ok: false, error: authError(e) };
+    }
+  }
+
   async function signOutUser() {
     if (A && authInstance) { try { await A.signOut(authInstance); } catch {} }
     // onAuthStateChanged(null) вернёт анонимный вход.
@@ -164,7 +190,7 @@ window.Sync = (() => {
   }
 
   return {
-    enabled, state, init, registerUser, join, report, signUpOrIn, signOutUser,
+    enabled, state, init, registerUser, join, report, signUpOrIn, signInGoogle, signOutUser,
     get uid() { return uid; },
     get email() { return accountEmail; },
     get isAnonymous() { return isAnon; },

@@ -140,6 +140,8 @@ const RU = {
   "Enter email and password": "Введи почту и пароль", "Wrong password": "Неверный пароль",
   "Password too short (min 6)": "Пароль слишком короткий (мин. 6)", "Invalid email": "Неверная почта",
   "Network error": "Ошибка сети", "Couldn't sign in": "Не удалось войти",
+  "Continue with Google": "Продолжить с Google", "or": "или",
+  "Allow popups and try again": "Разреши всплывающие окна и попробуй снова",
   "Add to Home Screen: Share → Add to Home Screen": "На экран «Домой»: Поделиться → «На экран Домой»",
 };
 
@@ -1092,6 +1094,8 @@ function accountCard() {
     ? `<div class="form-footer">${t("Synced across your devices")}</div>
        <button class="action-btn" data-act="signOut" style="background:var(--white-08);color:#fff">${t("Log out")}</button>`
     : `<div class="form-footer">${t("Sign in to sync progress across your devices")}</div>
+       <button class="action-btn" data-act="googleAuth" style="background:#fff;color:#1f1f1f">${t("Continue with Google")}</button>
+       <div class="form-footer" style="text-align:center;opacity:.5">${t("or")}</div>
        <input class="field" id="auth-email" type="email" inputmode="email" autocomplete="email" placeholder="${esc(t("Email"))}">
        <input class="field" id="auth-pass" type="password" autocomplete="current-password" placeholder="${esc(t("Password"))}">
        <button class="action-btn" data-act="submitAuth">${t("Log in / Sign up")}</button>`;
@@ -1629,13 +1633,28 @@ root.addEventListener("click", async (e) => {
     const res = await Sync.signUpOrIn(email, pass);
     if (res.ok) {
       if (store["profile.name"]) Sync.registerUser(store["profile.name"]);
-      track("account_linked", {});
+      track("account_linked", { method: "email" });
       toast(t("Signed in"));
       render();
     } else {
       el.disabled = false;
       const key = { "wrong-password": "Wrong password", "weak-password": "Password too short (min 6)", "invalid-email": "Invalid email", "network": "Network error" }[res.error] || "Couldn't sign in";
       toast(t(key));
+    }
+    return;
+  }
+  if (cmd === "googleAuth") {
+    el.disabled = true;
+    const res = await Sync.signInGoogle();
+    if (res.ok) {
+      if (store["profile.name"]) Sync.registerUser(store["profile.name"]);
+      track("account_linked", { method: "google" });
+      toast(t("Signed in"));
+      render();
+    } else {
+      el.disabled = false;
+      // "cancelled" — пользователь сам закрыл окно, молча ничего не показываем.
+      if (res.error !== "cancelled") toast(t(res.error === "popup-blocked" ? "Allow popups and try again" : "Couldn't sign in"));
     }
     return;
   }
