@@ -72,6 +72,11 @@ const RU = {
   "Challenge complete!": "Челлендж пройден!", "Challenge total": "Всего за челлендж", "Challenges": "Челленджи",
   "Close": "Закрыть", "cm": "см", "Combo": "Комбо", "Continue": "Дальше", "Create": "Создать",
   "Create Challenge": "Создать челлендж", "Currency": "Валюта", "Daily activity — 30 days": "Дневная активность за 30 дней",
+  "Which exercises?": "Какие упражнения?", "Pick one or several — a combo counts them all.": "Выбери одно или несколько — комбо считает все.",
+  "How many per day?": "Сколько в день?", "Daily goal for each exercise.": "Дневная норма для каждого.",
+  "Conditions": "Условия", "Name your challenge": "Название челленджа", "Pick at least one exercise": "Выбери хотя бы одно упражнение",
+  "Save & share": "Сохранить и поделиться", "New challenge": "Новый челлендж", "%lld / day": "%lld / день", "%lld days": "%lld дней",
+  "Duration": "Длительность", "Progression": "Прогрессия", "Yes": "Да", "No": "Нет", "%lld-day challenge": "Челлендж на %lld дней", "Buy-in": "Взнос",
   "Day %lld of %lld": "День %lld из %lld", "Day 1: %lld → Day %lld: %lld": "День 1: %lld → День %lld: %lld",
   "Day done!": "День закрыт!", "Do today's combo": "Комбо за сегодня", "Do today's push-ups": "Отжимания за сегодня",
   "Do today's squats": "Приседания за сегодня", "Done": "Готово", "Done today": "Сегодня выполнено",
@@ -1204,46 +1209,107 @@ function fieldStepper(label, key, min, max, by) {
       <button data-act="inc" data-key="${key}" data-min="${min}" data-max="${max}" data-by="${by || 1}">+</button></div></div>`;
 }
 
-function CreateSheet() {
-  const f = ui.form;
-  const seg = (opts, key, cur) => `<div class="segmented">${opts.map(([v, n]) => `<button data-act="seg" data-key="${key}" data-val="${v}" class="${cur === v ? "active" : ""}">${esc(n)}</button>`).join("")}</div>`;
-  const base = f.mode === "combo" ? f.pushups + f.squats : f[f.mode];
-  const goalsCount = f.mode === "combo" ? 2 : 1;
-  const inc = f.progOn ? f.progStep * progIncrements({ step: f.progStep, period: f.progPeriod }, Math.min(Math.max(f.duration, 1), 365)) * goalsCount : 0;
+// Создание челленджа — мастер по принципу онбординга (полный экран, без анимации-выезда).
+// Шаги: 0 упражнения → 1 нормы → 2 условия → 3 ставка → 4 название → 5 итог (Сохранить/Поделиться).
+const CREATE_EX = ["pushups", "squats", "pullups", "dips"];
+const CREATE_LAST = 5;
+function selectedExercises(f) { return CREATE_EX.filter((e) => f["sel_" + e]); }
+function defaultTitle(f) {
+  const sel = selectedExercises(f);
+  if (!sel.length) return t("New challenge");
+  return sel.map((e) => `${f[e]} ${Exercise.displayName(e)}`).join(" + ");
+}
 
-  const body = `
-    <div class="form-section">${lbl(t("Title"))}<input class="field" data-model="title" value="${esc(f.title)}" placeholder="100 Push-ups / 30 Days"></div>
-
-    <div class="form-section">${lbl(t("Exercise"))}
-      ${seg([["pushups", t("Push-ups")], ["squats", t("Squats")], ["pullups", t("Pull-ups")], ["dips", t("Dips")], ["combo", t("Combo")]], "mode", f.mode)}
-      ${f.mode === "combo"
-        ? fieldStepper(t("Push-ups per day"), "pushups", 10, 500, 10) + fieldStepper(t("Squats per day"), "squats", 10, 500, 10)
-        : fieldStepper(t("Reps per day"), f.mode, 5, 500, 5)}
+function createSummary(f) {
+  const sel = selectedExercises(f);
+  const row = (k, v) => `<div class="between" style="gap:12px"><span class="label secondary" style="font-size:12px">${esc(k)}</span><span style="font-weight:600;font-size:15px;text-align:right">${esc(v)}</span></div>`;
+  const buyIn = (store.currencyUSD ? "$" : Currency.symbol) + fmt(f.buyIn);
+  return `<div style="padding-top:8px;display:flex;flex-direction:column;gap:16px;height:100%;justify-content:center">
+    <div class="display" style="font-size:26px;text-align:center;text-wrap:balance">${esc(f.title.trim() || defaultTitle(f))}</div>
+    <div class="card" style="padding:16px;display:flex;flex-direction:column;gap:12px">
+      ${sel.map((e) => row(Exercise.displayName(e), t("%lld / day", f[e]))).join("")}
     </div>
+    <div class="card" style="padding:16px;display:flex;flex-direction:column;gap:12px">
+      ${row(t("Duration"), t("%lld days", f.duration))}
+      ${row(t("Missed days"), MissPolicy.displayName(f.miss))}
+      ${f.progOn ? row(t("Progression"), `+${f.progStep} ${f.progPeriod === "day" ? t("per day") : t("per week")}`) : ""}
+      ${row(t("Public challenge"), f.isPublic ? t("Yes") : t("No"))}
+      ${row(t("Stake amount"), buyIn)}
+    </div>
+  </div>`;
+}
 
-    <div class="form-section">${lbl(t("Schedule"))}
+function CreateWizard() {
+  const f = ui.form, step = f.step, sel = selectedExercises(f);
+  const seg = (opts, key, cur) => `<div class="segmented">${opts.map(([v, n]) => `<button data-act="seg" data-key="${key}" data-val="${v}" class="${cur === v ? "active" : ""}">${esc(n)}</button>`).join("")}</div>`;
+  const question = (title, subtitle, content) => `<div style="padding-top:24px;display:flex;flex-direction:column;gap:8px;height:100%">
+    <div class="display" style="font-size:30px">${esc(title)}</div>${subtitle ? `<div class="form-footer">${esc(subtitle)}</div>` : ""}
+    <div style="flex:1;display:flex;flex-direction:column;justify-content:center;gap:10px">${content}</div></div>`;
+  const emptyCircle = icon("plusCircle").replace("M12 8v8M8 12h8", "");
+  const checkCard = (ex) => {
+    const on = f["sel_" + ex];
+    return `<button class="card ${on ? "selected" : ""}" data-act="toggle" data-key="sel_${ex}" style="padding:16px;width:100%;display:flex;align-items:center;gap:10px;text-align:left">
+      <div style="flex:1"><div class="display" style="font-size:20px">${esc(Exercise.displayName(ex))}</div></div>
+      <span style="color:${on ? "var(--accent)" : "var(--text-secondary)"};display:flex">${on ? iconF("checkCircle") : emptyCircle}</span>
+    </button>`;
+  };
+
+  let content, label = t("Continue");
+  if (step === 0) content = question(t("Which exercises?"), t("Pick one or several — a combo counts them all."), CREATE_EX.map(checkCard).join(""));
+  else if (step === 1) content = question(t("How many per day?"), t("Daily goal for each exercise."),
+    (sel.length ? sel : ["pushups"]).map((e) => fieldStepper(Exercise.displayName(e), e, 5, 500, 5)).join(""));
+  else if (step === 2) content = question(t("Conditions"), null, `
       ${fieldStepper(t("Duration (days)"), "duration", 1, 365, 1)}
       <div class="settings-row"><span>${t("Missed days")}</span></div>
       ${seg(MissPolicy.all.map((p) => [p, MissPolicy.displayName(p)]), "miss", f.miss)}
       <div class="settings-row"><span>${t("Public challenge")}</span><button data-act="toggle" data-key="isPublic" class="toggle ${f.isPublic ? "on" : ""}"></button></div>
-    </div>
-
-    <div class="form-section">${lbl(t("Progression"))}
       <div class="settings-row"><span>${t("Progressive overload")}</span><button data-act="toggle" data-key="progOn" class="toggle ${f.progOn ? "on" : ""}"></button></div>
-      ${f.progOn ? `${fieldStepper(t("Increase by"), "progStep", 1, 50, 1)}
-        ${seg([["day", t("per day")], ["week", t("per week")]], "progPeriod", f.progPeriod)}
-        <div class="rule-row">${icon("bolt")}<div>${t("Day 1: %lld → Day %lld: %lld", base, Math.min(Math.max(f.duration, 1), 365), base + inc)}</div></div>` : ""}
-      <div class="form-footer">${t("The daily goal grows as the challenge goes on.")}</div>
-    </div>
-
-    <div class="form-section">${lbl(t("Stake amount"))}
+      ${f.progOn ? fieldStepper(t("Increase by"), "progStep", 1, 50, 1) + seg([["day", t("per day")], ["week", t("per week")]], "progPeriod", f.progPeriod) : ""}`);
+  else if (step === 3) content = question(t("Stake amount"), t("The buy-in is deducted from your balance right away. Test currency — no real money."), `
       ${showCurrencyToggle ? currencyToggle() : ""}
-      <div class="row gap8"><span class="secondary money" style="font-size:20px">${store.currencyUSD ? "$" : Currency.symbol}</span><input class="field money" type="number" data-model="buyIn" value="${f.buyIn}" style="font-size:20px"></div>
-      <div class="form-footer">${t("The buy-in is deducted from your balance right away. Test currency — no real money.")}</div>
-    </div>
+      <div class="row gap8"><span class="secondary money" style="font-size:24px">${store.currencyUSD ? "$" : Currency.symbol}</span><input class="field money" type="number" inputmode="numeric" data-model="buyIn" value="${f.buyIn}" style="font-size:24px"></div>`);
+  else if (step === 4) { content = question(t("Name your challenge"), t("Friends will see it in the leaderboard."),
+      `<input class="field" data-model="title" value="${esc(f.title)}" placeholder="${esc(defaultTitle(f))}" maxlength="40">`); label = t("Done"); }
+  else content = createSummary(f);
 
-    <button class="action-btn" data-act="submitCreate" ${f.title.trim() ? "" : "disabled"}>${t("Create")}</button>`;
-  return sheetShell(t("Create Challenge"), body, true);
+  const footer = step === CREATE_LAST
+    ? `<div style="padding:0 20px 8px;padding-bottom:calc(8px + env(safe-area-inset-bottom));display:flex;flex-direction:column;gap:8px">
+        <button class="action-btn money" data-act="saveShareChallenge">${iconF("share")}${t("Save & share")}</button>
+        <button class="action-btn" data-act="saveChallenge" style="background:var(--white-08);color:#fff">${t("Save")}</button></div>`
+    : `<div style="padding:0 20px 8px;padding-bottom:calc(8px + env(safe-area-inset-bottom))"><button class="action-btn" data-act="createNext">${label}</button></div>`;
+
+  return `<div class="fullscreen"><div style="min-height:100dvh;display:flex;flex-direction:column">
+    <div class="row gap12" style="padding:8px 20px 0;align-items:center">
+      <button data-act="createBack" style="width:32px;height:32px;display:flex;align-items:center;justify-content:center;color:#fff">${icon(step > 0 ? "chevronLeft" : "xmark")}</button>
+      <div style="flex:1">${bar(step / CREATE_LAST)}</div>
+    </div>
+    <div style="flex:1;padding:0 24px;overflow-y:auto">${content}</div>
+    ${footer}
+  </div></div>`;
+}
+
+// Собрать goals из выбранных упражнений и создать челлендж. false — если нечем оплатить/ничего не выбрано.
+function saveChallengeForm() {
+  const f = ui.form, sel = selectedExercises(f);
+  if (!sel.length) { toast(t("Pick at least one exercise")); return false; }
+  const clamp = (n) => Math.min(Math.max(n, 1), 500);
+  const goals = sel.map((e) => ({ exercise: e, repsPerDay: clamp(f[e]) }));
+  const ok = createChallenge({ title: f.title.trim() || defaultTitle(f), goals, durationDays: Math.min(Math.max(f.duration, 1), 365), buyIn: Math.max(f.buyIn, 1), isPublic: f.isPublic, missPolicy: f.miss, progression: f.progOn ? { step: f.progStep, period: f.progPeriod } : { step: 0, period: "day" } });
+  if (!ok) { toast(t("Not enough coins")); return false; }
+  return true;
+}
+// Карточка условий картинкой — тот же генератор, что и для результатов (Web Share API → инста и т.п.).
+function shareChallengeCard(f) {
+  const sel = selectedExercises(f);
+  shareCard({
+    title: f.title.trim() || defaultTitle(f),
+    headline: t("%lld-day challenge", f.duration),
+    metrics: [
+      ...sel.map((e) => [Exercise.displayName(e), t("%lld / day", f[e])]),
+      [t("Missed days"), MissPolicy.displayName(f.miss)],
+      [t("Buy-in"), (store.currencyUSD ? "$" : Currency.symbol) + fmt(f.buyIn)],
+    ],
+  });
 }
 
 function JoinSheet() {
@@ -1539,7 +1605,12 @@ async function shareCard(data) {
 // ==========================================================================
 // Открытие/закрытие модалок и поздравлений
 // ==========================================================================
-function openCreate() { ui.form = { title: "", mode: "pushups", pushups: store.dailyGoal, squats: store.dailyGoal, pullups: 20, dips: 30, duration: 30, buyIn: 50, isPublic: true, miss: "oneTotal", progOn: false, progStep: 5, progPeriod: "day" }; ui.sheet = CreateSheet; render(); }
+function openCreate() {
+  ui.form = { step: 0, title: "", sel_pushups: true, sel_squats: false, sel_pullups: false, sel_dips: false,
+    pushups: store.dailyGoal, squats: store.dailyGoal, pullups: 20, dips: 30,
+    duration: 30, buyIn: 50, isPublic: true, miss: "oneTotal", progOn: false, progStep: 5, progPeriod: "day" };
+  ui.full = CreateWizard; render(); window.scrollTo(0, 0);
+}
 function openJoin(id) { ui.form = { challengeId: id, weight: store["profile.weightKg"], maxReps: store["profile.maxReps"], photo: null }; ui.sheet = JoinSheet; render(); }
 function openMeasure() { ui.form = { weight: store["profile.weightKg"], maxReps: store["profile.maxReps"] }; ui.sheet = MeasureSheet; render(); }
 function openParticipant(id) { ui.form = { participantId: id }; ui.sheet = ParticipantSheet; render(); }
@@ -1638,15 +1709,23 @@ root.addEventListener("click", async (e) => {
 
   if (act.startsWith("pickPhoto")) { const img = await pickImage(arg === "camera"); if (img) { ui.form.photo = img; render(); } return; }
 
-  if (cmd === "submitCreate") {
+  if (cmd === "createNext") {
     const f = ui.form;
-    if (!f.title.trim()) { toast(t("Title")); return; }
-    const clamp = (n) => Math.min(Math.max(n, 1), 500);
-    const goals = f.mode === "combo"
-      ? [{ exercise: "pushups", repsPerDay: clamp(f.pushups) }, { exercise: "squats", repsPerDay: clamp(f.squats) }]
-      : [{ exercise: f.mode, repsPerDay: clamp(f[f.mode]) }];
-    const ok = createChallenge({ title: f.title.trim(), goals, durationDays: Math.min(Math.max(f.duration, 1), 365), buyIn: Math.max(f.buyIn, 1), isPublic: f.isPublic, missPolicy: f.miss, progression: f.progOn ? { step: f.progStep, period: f.progPeriod } : { step: 0, period: "day" } });
-    if (ok) closeSheet(); else toast(t("Not enough coins"));
+    if (f.step === 0 && !selectedExercises(f).length) { toast(t("Pick at least one exercise")); return; }
+    f.step++; render();
+    return;
+  }
+  if (cmd === "createBack") {
+    const f = ui.form;
+    if (f.step > 0) { f.step--; render(); } else { ui.full = null; ui.form = null; render(); }
+    return;
+  }
+  if (cmd === "saveChallenge") { if (saveChallengeForm()) { ui.full = null; ui.form = null; go("yours"); } return; }
+  if (cmd === "saveShareChallenge") {
+    const f = ui.form;
+    if (!saveChallengeForm()) return;
+    ui.full = null; ui.form = null; go("yours");
+    shareChallengeCard(f);
     return;
   }
   if (cmd === "submitJoin") {
