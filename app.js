@@ -28,6 +28,7 @@ const PATHS = {
   lockOpen: '<rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V8a4 4 0 017-2.5"/>',
   faceid: '<path d="M4 8V6a2 2 0 012-2h2M16 4h2a2 2 0 012 2v2M20 16v2a2 2 0 01-2 2h-2M8 20H6a2 2 0 01-2-2v-2"/><path d="M9 10v1M15 10v1M12 9v4l-1 1M9 15s1 1.5 3 1.5S15 15 15 15"/>',
   chevronLeft: '<path d="M15 5l-7 7 7 7"/>',
+  chevronRight: '<path d="M9 5l7 7-7 7"/>',
   share: '<path d="M12 3v13M8 7l4-4 4 4M5 12v7a1 1 0 001 1h12a1 1 0 001-1v-7"/>',
   personXmark: '<circle cx="9" cy="8" r="3.5"/><path d="M3 21c0-3.5 3-5.5 6-5.5M16 9l5 5M21 9l-5 5"/>',
   xCircle: '<circle cx="12" cy="12" r="10"/><path d="M9 9l6 6M15 9l-6 6" stroke="#0a0a0a"/>',
@@ -77,6 +78,7 @@ const RU = {
   "Conditions": "Условия", "Name your challenge": "Название челленджа", "Pick at least one exercise": "Выбери хотя бы одно упражнение",
   "Save & share": "Сохранить и поделиться", "New challenge": "Новый челлендж", "%lld / day": "%lld / день", "%lld days": "%lld дней",
   "Duration": "Длительность", "Progression": "Прогрессия", "Yes": "Да", "No": "Нет", "%lld-day challenge": "Челлендж на %lld дней", "Buy-in": "Взнос",
+  "Next exercise": "Следующее упражнение",
   "Day %lld of %lld": "День %lld из %lld", "Day 1: %lld → Day %lld: %lld": "День 1: %lld → День %lld: %lld",
   "Day done!": "День закрыт!", "Do today's combo": "Комбо за сегодня", "Do today's push-ups": "Отжимания за сегодня",
   "Do today's squats": "Приседания за сегодня", "Done": "Готово", "Done today": "Сегодня выполнено",
@@ -1457,13 +1459,9 @@ async function openSession(challengeId) {
   const countersEl = overlay.querySelector("#sess-counters");
   const bottomEl = overlay.querySelector("#sess-bottom");
 
-  // Счётчики: один большой или два в комбо.
+  // Комбо теперь последовательное: активно одно упражнение за раз, счётчик показываем один.
   const combo = goals.length > 1;
-  countersEl.className = combo ? "counters" : "";
-  countersEl.innerHTML = goals.map((g, i) => combo
-    ? `<div class="counter-col"><span class="cap">${esc(Exercise.displayName(g.exercise))}</span><span class="counter-big counter-combo c-white" data-num="${i}">${g.start}</span>${g.target != null ? `<span class="target">/ ${g.target}</span>` : ""}</div>`
-    : `<div class="counter-col"><span class="counter-big c-white" data-num="${i}">${g.start}</span>${g.target != null ? `<span class="target">/ ${g.target}</span>` : ""}<span class="cap">${t("Reps")}</span></div>`).join("");
-  const numEls = goals.map((_, i) => countersEl.querySelector(`[data-num="${i}"]`));
+  let active = 0;
 
   const sess = new window.PoseSession(goals.map((g) => g.exercise), { voice: store.voiceEnabled, lang: store.lang === "ru" ? "ru-RU" : "en-US" });
   liveSession = { sess, overlay };
@@ -1481,43 +1479,59 @@ async function openSession(challengeId) {
 
   const totalFor = (g, r) => g.start + (r ? r.repCount : 0);
   const resultFor = (ex) => sess.snapshot.results.find((r) => r.exercise === ex);
+
+  // Один счётчик — активного упражнения. В комбо над ним подпись «Упражнение · N/всего».
+  function renderCounter() {
+    const g = goals[active];
+    countersEl.className = "";
+    countersEl.innerHTML = `<div class="counter-col">
+      ${combo ? `<span class="cap">${esc(Exercise.displayName(g.exercise))} · ${active + 1}/${goals.length}</span>` : ""}
+      <span class="counter-big c-white" id="sess-num">${totalFor(g, resultFor(g.exercise))}</span>
+      ${g.target != null ? `<span class="target">/ ${g.target}</span>` : ""}
+      ${combo ? "" : `<span class="cap">${t("Reps")}</span>`}</div>`;
+  }
+  renderCounter();
   let prevGoalReached = false, prevBottomKey = "";
 
   function loop() {
     if (liveSession !== undefined && liveSession && liveSession.sess === sess) {
       const results = sess.snapshot.results;
       const sessionTotal = results.reduce((s, r) => s + r.repCount, 0);
-      const goalReached = goals.every((g) => g.target != null && totalFor(g, resultFor(g.exercise)) >= g.target);
+      const g = goals[active], ar = resultFor(g.exercise), total = totalFor(g, ar);
+      const curReached = g.target != null && total >= g.target;
+      const allReached = goals.every((x) => x.target != null && totalFor(x, resultFor(x.exercise)) >= x.target);
+      const hasNext = combo && active < goals.length - 1;
 
-      goals.forEach((g, i) => {
-        const r = resultFor(g.exercise), total = totalFor(g, r);
-        numEls[i].textContent = total;
-        const cls = g.target != null && total >= g.target ? "c-money" : (r && r.status === "down" ? "c-accent" : "c-white");
-        numEls[i].className = numEls[i].className.replace(/c-(money|accent|white)/, cls);
-      });
+      // Счётчик активного упражнения
+      const numEl = countersEl.querySelector("#sess-num");
+      if (numEl) {
+        numEl.textContent = total;
+        const cls = curReached ? "c-money" : (ar && ar.status === "down" ? "c-accent" : "c-white");
+        numEl.className = numEl.className.replace(/c-(money|accent|white)/, cls);
+      }
 
-      // Подсказка
-      let hint = null;
-      if (!results.length) hint = t("Point the camera at yourself");
-      else if (results.some((r) => r.status === "up" || r.status === "down")) hint = null;
-      else if (results.every((r) => r.status === "noBody")) hint = t("Point the camera at yourself");
-      else if (combo) hint = t("Your whole body must be in frame");
-      else hint = goals[0].exercise === "squats" ? t("Both legs must be fully in frame") : t("Both arms must be fully in frame");
+      // Подсказка по активному упражнению
+      let hint;
+      if (!ar || ar.status === "noBody") hint = t("Point the camera at yourself");
+      else if (ar.status === "up" || ar.status === "down") hint = null;
+      else hint = g.exercise === "squats" ? t("Both legs must be fully in frame") : t("Both arms must be fully in frame");
       hintEl.style.display = hint ? "" : "none";
       if (hint) hintEl.textContent = hint;
 
-      // Нижняя панель: угол + Завершить/Готово
-      const angle = !combo && resultFor(goals[0].exercise) && resultFor(goals[0].exercise).bendAngle != null ? Math.round(resultFor(goals[0].exercise).bendAngle) : null;
-      const key = `${goalReached}|${sessionTotal > 0}|${angle}`;
+      // Нижняя панель: угол + [→ следующее упражнение] + Завершить/Готово
+      const angle = ar && ar.bendAngle != null ? Math.round(ar.bendAngle) : null;
+      const key = `${active}|${curReached}|${allReached}|${sessionTotal > 0}|${angle}|${hasNext}`;
       if (key !== prevBottomKey) {
         prevBottomKey = key;
         let b = angle != null ? `<span class="angle">${angle}°</span>` : "";
-        if (goalReached) b += `<button class="action-btn money" data-sess="finish" style="max-width:340px">${iconF("checkCircle")}${t("Finish")}</button>`;
+        if (hasNext) b += `<button data-sess="next" style="display:inline-flex;align-items:center;gap:4px;padding:10px 18px;border-radius:999px;background:rgba(255,255,255,.16);color:#fff;font-weight:600;font-size:14px">${esc(Exercise.displayName(goals[active + 1].exercise))}${icon("chevronRight")}</button>`;
+        if (allReached) b += `<button class="action-btn money" data-sess="finish" style="max-width:340px">${iconF("checkCircle")}${t("Finish")}</button>`;
         else if (sessionTotal > 0) b += `<button class="action-btn" data-sess="finish" style="max-width:340px">${icon("check")}${t("Done")}</button>`;
         bottomEl.innerHTML = b;
       }
-      if (goalReached && !prevGoalReached) sess.say(t("Goal reached!"));
-      prevGoalReached = goalReached;
+      // Голос: похвала при закрытии текущего упражнения (в комбо — зовём к следующему).
+      if (curReached && !prevGoalReached) sess.say(hasNext ? t("Next exercise") : t("Goal reached!"));
+      prevGoalReached = curReached;
     }
     if (liveSession && liveSession.sess === sess) requestAnimationFrame(loop);
   }
@@ -1539,6 +1553,9 @@ async function openSession(challengeId) {
     if (!b) return;
     const a = b.dataset.sess;
     if (a === "close" || a === "finish") finish();
+    else if (a === "next") {
+      if (active < goals.length - 1) { active++; sess.setActive(active); renderCounter(); prevBottomKey = ""; prevGoalReached = false; }
+    }
     else if (a === "voice") { store.voiceEnabled = !store.voiceEnabled; sess.setVoice(store.voiceEnabled); b.innerHTML = icon(store.voiceEnabled ? "speakerOn" : "speakerOff"); b.style.color = store.voiceEnabled ? "var(--accent)" : "rgba(255,255,255,.6)"; }
     else if (a === "record") {
       const on = await sess.toggleRecording();

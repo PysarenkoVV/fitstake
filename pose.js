@@ -223,6 +223,7 @@ class PoseSession {
     this.voice = !!opts.voice;
     this.lang = opts.lang || "en-US";
     this.counters = exercises.map((e) => new RepCounter(e));
+    this.active = 0; // комбо последовательное: считается только текущее упражнение — нет конфликтов
     this.snapshot = { results: exercises.map((e) => ({ exercise: e, repCount: 0, status: "noBody", bendAngle: null })), points: {}, imageSize: { width: 0, height: 0 } };
     this._running = false;
     this._stream = null;
@@ -232,6 +233,9 @@ class PoseSession {
     this._recCanvas = null;
     this._lastTs = -1;
   }
+
+  // Переключить активное упражнение комбо (считается только оно).
+  setActive(i) { if (i >= 0 && i < this.counters.length) this.active = i; }
 
   async start(video, canvas) {
     this._video = video;
@@ -279,13 +283,16 @@ class PoseSession {
       }
 
       const results = this.counters.map((c, i) => {
+        // Неактивные упражнения комбо на паузе: счёт заморожен, кадр не обрабатываем.
+        if (i !== this.active) return { exercise: c.exercise, repCount: c.count, status: "paused", bendAngle: null };
         const r = c.process(points, size);
         if (this.voice && c.count > this._lastCounts[i]) this.say(String(c.count));
         this._lastCounts[i] = c.count;
         return { exercise: c.exercise, repCount: c.count, status: r.status, bendAngle: r.bendAngle };
       });
-      // Всё нужное в кадре — все счётчики трекаются (не noBody/partialBody). Скелет зеленеет.
-      const ready = results.length > 0 && results.every((r) => r.status === "up" || r.status === "down");
+      // Всё нужное для активного упражнения в кадре — скелет зеленеет.
+      const ar = results[this.active];
+      const ready = !!(ar && (ar.status === "up" || ar.status === "down"));
       this.snapshot = { results, points, imageSize: size };
       this._drawSkeleton(points, size, ready);
       if (this._recording) this._drawRecordFrame(size);
