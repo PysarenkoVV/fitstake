@@ -7,4 +7,5 @@ window.FIREBASE_CONFIG = {
   storageBucket: "fitstake-2ccf4.firebasestorage.app",
   messagingSenderId: "675204170275",
   appId: "1:675204170275:web:27b4c717e49dc938d66796",
+  measurementId: "G-MJ4S3JHZKH",
 };

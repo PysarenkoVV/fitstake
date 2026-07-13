@@ -44,6 +44,11 @@ window.Sync = (() => {
       F = dbMod;
       A = authMod;
       authInstance = authMod.getAuth(fbApp);
+      // Google Analytics (Firebase) — грузим лениво и только где поддерживается,
+      // чтобы не сыпать ошибками в installed-PWA/webview. Fire-and-forget: сбой не ломает sync.
+      import(V + "firebase-analytics.js")
+        .then((m) => m.isSupported().then((ok) => { if (ok) m.getAnalytics(fbApp); }))
+        .catch(() => {});
       // Подписки на данные — пути фиксированы, от uid не зависят.
       F.onValue(F.ref(db, "fitstake/users"), (snap) => {
         state.users = snap.val() || {};
