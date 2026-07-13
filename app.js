@@ -142,6 +142,9 @@ const RU = {
   "Network error": "Ошибка сети", "Couldn't sign in": "Не удалось войти",
   "Continue with Google": "Продолжить с Google", "or": "или",
   "Allow popups and try again": "Разреши всплывающие окна и попробуй снова",
+  "Enable Google in Firebase (Sign-in method)": "Включи Google в Firebase (Sign-in method)",
+  "Add domain in Firebase (Authorized domains)": "Добавь домен в Firebase (Authorized domains)",
+  "Google sign-in unavailable here — use email": "Google-вход тут недоступен — войди по почте",
   "Add to Home Screen: Share → Add to Home Screen": "На экран «Домой»: Поделиться → «На экран Домой»",
 };
 
@@ -1653,8 +1656,15 @@ root.addEventListener("click", async (e) => {
       render();
     } else {
       el.disabled = false;
-      // "cancelled" — пользователь сам закрыл окно, молча ничего не показываем.
-      if (res.error !== "cancelled") toast(t(res.error === "popup-blocked" ? "Allow popups and try again" : "Couldn't sign in"));
+      if (res.error === "cancelled") return; // сам закрыл окно — молчим
+      const hint = {
+        "auth/operation-not-allowed": "Enable Google in Firebase (Sign-in method)",
+        "auth/unauthorized-domain": "Add domain in Firebase (Authorized domains)",
+        "auth/popup-blocked": "Allow popups and try again",
+        "auth/operation-not-supported-in-this-environment": "Google sign-in unavailable here — use email",
+        "auth/web-storage-unsupported": "Google sign-in unavailable here — use email",
+      }[res.error];
+      toast(hint ? t(hint) : (res.error || t("Couldn't sign in")));
     }
     return;
   }

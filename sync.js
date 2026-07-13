@@ -116,7 +116,7 @@ window.Sync = (() => {
       refreshAuthState();
       return { ok: true };
     } catch (e) {
-      const code = (e && e.code) || "";
+      const code = (e && e.code) || "error";
       // Этот Google-аккаунт уже привязан к другому uid — просто входим в него.
       if (code === "auth/credential-already-in-use") {
         try {
@@ -125,8 +125,7 @@ window.Sync = (() => {
         } catch {}
       }
       if (code === "auth/popup-closed-by-user" || code === "auth/cancelled-popup-request") return { ok: false, error: "cancelled" };
-      if (code === "auth/popup-blocked") return { ok: false, error: "popup-blocked" };
-      return { ok: false, error: authError(e) };
+      return { ok: false, error: code }; // сырой код Firebase — чтобы видеть реальную причину
     }
   }
 
