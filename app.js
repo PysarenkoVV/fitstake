@@ -1659,6 +1659,7 @@ root.addEventListener("click", async (e) => {
       if (res.error === "cancelled") return; // сам закрыл окно — молчим
       const hint = {
         "auth/operation-not-allowed": "Enable Google in Firebase (Sign-in method)",
+        "auth/configuration-not-found": "Enable Google in Firebase (Sign-in method)",
         "auth/unauthorized-domain": "Add domain in Firebase (Authorized domains)",
         "auth/popup-blocked": "Allow popups and try again",
         "auth/operation-not-supported-in-this-environment": "Google sign-in unavailable here — use email",
