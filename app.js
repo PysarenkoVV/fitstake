@@ -280,6 +280,10 @@ function newChallenge(o) {
 const Sync = window.Sync || { enabled: false, uid: null, state: {}, init: async () => false, registerUser() {}, join() {}, report() {} };
 const SHARED_START = "2026-07-11";
 
+// PostHog: продуктовая аналитика. Обёрнуто — не падаем, если скрипт заблокирован/не загружен.
+function track(event, props) { try { if (window.posthog) window.posthog.capture(event, props || {}); } catch {} }
+function phIdentify() { try { if (window.posthog && Sync.uid) window.posthog.identify(Sync.uid, { name: store["profile.name"] || undefined }); } catch {} }
+
 function currentDayFromStart(days) {
   const s = new Date(SHARED_START + "T00:00:00").getTime();
   return Math.min(Math.max(Math.floor((startOfDay(Date.now()) - s) / DAY) + 1, 1), days);
@@ -507,6 +511,7 @@ function joinChallenge(ch, weight, maxReps, beforePhoto) {
   ch.participants.unshift({ id: Sync.uid || uid(), name: "", isMe: true, state: "active", doneToday: false, todayReps: 0, _days: {}, _total: 0 });
   ch.startWeight = weight; ch.startMaxReps = maxReps; ch.beforePhoto = beforePhoto || null;
   if (ch.id === "main") Sync.join(store["profile.name"]);
+  track("challenge_joined", { challenge_id: ch.id, buy_in: ch.buyIn, exercises: ch.goals.map((g) => g.exercise).join(",") });
   return true;
 }
 
@@ -530,7 +535,10 @@ function addReps(ch, counts) {
   me.todayReps = C.myTodayTotal(ch);
   if (C.isTodayDone(ch)) me.doneToday = true;
   if (ch.id === "main") Sync.report(dateKey(), ch.myTodayReps, ch.myTotalReps);
-  return !wasDone && C.isTodayDone(ch);
+  const closed = !wasDone && C.isTodayDone(ch);
+  track("reps_added", { challenge_id: ch.id, total, exercises: Object.keys(counts).filter((k) => counts[k] > 0).join(",") });
+  if (closed) track("workout_completed", { challenge_id: ch.id, day: ch.currentDay });
+  return closed;
 }
 
 function completeChallenge(ch, afterPhoto, weight, maxReps) {
@@ -1628,6 +1636,8 @@ root.addEventListener("click", async (e) => {
       store.dailyGoal = recommendedDailyReps(store["profile.level"], store["profile.maxReps"]);
       store.onboarded = true;
       Sync.registerUser(store["profile.name"]);
+      phIdentify();
+      track("onboarding_completed", { level: store["profile.level"], daily_goal: store.dailyGoal });
       ui.screen = "tabs";
       // Пришёл по ссылке-приглашению — сразу открываем вступление в общий челлендж.
       if (JOIN_INTENT) { ui.tab = "challenges"; render(); openJoin("main"); return; }
@@ -1691,6 +1701,7 @@ render = function () {
 // ==========================================================================
 const INVITE_URL = "https://pysarenkovv.github.io/fitstake/?join=main";
 async function shareInvite() {
+  track("invite_shared", {});
   const text = t("Join my challenge — 150 push-ups + 50 squats a day!");
   if (navigator.share) {
     try { await navigator.share({ title: "FitStake", text, url: INVITE_URL }); return; } catch {}
@@ -1713,6 +1724,7 @@ render();
 // Живой общий прогресс: подписка на Firebase (если конфиг вставлен).
 Sync.init(() => {
   applySync();
+  phIdentify(); // uid из auth готов — связываем аналитику с игроком
   // Не дёргаем перерисовку поверх открытых форм и камеры.
   if (!ui.sheet && !ui.full && !liveSession) render();
 });
