@@ -134,12 +134,13 @@ const RU = {
   "Day streak": "Дней подряд", "%lld-day streak": "%lld дней подряд",
   "Closed": "Закрыт", "Missed": "Пропущен", "Upcoming": "Впереди", "Out": "Выбыл",
   "Account": "Аккаунт", "Email": "Почта", "Password": "Пароль", "Log out": "Выйти",
-  "Log in / Sign up": "Войти / Создать", "Signed in": "Вход выполнен",
+  "Log in": "Войти", "Sign up": "Зарегистрироваться", "Signed in": "Вход выполнен",
   "Sign in to sync progress across your devices": "Войди, чтобы прогресс сохранялся на всех устройствах",
   "Synced across your devices": "Прогресс синхронизируется на всех устройствах",
   "Enter email and password": "Введи почту и пароль", "Wrong password": "Неверный пароль",
   "Password too short (min 6)": "Пароль слишком короткий (мин. 6)", "Invalid email": "Неверная почта",
   "Network error": "Ошибка сети", "Couldn't sign in": "Не удалось войти",
+  "Email already registered — log in": "Почта уже занята — войди", "No account yet — sign up": "Аккаунта нет — зарегистрируйся",
   "Create your account": "Создай аккаунт",
   "So your progress is saved and syncs across your devices": "Чтобы прогресс сохранялся и синхронизировался между устройствами",
   "Continue with Google": "Продолжить с Google", "or": "или",
@@ -1096,7 +1097,10 @@ function authForm() {
     <div class="form-footer" style="text-align:center;opacity:.5">${t("or")}</div>
     <input class="field" id="auth-email" type="email" inputmode="email" autocomplete="email" placeholder="${esc(t("Email"))}">
     <input class="field" id="auth-pass" type="password" autocomplete="current-password" placeholder="${esc(t("Password"))}">
-    <button class="action-btn" data-act="submitAuth">${t("Log in / Sign up")}</button>`;
+    <div style="display:flex;gap:8px">
+      <button class="action-btn" data-act="submitAuth" data-mode="signin" style="flex:1;background:var(--white-08);color:#fff">${t("Log in")}</button>
+      <button class="action-btn" data-act="submitAuth" data-mode="signup" style="flex:1">${t("Sign up")}</button>
+    </div>`;
 }
 // Аккаунт в профиле: у вошедшего — email + выход; у анонима — форма входа.
 function accountCard() {
@@ -1656,17 +1660,18 @@ root.addEventListener("click", async (e) => {
     const emailEl = document.getElementById("auth-email"), passEl = document.getElementById("auth-pass");
     const email = ((emailEl && emailEl.value) || "").trim(), pass = (passEl && passEl.value) || "";
     if (!email || !pass) { toast(t("Enter email and password")); return; }
+    const mode = el.dataset.mode === "signup" ? "signup" : "signin";
     el.disabled = true;
-    const res = await Sync.signUpOrIn(email, pass);
+    const res = mode === "signup" ? await Sync.signUp(email, pass) : await Sync.signIn(email, pass);
     if (res.ok) {
-      track("account_linked", { method: "email" });
+      track("account_linked", { method: "email", mode });
       if (ui.screen === "onboarding") { finishOnboarding(); return; }
       if (store["profile.name"]) Sync.registerUser(store["profile.name"]);
       toast(t("Signed in"));
       render();
     } else {
       el.disabled = false;
-      const key = { "wrong-password": "Wrong password", "weak-password": "Password too short (min 6)", "invalid-email": "Invalid email", "network": "Network error" }[res.error] || "Couldn't sign in";
+      const key = { "wrong-password": "Wrong password", "weak-password": "Password too short (min 6)", "invalid-email": "Invalid email", "email-taken": "Email already registered — log in", "no-account": "No account yet — sign up", "network": "Network error" }[res.error] || "Couldn't sign in";
       toast(t(key));
     }
     return;

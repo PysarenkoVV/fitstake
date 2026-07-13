@@ -80,9 +80,10 @@ window.Sync = (() => {
     }
   }
 
-  // Создать аккаунт или войти. Если сейчас аноним — привязываем email к нему,
-  // сохраняя uid и весь прогресс. Если email уже занят — входим в существующий аккаунт.
-  async function signUpOrIn(email, password) {
+  // Регистрация нового аккаунта. Сейчас аноним — привязываем email к нему через
+  // linkWithCredential, сохраняя uid и весь прогресс; иначе создаём новый аккаунт.
+  // Если email уже занят — вернём email-taken (пусть пользователь войдёт).
+  async function signUp(email, password) {
     if (!enabled || !A || !authInstance) return { ok: false, error: "offline" };
     const cur = authInstance.currentUser;
     try {
@@ -95,16 +96,18 @@ window.Sync = (() => {
       refreshAuthState(); // link не всегда триггерит onAuthStateChanged — обновляем сами
       return { ok: true };
     } catch (e) {
-      const code = (e && e.code) || "";
-      // Аккаунт с этим email уже есть (например, регистрировал на другом устройстве) — входим.
-      if (code === "auth/email-already-in-use" || code === "auth/credential-already-in-use") {
-        try {
-          await A.signInWithEmailAndPassword(authInstance, email, password);
-          return { ok: true };
-        } catch (e2) {
-          return { ok: false, error: authError(e2) };
-        }
-      }
+      return { ok: false, error: authError(e) };
+    }
+  }
+
+  // Вход в существующий аккаунт по email+паролю. Прогресс аккаунта подтянет applySync.
+  async function signIn(email, password) {
+    if (!enabled || !A || !authInstance) return { ok: false, error: "offline" };
+    try {
+      await A.signInWithEmailAndPassword(authInstance, email, password);
+      refreshAuthState();
+      return { ok: true };
+    } catch (e) {
       return { ok: false, error: authError(e) };
     }
   }
@@ -149,6 +152,8 @@ window.Sync = (() => {
 
   function authError(e) {
     const c = (e && e.code) || "";
+    if (c.includes("email-already-in-use") || c.includes("credential-already-in-use")) return "email-taken";
+    if (c.includes("user-not-found")) return "no-account";
     if (c.includes("wrong-password") || c.includes("invalid-credential")) return "wrong-password";
     if (c.includes("weak-password")) return "weak-password";
     if (c.includes("invalid-email")) return "invalid-email";
@@ -194,7 +199,7 @@ window.Sync = (() => {
   }
 
   return {
-    enabled, state, init, registerUser, join, report, signUpOrIn, signInGoogle, signOutUser,
+    enabled, state, init, registerUser, join, report, signIn, signUp, signInGoogle, signOutUser,
     get uid() { return uid; },
     get email() { return accountEmail; },
     get isAnonymous() { return isAnon; },
