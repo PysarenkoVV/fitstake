@@ -4,7 +4,7 @@
 "use strict";
 
 // Версия оболочки — держать в синхроне с CACHE в sw.js; уходит в баг-репорты.
-const APP_VERSION = "v29";
+const APP_VERSION = "v30";
 // Последняя JS-ошибка — прикладываем к баг-репорту, чтобы сразу видеть причину.
 let lastError = "";
 window.addEventListener("error", (e) => {
@@ -707,12 +707,17 @@ function progressRing(id, g, reps, norm, done) {
 }
 function badge(text, color) { return `<span class="badge" style="color:${color}">${esc(text)}</span>`; }
 function streakPill(n) { return n >= 2 ? `<span class="streak-pill">🔥 ${n}</span>` : ""; }
-function lbl(text, extra = "") { return `<span class="label secondary ${extra}" style="font-size:11px">${esc(text)}</span>`; }
+function lbl(text, extra = "") { return `<span class="label secondary ${extra}" style="font-size:12px">${esc(text)}</span>`; }
 
-function screenHeader(title, right = "") {
-  return `<div class="between" style="padding-top:8px;margin-bottom:2px">
+// Хедер в две строки (ТЗ: убрать переполнение): компактная служебная строка сверху
+// (жучок + язык, по правому краю), крупный заголовок ниже. Кнопок-действий тут нет.
+function screenHeader(title) {
+  return `<div class="screen-head">
+    <div class="head-tools">
+      <button class="badge" data-act="openBug" aria-label="${t("Report a problem")}" style="color:var(--text-secondary);display:flex;align-items:center;padding:5px 7px">${icon("bug")}</button>
+      ${langToggle()}
+    </div>
     <h1 class="screen-title">${esc(title)}</h1>
-    <div class="row gap8">${right}<button class="badge" data-act="openBug" aria-label="${t("Report a problem")}" style="color:var(--text-secondary);display:flex;align-items:center;padding:5px 7px">${icon("bug")}</button>${langToggle()}</div>
   </div>`;
 }
 function langToggle() {
@@ -784,10 +789,10 @@ function YoursTab() {
   const mine = app.challenges.filter(C.isJoined);
   const doneToday = mine.filter(C.isTodayDone).length;
   const nextUp = mine.find((c) => !C.isTodayDone(c) && !challengeEnded(c));
-  const statsCard = `<div class="card center" style="padding:24px 16px">
+  const statsCard = `<div class="card" style="padding:24px 16px;display:flex;flex-direction:column;align-items:center;gap:6px;text-align:center">
     ${lbl(t("All-time reps"), "tracking-15")}
-    <div class="money" style="font-size:56px;margin:6px 0">${app.totalPushups}</div>
-    ${mine.length ? `<div class="row label" style="justify-content:center;gap:18px;font-size:10px">
+    <div class="money" style="font-size:56px">${app.totalPushups}</div>
+    ${mine.length ? `<div class="row label" style="justify-content:center;gap:18px;font-size:11px">
       <span class="secondary">${t("Active challenges: %lld", mine.length)}</span>
       <span style="color:${doneToday === mine.length ? "var(--money)" : "#fff"}">${t("Done today: %lld/%lld", doneToday, mine.length)}</span></div>` : ""}
   </div>`;
@@ -835,8 +840,7 @@ function friendsCard() {
 // Вкладка «Челленджи»
 // ==========================================================================
 function ChallengesTab() {
-  const createPill = `<button class="pill-btn" data-act="create">${icon("plus")}${t("Create")}</button>`;
-  return screenHeader(t("Challenges"), createPill) + `<div class="stack">
+  return screenHeader(t("Challenges")) + `<div class="stack">
     ${app.challenges.map((c) => ChallengeCard(c, false)).join("")}
     <button class="action-btn" data-act="create">${icon("plus")}${t("Create Challenge")}</button>
   </div>`;

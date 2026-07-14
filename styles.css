@@ -42,7 +42,10 @@ input, select { font-family: inherit; }
 img { max-width: 100%; }
 
 /* ---- Типографика ---- */
-.screen-title { font-size: 34px; font-weight: 700; color: #fff; letter-spacing: -0.5px; }
+.screen-title { font-size: 34px; font-weight: 700; color: #fff; letter-spacing: -0.5px; text-wrap: balance; }
+/* Двухрядный хедер вкладок: служебная строка (жучок+язык) над крупным заголовком. */
+.screen-head { padding-top: 6px; margin-bottom: 8px; }
+.head-tools { display: flex; align-items: center; justify-content: flex-end; gap: 8px; min-height: 30px; margin-bottom: 2px; }
 .display {
   font-weight: 900;
   font-stretch: 75%;
@@ -119,26 +122,12 @@ img { max-width: 100%; }
 .action-btn:disabled { opacity: 0.4; }
 .action-btn svg { width: 20px; height: 20px; }
 
-.pill-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  height: 42px;
-  padding: 0 16px;
-  border-radius: 999px;
-  background: var(--accent);
-  color: #000;
-  font-weight: 700;
-  font-size: 16px;
-}
-.pill-btn svg { width: 18px; height: 18px; }
-
 .text-btn { color: var(--text-secondary); font-weight: 600; font-size: 17px; padding: 8px; }
 
 /* полупрозрачная круглая кнопка поверх камеры (44×44) */
 .cam-btn {
-  width: 44px;
-  height: 44px;
+  width: 52px;
+  height: 52px;
   border-radius: 50%;
   display: flex;
   align-items: center;
@@ -148,7 +137,7 @@ img { max-width: 100%; }
   backdrop-filter: blur(18px);
   -webkit-backdrop-filter: blur(18px);
 }
-.cam-btn svg { width: 22px; height: 22px; }
+.cam-btn svg { width: 26px; height: 26px; }
 
 /* ---- Иконки ---- */
 .icon { width: 20px; height: 20px; display: inline-block; vertical-align: middle; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
@@ -325,9 +314,11 @@ img { max-width: 100%; }
 }
 .session .topbar {
   position: absolute; top: 0; left: 0; right: 0;
-  padding: max(12px, env(safe-area-inset-top)) 20px 0;
+  padding: max(12px, env(safe-area-inset-top)) 20px 24px;
   display: flex; flex-direction: column; gap: 10px;
   z-index: 3;
+  /* Тёмная подложка под белыми иконками/подсказкой, чтобы не сливались со светлым фоном. */
+  background: linear-gradient(to bottom, rgba(0, 0, 0, 0.5), transparent);
 }
 .session .cam-col { display: flex; flex-direction: column; gap: 12px; }
 .session .hint {
@@ -343,10 +334,12 @@ img { max-width: 100%; }
 }
 .session .hud {
   position: absolute; left: 0; right: 0; bottom: 0;
-  padding: 0 20px calc(8px + env(safe-area-inset-bottom));
+  padding: 48px 20px calc(8px + env(safe-area-inset-bottom));
   display: flex; flex-direction: column; align-items: center; gap: 10px;
   z-index: 3;
   text-shadow: 0 2px 10px rgba(0, 0, 0, 0.6);
+  /* Тёмная подложка под счётчиком (PUSH-UPS · 1/2, / 150), чтобы читалось на светлом фоне. */
+  background: linear-gradient(to top, rgba(0, 0, 0, 0.6), transparent);
 }
 .session .counter-big {
   font-family: var(--sans);
