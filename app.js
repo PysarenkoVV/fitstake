@@ -90,6 +90,7 @@ const RU = {
   "Camera access is needed for the photo.": "Для фото нужен доступ к камере.",
   "Camera access is needed to count your reps.": "Для подсчёта повторов нужен доступ к камере.",
   "Challenge complete!": "Челлендж пройден!", "Challenge total": "Всего за челлендж", "Challenges": "Челленджи",
+  "Back": "Назад", "Voice guidance": "Голосовые подсказки", "Record video": "Записать видео",
   "Close": "Закрыть", "cm": "см", "Combo": "Комбо", "Continue": "Дальше", "Create": "Создать",
   "Create Challenge": "Создать челлендж", "Currency": "Валюта", "Daily activity — 30 days": "Дневная активность за 30 дней",
   "Which exercises?": "Какие упражнения?", "Pick one or several — a combo counts them all.": "Выбери одно или несколько — комбо считает все.",
@@ -162,7 +163,7 @@ const RU = {
   "Day streak": "Дней подряд", "%lld-day streak": "%lld дней подряд",
   "Closed": "Закрыт", "Missed": "Пропущен", "Upcoming": "Впереди", "Out": "Выбыл",
   "Account": "Аккаунт", "Email": "Почта", "Password": "Пароль", "Log out": "Выйти",
-  "Log in": "Войти", "Sign up": "Зарегистрироваться", "Signed in": "Вход выполнен",
+  "Log in": "Войти", "Sign up": "Зарегистрироваться", "Signed in": "Вход выполнен", "Signing in…": "Вход…", "Skip for now": "Пропустить пока",
   "Sign in to sync progress across your devices": "Войди, чтобы прогресс сохранялся на всех устройствах",
   "Synced across your devices": "Прогресс синхронизируется на всех устройствах",
   "Enter email and password": "Введи почту и пароль", "Wrong password": "Неверный пароль",
@@ -243,6 +244,12 @@ const fmt = (n) => Number(n).toLocaleString("en-US");
 function coin(value) {
   const sym = store.currencyUSD ? "$" : Currency.symbol;
   return `<span class="money">${sym}${fmt(value)}</span>`;
+}
+// Как coin(), но число плавно «досчитывается» при изменении (см. count-up в afterRender).
+// fromZero — считать от нуля при первом появлении (для экрана победы).
+function coinCountUp(value, key, fromZero) {
+  const sym = store.currencyUSD ? "$" : Currency.symbol;
+  return `<span class="money count-up" data-count="${value}" data-count-key="${esc(key)}" data-count-sym="${sym}"${fromZero ? ' data-count-from="0"' : ""}>${sym}${fmt(value)}</span>`;
 }
 const showCurrencyToggle = Currency.code !== "USD";
 
@@ -651,6 +658,15 @@ function esc(s) { return String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "
 
 const root = document.getElementById("app");
 let scrollMemo = {};
+let pendingStagger = false; // проиграть каскадное появление карточек на ближайшем рендере (смена вкладки/старт)
+let pendingCelebrate = false; // проиграть последовательность появления на экране победы + вибро
+// Системная настройка «уменьшить движение» — гасим необязательный моушн.
+const REDUCE_MOTION = () => window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+// Тактильный отклик. Работает на Android/поддерживающих браузерах; на iOS Safari вибро
+// недоступно — тихо игнорируется. При «уменьшить движение» не срабатывает.
+function haptic(pattern) { if (!REDUCE_MOTION() && navigator.vibrate) { try { navigator.vibrate(pattern); } catch (e) {} } }
+// Плавный «счёт вверх» чисел между перерисовками: помним последнее показанное значение по ключу.
+const countMemo = {};
 
 function render() {
   rolloverIfNeeded();
@@ -682,15 +698,33 @@ function pwaHint() {
   </div>`;
 }
 
-function go(tab) { ui.tab = tab; ui.detailId = null; render(); window.scrollTo(0, 0); }
-function openDetail(id) { ui.detailId = id; render(); window.scrollTo(0, 0); }
-function back() { ui.detailId = null; render(); window.scrollTo(0, 0); }
+function go(tab) { ui.tab = tab; ui.detailId = null; pendingStagger = true; render(); window.scrollTo(0, 0); }
+function openDetail(id) { ui.detailId = id; navRender("push"); }
+function back() { ui.detailId = null; navRender("pop"); }
 function toast(msg) {
   const el = document.createElement("div");
   el.textContent = msg;
+  el.setAttribute("role", "status");
+  el.setAttribute("aria-live", "polite");
   el.style.cssText = "position:fixed;left:50%;bottom:calc(80px + env(safe-area-inset-bottom));transform:translateX(-50%);background:#222;color:#fff;padding:12px 18px;border-radius:12px;z-index:200;font-weight:600;box-shadow:0 8px 24px rgba(0,0,0,.5)";
   document.body.appendChild(el);
   setTimeout(() => el.remove(), 1900);
+}
+
+// Индикация «в процессе» для сетевых кнопок: подпись + aria-busy + блокировка
+// от повторного нажатия. Восстановление нужно только при ошибке — успех перерисует UI.
+function setBtnLoading(el, on, text) {
+  if (!el) return;
+  if (on) {
+    if (el._label == null) el._label = el.innerHTML;
+    el.disabled = true;
+    el.setAttribute("aria-busy", "true");
+    el.textContent = text;
+  } else {
+    el.disabled = false;
+    el.removeAttribute("aria-busy");
+    if (el._label != null) { el.innerHTML = el._label; el._label = null; }
+  }
 }
 
 // ==========================================================================
@@ -865,7 +899,7 @@ function DetailScreen(id) {
   const c = app.challenges.find((x) => x.id === id);
   if (!c) { ui.detailId = null; return ChallengesTab(); }
   const joined = C.isJoined(c);
-  const nav = `<div class="navbar"><button class="icon-btn" data-act="back">${icon("chevronLeft")}</button><div class="title">${esc(c.title)}</div><button class="icon-btn" data-act="invite">${icon("share")}</button></div>`;
+  const nav = `<div class="navbar"><button class="icon-btn" data-act="back" aria-label="${t("Back")}">${icon("chevronLeft")}</button><div class="title">${esc(c.title)}</div><button class="icon-btn" data-act="invite" aria-label="${t("Share")}">${icon("share")}</button></div>`;
   let body;
   if (joined) {
     const ended = challengeEnded(c);
@@ -1053,7 +1087,7 @@ function beforeAfterCard(c) {
   return `<div class="card" style="padding:16px;display:flex;flex-direction:column;gap:12px">${lbl(t("Before / After"), "tracking-1")}
     <div class="grid2">
       <div style="display:flex;flex-direction:column;gap:6px">
-        <div class="photo-slot locked">${c.beforePhoto ? `<img src="${c.beforePhoto}">` : ""}<div class="lock-overlay">${iconF("lock")}<span class="label" style="font-size:9px">${t("Opens at the finish")}</span></div></div>
+        <div class="photo-slot locked">${c.beforePhoto ? `<img src="${c.beforePhoto}" alt="${t("Before")}">` : ""}<div class="lock-overlay">${iconF("lock")}<span class="label" style="font-size:9px">${t("Opens at the finish")}</span></div></div>
         ${lbl(t("Before"))}
       </div>
       <div style="display:flex;flex-direction:column;gap:6px">
@@ -1241,7 +1275,7 @@ function ProfileTab() {
 
   const txLabel = (tx) => tx.kind === "start" ? t("Starting balance") : tx.kind === "topup" ? t("Coins purchased") : t("Buy-in: %@", esc(tx.challenge));
   const wallet = `<div class="card" style="padding:16px;display:flex;flex-direction:column;gap:14px">
-    <div class="between">${lbl(t("Balance"), "tracking-1")}<span class="c-money" style="font-size:24px">${coin(app.balance)}</span></div>
+    <div class="between">${lbl(t("Balance"), "tracking-1")}<span class="c-money" style="font-size:24px">${coinCountUp(app.balance, "balance")}</span></div>
     <div class="form-footer">${t("Test currency — no real money.")}</div>
     ${showCurrencyToggle ? currencyToggle() : ""}
     <button class="action-btn" data-act="openBuyCoins">${icon("plus")}${t("Buy coins")}</button>
@@ -1254,7 +1288,7 @@ function ProfileTab() {
   return screenHeader(t("Profile")) + `<div class="stack">${summary}${bodyCard}${measurements}${photosCard}${accountCard()}${wallet}</div>`;
 }
 function photoSlot(dataURL, caption) {
-  return `<div style="display:flex;flex-direction:column;gap:5px"><div class="photo-slot" style="height:150px">${dataURL ? `<img src="${dataURL}">` : icon("camera")}</div>${lbl(caption)}</div>`;
+  return `<div style="display:flex;flex-direction:column;gap:5px"><div class="photo-slot" style="height:150px">${dataURL ? `<img src="${dataURL}" alt="${esc(caption || "")}">` : icon("camera")}</div>${lbl(caption)}</div>`;
 }
 function currencyToggle() {
   return `<div class="segmented"><button data-act="seg" data-store="currencyUSD" data-val="true" class="${store.currencyUSD ? "active" : ""}">$ USD</button>
@@ -1334,7 +1368,9 @@ function Onboarding() {
   // На шаге входа CTA — сами кнопки формы, отдельной кнопки «дальше» нет.
   const authStep = Sync.enabled && step === LAST_STEP;
   const footerLabel = step === 0 ? t("Get started") : step === LAST_STEP ? t("Let's go") : t("Continue");
-  const footer = authStep ? "" : `<div style="padding:0 20px 8px;padding-bottom:calc(8px + env(safe-area-inset-bottom))"><button class="action-btn" data-act="onbNext">${footerLabel}</button></div>`;
+  const footer = authStep
+    ? `<div style="padding:0 20px 8px;padding-bottom:calc(8px + env(safe-area-inset-bottom))"><button class="text-btn" data-act="skipAuth" style="width:100%">${t("Skip for now")}</button></div>`
+    : `<div style="padding:0 20px 8px;padding-bottom:calc(8px + env(safe-area-inset-bottom))"><button class="action-btn" data-act="onbNext">${footerLabel}</button></div>`;
   return `<div style="min-height:100dvh;display:flex;flex-direction:column">
     <div class="row gap12" style="padding:max(10px,env(safe-area-inset-top)) 20px 0;align-items:center">
       <button data-act="onbBack" style="width:32px;height:32px;display:flex;align-items:center;justify-content:center;color:#fff;opacity:${step > 0 ? 1 : 0}">${icon("chevronLeft")}</button>
@@ -1362,8 +1398,8 @@ function finishOnboarding() {
 // Листы снизу: создать / вступить / замер
 // ==========================================================================
 function sheetShell(title, body, leftIcon) {
-  return `<div class="sheet-backdrop" data-act="closeSheetBg"><div class="sheet" data-stop>
-    <div class="navbar">${leftIcon ? `<button class="icon-btn" data-act="closeSheet">${icon("xmark")}</button>` : "<div style='width:32px'></div>"}<div class="title">${esc(title)}</div><div style="width:32px"></div></div>
+  return `<div class="sheet-backdrop" data-act="closeSheetBg"><div class="sheet" data-stop role="dialog" aria-modal="true" aria-label="${esc(title)}" tabindex="-1">
+    <div class="navbar">${leftIcon ? `<button class="icon-btn" data-act="closeSheet" aria-label="${t("Close")}">${icon("xmark")}</button>` : "<div style='width:32px'></div>"}<div class="title">${esc(title)}</div><div style="width:32px"></div></div>
     <div class="sheet-body">${body}</div></div></div>`;
 }
 function fieldStepper(label, key, min, max, by) {
@@ -1427,8 +1463,8 @@ function CreateWizard() {
       ${fieldStepper(t("Duration (days)"), "duration", 1, 365, 1)}
       <div class="settings-row"><span>${t("Missed days")}</span></div>
       ${seg(MissPolicy.all.map((p) => [p, MissPolicy.displayName(p)]), "miss", f.miss)}
-      <div class="settings-row"><span>${t("Public challenge")}</span><button data-act="toggle" data-key="isPublic" class="toggle ${f.isPublic ? "on" : ""}"></button></div>
-      <div class="settings-row"><span>${t("Progressive overload")}</span><button data-act="toggle" data-key="progOn" class="toggle ${f.progOn ? "on" : ""}"></button></div>
+      <div class="settings-row"><span id="lbl-isPublic">${t("Public challenge")}</span><button data-act="toggle" data-key="isPublic" role="switch" aria-checked="${f.isPublic}" aria-labelledby="lbl-isPublic" class="toggle ${f.isPublic ? "on" : ""}"></button></div>
+      <div class="settings-row"><span id="lbl-progOn">${t("Progressive overload")}</span><button data-act="toggle" data-key="progOn" role="switch" aria-checked="${f.progOn}" aria-labelledby="lbl-progOn" class="toggle ${f.progOn ? "on" : ""}"></button></div>
       ${f.progOn ? fieldStepper(t("Increase by"), "progStep", 1, 50, 1) + seg([["day", t("per day")], ["week", t("per week")]], "progPeriod", f.progPeriod) : ""}`);
   else if (step === 3) content = question(t("Stake amount"), t("The buy-in is deducted from your balance right away. Test currency — no real money."), `
       ${showCurrencyToggle ? currencyToggle() : ""}
@@ -1483,7 +1519,7 @@ function JoinSheet() {
       <div class="form-footer">${t("Your starting point — at the finish you'll see how far you've come.")}</div>
     </div>
     <div class="form-section">${lbl(t("Photo BEFORE"))}
-      ${f.photo ? `<div class="photo-slot" style="height:220px"><img src="${f.photo}"></div>` : ""}
+      ${f.photo ? `<div class="photo-slot" style="height:220px"><img src="${f.photo}" alt="${t("Photo BEFORE")}"></div>` : ""}
       <button class="action-btn" data-act="pickPhoto:camera" style="background:var(--white-08);color:#fff">${iconF("camera")}${f.photo ? t("Retake") : t("Take a photo")}</button>
       <button class="action-btn" data-act="pickPhoto:library" style="background:var(--white-08);color:#fff">${iconF("photo")}${t("Upload from library")}</button>
       <div class="form-footer">${t("The photo stays hidden until the finish — then it appears next to your AFTER photo.")}</div>
@@ -1560,13 +1596,13 @@ function ChallengeCompleteFull() {
   return `<div class="fullscreen">${confetti()}<div class="screen" style="padding-top:24px;display:flex;flex-direction:column;gap:18px;align-items:center;text-align:center">
     <div class="c-money pop-in" style="font-size:76px;display:flex">${iconF("trophy")}</div>
     <div class="display" style="font-size:34px">${t("Challenge complete!")}</div>
-    <div class="row gap6">${lbl(t("You take home"))}<span class="c-money money" style="font-size:22px">${coin(C.payout(c))}</span></div>
+    <div class="row gap6">${lbl(t("You take home"))}<span class="c-money money" style="font-size:22px">${coinCountUp(C.payout(c), "winPayout", true)}</span></div>
 
     <div class="card" style="padding:16px;width:100%;display:flex;flex-direction:column;gap:12px;text-align:left">
       ${lbl(t("Before / After"), "tracking-1")}
       <div class="grid2">
-        <div style="display:flex;flex-direction:column;gap:6px"><div class="photo-slot" style="height:190px">${c.beforePhoto ? `<img src="${c.beforePhoto}">` : icon("camera")}</div>${lbl(t("Before"))}</div>
-        <div style="display:flex;flex-direction:column;gap:6px"><div class="photo-slot accent" style="height:190px">${f.photo ? `<img src="${f.photo}">` : iconF("camera")}</div>${lbl(t("After"))}</div>
+        <div style="display:flex;flex-direction:column;gap:6px"><div class="photo-slot" style="height:190px">${c.beforePhoto ? `<img src="${c.beforePhoto}" alt="${t("Before")}">` : icon("camera")}</div>${lbl(t("Before"))}</div>
+        <div style="display:flex;flex-direction:column;gap:6px"><div class="photo-slot accent" style="height:190px">${f.photo ? `<img src="${f.photo}" alt="${t("After")}">` : iconF("camera")}</div>${lbl(t("After"))}</div>
       </div>
       <div class="row gap12">
         <button class="action-btn" data-act="pickPhoto:camera" style="background:var(--white-08);color:#fff;font-size:14px">${iconF("camera")}${f.photo ? t("Retake") : t("Take a photo")}</button>
@@ -1602,10 +1638,10 @@ async function openSession(challengeId, startExercise) {
     <canvas class="skeleton"></canvas>
     <div class="topbar">
       <div class="between" style="align-items:flex-start">
-        <button class="cam-btn" data-sess="close">${icon("xmark")}</button>
+        <button class="cam-btn" data-sess="close" aria-label="${t("Close")}">${icon("xmark")}</button>
         <div class="cam-col">
-          <button class="cam-btn" data-sess="voice">${icon(store.voiceEnabled ? "speakerOn" : "speakerOff")}</button>
-          ${CAN_RECORD ? `<button class="cam-btn" data-sess="record">${icon("record")}</button>` : ""}
+          <button class="cam-btn" data-sess="voice" aria-pressed="${store.voiceEnabled}" aria-label="${t("Voice guidance")}">${icon(store.voiceEnabled ? "speakerOn" : "speakerOff")}</button>
+          ${CAN_RECORD ? `<button class="cam-btn" data-sess="record" aria-label="${t("Record video")}">${icon("record")}</button>` : ""}
         </div>
       </div>
       <div class="hint" id="sess-hint"></div>
@@ -1644,6 +1680,7 @@ async function openSession(challengeId, startExercise) {
   const resultFor = (ex) => sess.snapshot.results.find((r) => r.exercise === ex);
 
   // Один счётчик — активного упражнения. В комбо над ним подпись «Упражнение · N/всего».
+  let prevTotal = -1;
   function renderCounter() {
     const g = goals[active];
     const hasPrev = combo && active > 0, hasNext = combo && active < goals.length - 1;
@@ -1658,6 +1695,7 @@ async function openSession(challengeId, startExercise) {
         ${hasPrev ? `<button data-sess="prev">${icon("chevronLeft")}${esc(Exercise.displayName(goals[active - 1].exercise))}</button>` : ""}
         ${hasNext ? `<button data-sess="next">${esc(Exercise.displayName(goals[active + 1].exercise))}${icon("chevronRight")}</button>` : ""}
       </div>` : ""}`;
+    prevTotal = totalFor(g, resultFor(g.exercise)); // сброс, чтобы пульс не сработал при смене упражнения
   }
   renderCounter();
   let prevGoalReached = false, prevBottomKey = "";
@@ -1677,6 +1715,15 @@ async function openSession(challengeId, startExercise) {
         numEl.textContent = total;
         const cls = curReached ? "c-money" : (ar && ar.status === "down" ? "c-accent" : "c-white");
         numEl.className = numEl.className.replace(/c-(money|accent|white)/, cls);
+        // Пульс + вибро на каждом новом засчитанном повторе — тактильный отклик ядра приложения.
+        if (total > prevTotal) {
+          haptic(12);
+          if (numEl.animate && !REDUCE_MOTION()) {
+            numEl.animate([{ transform: "scale(1)" }, { transform: "scale(1.32)" }, { transform: "scale(1)" }],
+              { duration: 260, easing: "cubic-bezier(0.34,1.56,0.64,1)" });
+          }
+        }
+        prevTotal = total;
       }
 
       // Подсказка по активному упражнению
@@ -1698,7 +1745,7 @@ async function openSession(challengeId, startExercise) {
         bottomEl.innerHTML = b;
       }
       // Голос: похвала при закрытии текущего упражнения (в комбо — зовём к следующему).
-      if (curReached && !prevGoalReached) sess.say(hasNext ? t("Next exercise") : t("Goal reached!"));
+      if (curReached && !prevGoalReached) { sess.say(hasNext ? t("Next exercise") : t("Goal reached!")); haptic([0, 40, 40, 80]); }
       prevGoalReached = curReached;
     }
     if (liveSession && liveSession.sess === sess) requestAnimationFrame(loop);
@@ -2063,8 +2110,8 @@ function openStartPicker(id) { ui.form = { challengeId: id }; ui.sheet = StartPi
 function openLeave(id) { ui.form = { challengeId: id }; ui.sheet = LeaveSheet; render(); }
 function openParticipant(id) { ui.form = { participantId: id }; ui.sheet = ParticipantSheet; render(); }
 function closeSheet() { ui.sheet = null; ui.form = null; render(); }
-function openDayComplete(c) { ui.fullId = c.id; ui.full = DayCompleteFull; render(); }
-function openChallengeComplete(c) { ui.form = { challengeId: c.id, weight: store["profile.weightKg"], maxReps: store["profile.maxReps"], photo: null }; ui.full = ChallengeCompleteFull; render(); }
+function openDayComplete(c) { ui.fullId = c.id; ui.full = DayCompleteFull; pendingCelebrate = true; render(); }
+function openChallengeComplete(c) { ui.form = { challengeId: c.id, weight: store["profile.weightKg"], maxReps: store["profile.maxReps"], photo: null }; ui.full = ChallengeCompleteFull; pendingCelebrate = true; render(); }
 function closeFull() { ui.full = null; ui.form = null; render(); }
 
 function pickImage(camera) {
@@ -2105,6 +2152,7 @@ root.addEventListener("click", async (e) => {
   const el = e.target.closest("[data-act]");
   if (!el) return;
   const act = el.dataset.act;
+  if (el.classList.contains("action-btn")) haptic(8); // лёгкий тактильный отклик на первичных кнопках
 
   if (act === "closeSheetBg") { if (e.target.classList.contains("sheet-backdrop")) closeSheet(); return; }
   const [cmd, arg] = act.split(":");
@@ -2195,7 +2243,7 @@ root.addEventListener("click", async (e) => {
     const email = ((emailEl && emailEl.value) || "").trim(), pass = (passEl && passEl.value) || "";
     if (!email || !pass) { toast(t("Enter email and password")); return; }
     const mode = el.dataset.mode === "signup" ? "signup" : "signin";
-    el.disabled = true;
+    setBtnLoading(el, true, t("Signing in…"));
     const res = mode === "signup" ? await Sync.signUp(email, pass) : await Sync.signIn(email, pass);
     if (res.ok) {
       track("account_linked", { method: "email", mode });
@@ -2204,14 +2252,14 @@ root.addEventListener("click", async (e) => {
       toast(t("Signed in"));
       render();
     } else {
-      el.disabled = false;
+      setBtnLoading(el, false);
       const key = { "wrong-password": "Wrong password", "weak-password": "Password too short (min 6)", "invalid-email": "Invalid email", "email-taken": "Email already registered — log in", "no-account": "No account yet — sign up", "network": "Network error" }[res.error] || "Couldn't sign in";
       toast(t(key));
     }
     return;
   }
   if (cmd === "googleAuth") {
-    el.disabled = true;
+    setBtnLoading(el, true, t("Signing in…"));
     const res = await Sync.signInGoogle();
     if (res.ok) {
       track("account_linked", { method: "google" });
@@ -2220,7 +2268,7 @@ root.addEventListener("click", async (e) => {
       toast(t("Signed in"));
       render();
     } else {
-      el.disabled = false;
+      setBtnLoading(el, false);
       if (res.error === "cancelled") return; // сам закрыл окно — молчим
       const hint = {
         "auth/operation-not-allowed": "Enable Google in Firebase (Sign-in method)",
@@ -2293,6 +2341,8 @@ root.addEventListener("click", async (e) => {
     return;
   }
   if (cmd === "onbSet") { store[arg] = act.split(":")[2]; render(); return; }
+  // Пропустить создание аккаунта — временно входим без входа (флаг гасит обязательный возврат).
+  if (cmd === "skipAuth") { store.skippedAuth = true; finishOnboarding(); return; }
 });
 
 root.addEventListener("input", (e) => {
@@ -2318,6 +2368,70 @@ root.addEventListener("change", (e) => {
 // afterRender — привязка колёс онбординга + сохранение скролла
 // ==========================================================================
 function afterRender() {
+  // Переводим фокус в лист при его открытии — чтобы клавиатура/скринридер
+  // попали внутрь диалога, а не остались на фоне. Только на первом появлении.
+  const _sheet = document.querySelector(".sheet");
+  if (_sheet && !afterRender._sheetOpen) {
+    _sheet.focus(); // первое открытие — фокус + выезд снизу
+  } else if (_sheet) {
+    // Лист уже был открыт (перерисовка при выборе чипа и т.п.) — глушим повторный выезд,
+    // синхронно до отрисовки кадра, поэтому slideup/backdrop-in не проигрываются заново.
+    _sheet.classList.add("no-enter");
+    const _bd = document.querySelector(".sheet-backdrop");
+    if (_bd) _bd.classList.add("no-enter");
+  }
+  afterRender._sheetOpen = !!_sheet;
+
+  // Плавный «счёт вверх» помеченных чисел (баланс, выигрыш) при изменении значения.
+  document.querySelectorAll(".count-up").forEach((el) => {
+    const key = el.dataset.countKey, target = +el.dataset.count, sym = el.dataset.countSym || "";
+    const prev = countMemo[key];
+    const from = prev != null ? prev : (el.dataset.countFrom != null ? +el.dataset.countFrom : target);
+    countMemo[key] = target;
+    if (from === target || REDUCE_MOTION()) { el.textContent = sym + fmt(target); return; }
+    const t0 = performance.now(), DUR = 650;
+    const tick = (now) => {
+      const p = Math.min(1, (now - t0) / DUR);
+      const v = Math.round(from + (target - from) * (1 - Math.pow(1 - p, 3))); // easeOutCubic
+      el.textContent = sym + fmt(v);
+      if (p < 1 && el.isConnected) requestAnimationFrame(tick);
+    };
+    requestAnimationFrame(tick);
+  });
+
+  // Экран победы: победный вибро-паттерн + последовательное появление элементов.
+  if (pendingCelebrate) {
+    pendingCelebrate = false;
+    haptic([0, 60, 40, 60, 40, 120]);
+    if (!REDUCE_MOTION()) {
+      const cel = document.querySelector(".fullscreen .celebrate, .fullscreen .screen");
+      if (cel) Array.from(cel.children).forEach((el, i) => {
+        if (i === 0) return; // трофей/печать — своя pop-in анимация, не дублируем
+        if (el.animate) el.animate(
+          [{ opacity: 0, transform: "translateY(18px) scale(0.96)" }, { opacity: 1, transform: "none" }],
+          { duration: 460, delay: Math.min(i * 90, 540), easing: "cubic-bezier(0.34,1.56,0.64,1)", fill: "backwards" });
+      });
+    }
+  }
+
+  // Каскадное появление карточек при входе на вкладку (fade + подъём, одна за другой).
+  if (pendingStagger) {
+    pendingStagger = false;
+    const scope = document.getElementById("scroller");
+    if (scope && !REDUCE_MOTION()) {
+      const items = [];
+      Array.from(scope.children).forEach((ch) => {
+        if (ch.classList.contains("stack")) items.push(...ch.children);
+        else items.push(ch);
+      });
+      items.forEach((el, i) => {
+        if (el.animate) el.animate(
+          [{ opacity: 0, transform: "translateY(14px)" }, { opacity: 1, transform: "none" }],
+          { duration: 380, delay: Math.min(i * 45, 320), easing: "cubic-bezier(0.32,0.72,0,1)", fill: "backwards" });
+      });
+    }
+  }
+
   document.querySelectorAll(".wheel").forEach((w) => {
     const key = w.dataset.wheel, min = +w.dataset.min, max = +w.dataset.max;
     w.scrollTop = (store[key] - min) * 44;
@@ -2344,6 +2458,53 @@ render = function () {
   saveApp();
 };
 
+// Escape закрывает открытый лист — тот же выход, что и тап по фону.
+document.addEventListener("keydown", (e) => {
+  if (e.key === "Escape" && ui.sheet) { closeSheet(); }
+});
+
+// iOS-переход между экранами: снимаем текущий экран в слой-«снимок»,
+// рендерим новый и разъезжаем их по горизонтали (push вправо-налево, pop наоборот).
+// При «уменьшить движение» или во время уже идущей анимации — просто перерисовка.
+function navRender(dir) {
+  const reduce = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  if (reduce || root._navBusy) { render(); window.scrollTo(0, 0); return; }
+
+  const snap = document.createElement("div");
+  snap.className = "nav-snapshot";
+  snap.setAttribute("aria-hidden", "true");
+  snap.innerHTML = root.innerHTML;
+
+  render();
+  window.scrollTo(0, 0);
+
+  document.body.appendChild(snap);
+  root._navBusy = true;
+  root.classList.add("nav-layer");
+
+  const push = dir === "push", DUR = 420;
+  root.style.zIndex = push ? "71" : "70";
+  snap.style.zIndex = push ? "70" : "71";
+  root.style.transform = push ? "translateX(100%)" : "translateX(-30%)";
+  if (!push) snap.style.boxShadow = "-8px 0 24px rgba(0,0,0,0.4)";
+
+  requestAnimationFrame(() => requestAnimationFrame(() => {
+    const ease = "cubic-bezier(0.32,0.72,0,1)";
+    root.style.transition = `transform ${DUR}ms ${ease}`;
+    snap.style.transition = `transform ${DUR}ms ${ease}, opacity ${DUR}ms ${ease}`;
+    root.style.transform = "translateX(0)";
+    if (push) { snap.style.transform = "translateX(-30%)"; snap.style.opacity = "0.5"; }
+    else { snap.style.transform = "translateX(100%)"; }
+  }));
+
+  setTimeout(() => {
+    snap.remove();
+    root.classList.remove("nav-layer");
+    root.style.transition = root.style.transform = root.style.zIndex = "";
+    root._navBusy = false;
+  }, DUR + 40);
+}
+
 // ==========================================================================
 // Приглашение друзей
 // ==========================================================================
@@ -2367,6 +2528,7 @@ if (JOIN_INTENT && history.replaceState) history.replaceState(null, "", location
 ui.screen = store.onboarded ? "tabs" : "onboarding";
 // Уже онбордился — открываем общий челлендж (там кнопка вступления, если ещё не внутри).
 if (store.onboarded && JOIN_INTENT) { ui.tab = "challenges"; ui.detailId = "main"; }
+pendingStagger = !ui.detailId; // каскад карточек на первом экране (если это не сразу деталь)
 render();
 
 // Живой общий прогресс: подписка на Firebase (если конфиг вставлен).
@@ -2374,7 +2536,7 @@ Sync.init(() => {
   applySync();
   phIdentify(); // uid из auth готов — связываем аналитику с игроком
   // Без инкогнито: онбордился, но остался анонимом (или вышел) — на обязательный вход.
-  if (Sync.enabled && Sync.isAnonymous && store.onboarded && ui.screen === "tabs") { ui.screen = "onboarding"; ui.onbStep = LAST_STEP; }
+  if (Sync.enabled && Sync.isAnonymous && store.onboarded && !store.skippedAuth && ui.screen === "tabs") { ui.screen = "onboarding"; ui.onbStep = LAST_STEP; }
   // Не дёргаем перерисовку поверх открытых форм и камеры.
   if (!ui.sheet && !ui.full && !liveSession) render();
 });
