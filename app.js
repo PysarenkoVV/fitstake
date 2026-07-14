@@ -4,7 +4,7 @@
 "use strict";
 
 // Версия оболочки — держать в синхроне с CACHE в sw.js; уходит в баг-репорты.
-const APP_VERSION = "v30";
+const APP_VERSION = "v31";
 // Последняя JS-ошибка — прикладываем к баг-репорту, чтобы сразу видеть причину.
 let lastError = "";
 window.addEventListener("error", (e) => {
@@ -191,6 +191,7 @@ const RU = {
   "Payout problem": "Проблема с выплатой", "Spacing or elements are off": "Съехали отступы или элементы",
   "Text cut off or overlapping": "Текст обрезан или налезает", "Hard to see in dark or light theme": "Плохо видно в тёмной или светлой теме",
   "Froze or crashed": "Зависло или вылетело", "Laggy": "Тормозит", "Something won't load": "Что-то не грузится",
+  "Buy coins": "Купить коины", "coins": "коинов", "Coins purchased": "Пополнение баланса", "+%lld coins": "+%lld коинов",
 };
 
 // Перевод + подстановка %lld / %@ по порядку аргументов.
@@ -550,10 +551,21 @@ function rolloverIfNeeded() {
 }
 
 function spend(amount, title) {
+  if (amount <= 0) return true; // бесплатный челлендж (нулевой взнос) — без списания и записи
   if (app.balance < amount) return false;
   app.balance -= amount;
   app.transactions.unshift({ id: uid(), kind: "buyIn", challenge: title, amount: -amount, date: Date.now() });
   return true;
+}
+
+// Пополнение баланса тестовыми коинами (не реальная оплата — валюта тестовая).
+function buyCoins(amount) {
+  app.balance += amount;
+  app.transactions.unshift({ id: uid(), kind: "topup", amount, date: Date.now() });
+  saveApp();
+  track("coins_bought", { amount });
+  closeSheet();
+  toast(t("+%lld coins", amount));
 }
 
 function logEntry(title, norm, reps) {
@@ -1011,6 +1023,16 @@ function currentScreenName() {
 
 function openBug() { ui.bug = { pick: null, note: "" }; ui.sheet = BugSheet; render(); }
 
+// Магазин коинов: тестовые пакеты (реальной оплаты нет — валюта тестовая).
+const COIN_PACKS = [500, 1500, 5000];
+function BuyCoinsSheet() {
+  const rows = COIN_PACKS.map((n) => `<button class="action-btn" data-act="buyCoins:${n}" style="background:var(--white-08);color:#fff;justify-content:space-between">
+    <span class="row gap8"><span style="color:var(--money);display:flex">${iconF("plusCircle")}</span>${fmt(n)} ${t("coins")}</span>
+    <span class="c-money money" style="font-size:16px">+${fmt(n)}</span></button>`).join("");
+  return sheetShell(t("Buy coins"), `<div class="form-footer">${t("Test currency — no real money.")}</div><div class="stack">${rows}</div>`, true);
+}
+function openBuyCoins() { ui.sheet = BuyCoinsSheet; render(); }
+
 function ruleRow(ic, html) { return `<div class="rule-row">${icon(ic)}<div>${html}</div></div>`; }
 function rulesCard(c) {
   const rows = [ruleRow("flame", `<b>${t("Every day: ")}${esc(C.goalsText(c))}</b>`)];
@@ -1217,13 +1239,15 @@ function ProfileTab() {
     <div class="between">${lbl(t("Before / After photos"), "tracking-1")}<span style="color:${photosUnlocked ? "var(--money)" : "var(--text-secondary)"};display:flex">${iconF(photosUnlocked ? "lockOpen" : "lock")}</span></div>
     ${photosInner}</div>`;
 
+  const txLabel = (tx) => tx.kind === "start" ? t("Starting balance") : tx.kind === "topup" ? t("Coins purchased") : t("Buy-in: %@", esc(tx.challenge));
   const wallet = `<div class="card" style="padding:16px;display:flex;flex-direction:column;gap:14px">
     <div class="between">${lbl(t("Balance"), "tracking-1")}<span class="c-money" style="font-size:24px">${coin(app.balance)}</span></div>
     <div class="form-footer">${t("Test currency — no real money.")}</div>
     ${showCurrencyToggle ? currencyToggle() : ""}
+    <button class="action-btn" data-act="openBuyCoins">${icon("plus")}${t("Buy coins")}</button>
     <hr class="hr">
     ${app.transactions.map((tx) => `<div class="between" style="padding:6px 0">
-      <span style="font-size:15px">${tx.kind === "start" ? t("Starting balance") : t("Buy-in: %@", esc(tx.challenge))}</span>
+      <span style="font-size:15px">${txLabel(tx)}</span>
       <span class="money" style="font-size:15px;color:${tx.amount > 0 ? "var(--money)" : "var(--red)"}">${tx.amount > 0 ? "+" + tx.amount : tx.amount}</span></div>`).join("")}
   </div>`;
 
@@ -1364,7 +1388,7 @@ function createSummary(f) {
   const sel = selectedExercises(f);
   const row = (k, v) => `<div class="between" style="gap:12px"><span class="label secondary" style="font-size:12px">${esc(k)}</span><span style="font-weight:600;font-size:15px;text-align:right">${esc(v)}</span></div>`;
   const buyIn = (store.currencyUSD ? "$" : Currency.symbol) + fmt(f.buyIn);
-  return `<div style="padding-top:8px;display:flex;flex-direction:column;gap:16px;height:100%;justify-content:center">
+  return `<div style="padding-top:20px;display:flex;flex-direction:column;gap:16px;height:100%;justify-content:center">
     <div class="display" style="font-size:26px;text-align:center;text-wrap:balance">${esc(f.title.trim() || defaultTitle(f))}</div>
     <div class="card" style="padding:16px;display:flex;flex-direction:column;gap:12px">
       ${sel.map((e) => row(Exercise.displayName(e), t("%lld / day", f[e]))).join("")}
@@ -1420,7 +1444,7 @@ function CreateWizard() {
     : `<div style="padding:0 20px 8px;padding-bottom:calc(8px + env(safe-area-inset-bottom))"><button class="action-btn" data-act="createNext">${label}</button></div>`;
 
   return `<div class="fullscreen"><div style="min-height:100dvh;display:flex;flex-direction:column">
-    <div class="row gap12" style="padding:max(10px,env(safe-area-inset-top)) 20px 0;align-items:center">
+    <div class="row gap12" style="padding:max(10px,env(safe-area-inset-top)) 20px 16px;align-items:center">
       <button data-act="createBack" style="width:32px;height:32px;display:flex;align-items:center;justify-content:center;color:#fff">${icon(step > 0 ? "chevronLeft" : "xmark")}</button>
       <div style="flex:1">${bar(step / CREATE_LAST)}</div>
     </div>
@@ -1435,7 +1459,7 @@ function saveChallengeForm() {
   if (!sel.length) { toast(t("Pick at least one exercise")); return false; }
   const clamp = (n) => Math.min(Math.max(n, 1), 500);
   const goals = sel.map((e) => ({ exercise: e, repsPerDay: clamp(f[e]) }));
-  const ok = createChallenge({ title: f.title.trim() || defaultTitle(f), goals, durationDays: Math.min(Math.max(f.duration, 1), 365), buyIn: Math.max(f.buyIn, 1), isPublic: f.isPublic, missPolicy: f.miss, progression: f.progOn ? { step: f.progStep, period: f.progPeriod } : { step: 0, period: "day" } });
+  const ok = createChallenge({ title: f.title.trim() || defaultTitle(f), goals, durationDays: Math.min(Math.max(f.duration, 1), 365), buyIn: Math.max(f.buyIn, 0), isPublic: f.isPublic, missPolicy: f.miss, progression: f.progOn ? { step: f.progStep, period: f.progPeriod } : { step: 0, period: "day" } });
   if (!ok) { toast(t("Not enough coins")); return false; }
   return true;
 }
@@ -2119,6 +2143,8 @@ root.addEventListener("click", async (e) => {
     case "confirmLeave": leaveChallenge(arg); ui.sheet = null; ui.form = null; ui.detailId = null; render(); return;
     case "openBug": openBug(); return;
     case "bugPick": if (ui.bug) { ui.bug.pick = arg; render(); } return;
+    case "openBuyCoins": openBuyCoins(); return;
+    case "buyCoins": buyCoins(+arg); return;
   }
 
   // Форм-контролы
