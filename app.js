@@ -4,7 +4,7 @@
 "use strict";
 
 // Версия оболочки — держать в синхроне с CACHE в sw.js; уходит в баг-репорты.
-const APP_VERSION = "v32";
+const APP_VERSION = "v33";
 // Последняя JS-ошибка — прикладываем к баг-репорту, чтобы сразу видеть причину.
 let lastError = "";
 window.addEventListener("error", (e) => {
@@ -1646,12 +1646,18 @@ async function openSession(challengeId, startExercise) {
   // Один счётчик — активного упражнения. В комбо над ним подпись «Упражнение · N/всего».
   function renderCounter() {
     const g = goals[active];
-    countersEl.className = "";
-    countersEl.innerHTML = `<div class="counter-col">
-      ${combo ? `<span class="cap">${esc(Exercise.displayName(g.exercise))} · ${active + 1}/${goals.length}</span>` : ""}
-      <span class="counter-big c-white" id="sess-num">${totalFor(g, resultFor(g.exercise))}</span>
-      ${g.target != null ? `<span class="target">/ ${g.target}</span>` : ""}
-      ${combo ? "" : `<span class="cap">${t("Reps")}</span>`}</div>`;
+    const hasPrev = combo && active > 0, hasNext = combo && active < goals.length - 1;
+    countersEl.className = "counter-col";
+    countersEl.innerHTML = `
+      <span class="cap">${esc(Exercise.displayName(g.exercise))}${combo ? ` • ${active + 1}/${goals.length}` : ""}</span>
+      <div class="count-line">
+        <span class="counter-big c-white" id="sess-num">${totalFor(g, resultFor(g.exercise))}</span>
+        ${g.target != null ? `<span class="count-target">/ ${g.target}</span>` : ""}
+      </div>
+      ${hasPrev || hasNext ? `<div class="sess-nav">
+        ${hasPrev ? `<button data-sess="prev">${icon("chevronLeft")}${esc(Exercise.displayName(goals[active - 1].exercise))}</button>` : ""}
+        ${hasNext ? `<button data-sess="next">${esc(Exercise.displayName(goals[active + 1].exercise))}${icon("chevronRight")}</button>` : ""}
+      </div>` : ""}`;
   }
   renderCounter();
   let prevGoalReached = false, prevBottomKey = "";
@@ -1681,20 +1687,12 @@ async function openSession(challengeId, startExercise) {
       hintEl.style.display = hint ? "" : "none";
       if (hint) hintEl.textContent = hint;
 
-      // Нижняя панель: угол + навигация по упражнениям (назад/вперёд) + Завершить/Готово
+      // Нижняя панель: угол текущего упражнения + кнопка Завершить/Готово (переключение упражнений — в блоке счётчика)
       const angle = ar && ar.bendAngle != null ? Math.round(ar.bendAngle) : null;
-      const hasPrev = combo && active > 0;
-      const key = `${active}|${curReached}|${allReached}|${sessionTotal > 0}|${angle}|${hasNext}|${hasPrev}`;
+      const key = `${curReached}|${allReached}|${sessionTotal > 0}|${angle}`;
       if (key !== prevBottomKey) {
         prevBottomKey = key;
-        const pill = "display:inline-flex;align-items:center;gap:4px;padding:10px 16px;border-radius:999px;background:rgba(255,255,255,.16);color:#fff;font-weight:600;font-size:14px";
         let b = angle != null ? `<span class="angle">${angle}°</span>` : "";
-        if (hasPrev || hasNext) {
-          b += `<div class="row gap8" style="justify-content:center">`
-            + (hasPrev ? `<button data-sess="prev" style="${pill}">${icon("chevronLeft")}${esc(Exercise.displayName(goals[active - 1].exercise))}</button>` : "")
-            + (hasNext ? `<button data-sess="next" style="${pill}">${esc(Exercise.displayName(goals[active + 1].exercise))}${icon("chevronRight")}</button>` : "")
-            + `</div>`;
-        }
         if (allReached) b += `<button class="action-btn money" data-sess="finish" style="max-width:340px">${iconF("checkCircle")}${t("Finish")}</button>`;
         else if (sessionTotal > 0) b += `<button class="action-btn" data-sess="finish" style="max-width:340px">${icon("check")}${t("Done")}</button>`;
         bottomEl.innerHTML = b;
