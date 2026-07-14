@@ -1719,8 +1719,8 @@ async function openSession(challengeId, startExercise) {
         if (total > prevTotal) {
           haptic(12);
           if (numEl.animate && !REDUCE_MOTION()) {
-            numEl.animate([{ transform: "scale(1)" }, { transform: "scale(1.32)" }, { transform: "scale(1)" }],
-              { duration: 260, easing: "cubic-bezier(0.34,1.56,0.64,1)" });
+            numEl.animate([{ transform: "scale(1)" }, { transform: "scale(1.18)" }, { transform: "scale(1)" }],
+              { duration: 320, easing: "cubic-bezier(0.34,1.28,0.7,1)" });
           }
         }
         prevTotal = total;
@@ -2408,8 +2408,8 @@ function afterRender() {
       if (cel) Array.from(cel.children).forEach((el, i) => {
         if (i === 0) return; // трофей/печать — своя pop-in анимация, не дублируем
         if (el.animate) el.animate(
-          [{ opacity: 0, transform: "translateY(18px) scale(0.96)" }, { opacity: 1, transform: "none" }],
-          { duration: 460, delay: Math.min(i * 90, 540), easing: "cubic-bezier(0.34,1.56,0.64,1)", fill: "backwards" });
+          [{ opacity: 0, transform: "translateY(16px) scale(0.98)" }, { opacity: 1, transform: "none" }],
+          { duration: 520, delay: Math.min(i * 90, 540), easing: "cubic-bezier(0.34,1.28,0.7,1)", fill: "backwards" });
       });
     }
   }
