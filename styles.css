@@ -379,8 +379,14 @@ img { max-width: 100%; }
   padding-bottom: env(safe-area-inset-bottom);
 }
 @keyframes slideup { from { transform: translateY(100%); } to { transform: translateY(0); } }
-.sheet .navbar { background: var(--bg); border-radius: 20px 20px 0 0; }
+/* Лист — снизу экрана, под «островом» его нет: safe-area сверху не нужен,
+   иначе шапка раздувается и разделитель ложится на текст заголовка. */
+.sheet .navbar { background: var(--bg); border-radius: 20px 20px 0 0; padding-top: 12px; }
 .sheet-body { padding: 16px; display: flex; flex-direction: column; gap: 14px; }
+/* Ровный список выбора: одинаковые строки + тонкий разделитель между ними. */
+.picker-list { display: flex; flex-direction: column; }
+.picker-row { display: flex; align-items: center; justify-content: space-between; width: 100%; padding: 16px 6px; gap: 12px; }
+.picker-row:not(:last-child) { border-bottom: 1px solid var(--border); }
 
 /* полноэкранное поздравление */
 .fullscreen { position: fixed; inset: 0; background: var(--bg); z-index: 95; overflow-y: auto; }

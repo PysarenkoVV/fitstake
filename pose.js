@@ -191,11 +191,16 @@ class RepCounter {
     return null;
   }
 
+  // Сустав годен, только если он РЕАЛЬНО в кадре: MediaPipe достраивает точки за краями
+  // (y>1 / x<0) — при съёмке лица вблизи руки «домысливаются» под кадром и давали
+  // ложный счёт. Требуем и уверенность, и координаты внутри [0,1].
+  _inFrame(p) {
+    return !!p && p.confidence > this.minConfidence && p.x >= 0 && p.x <= 1 && p.y >= 0 && p.y <= 1;
+  }
+
   _limbVisible(s, points) {
     const j = EX[this.exercise].angleJoints(s);
-    const a = points[j.a], v = points[j.vertex], b = points[j.b];
-    if (!a || !v || !b) return false;
-    return Math.min(a.confidence, v.confidence, b.confidence) > this.minConfidence;
+    return this._inFrame(points[j.a]) && this._inFrame(points[j.vertex]) && this._inFrame(points[j.b]);
   }
 
   _bendAngle(s, points, size) {

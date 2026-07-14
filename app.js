@@ -100,6 +100,8 @@ const RU = {
   "How many push-ups can you do in one set?": "Сколько отжиманий делаешь за один подход?",
   "I barely train": "Почти не тренируюсь", "Increase by: %lld reps": "Прирост: %lld повторов",
   "Join for": "Вступить за", "kg": "кг", "Leaderboard": "Таблица итогов", "Let's go": "Погнали",
+  "Leave challenge": "Выйти из челленджа", "Leave challenge?": "Выйти из челленджа?", "Leave": "Выйти", "Cancel": "Отмена",
+  "Your buy-in won't be refunded and you won't be able to see the results.": "Взнос не вернётся, и результаты ты больше не сможешь посмотреть.",
   "Male": "Мужской", "Max reps": "Максимум за подход", "Max reps in one set": "Максимум за подход",
   "Max reps in one set: %lld": "Максимум за подход: %lld", "Measurements": "Замеры", "Members: %lld": "Участников: %lld",
   "Missed days": "Пропуски дней", "New measurement": "Новый замер",
@@ -425,6 +427,7 @@ const app = {
   history: [],
   measurements: [],
   totalPushups: Sync.enabled ? 0 : 1760,
+  leftMain: false,
 };
 app.history = Sync.enabled ? [] : mockHistory(app.challenges.filter(C.isJoined));
 
@@ -459,7 +462,7 @@ function applySync() {
 const SAVE_KEY = "fs.state";
 function snapshotApp() {
   return { balance: app.balance, transactions: app.transactions, challenges: app.challenges,
-    history: app.history, measurements: app.measurements, totalPushups: app.totalPushups, dayKey: app.dayKey };
+    history: app.history, measurements: app.measurements, totalPushups: app.totalPushups, dayKey: app.dayKey, leftMain: app.leftMain };
 }
 let saveTimer = null;
 function saveApp() {
@@ -486,10 +489,11 @@ function saveApp() {
   app.measurements = saved.measurements || [];
   app.totalPushups = saved.totalPushups || 0;
   app.dayKey = saved.dayKey || dateKey();
+  app.leftMain = saved.leftMain || false;
   // Конфигурация общего челленджа всегда из кода — старое сохранение не должно блокировать обновления.
   const tpl = mockChallenges()[0];
   const main = app.challenges.find((c) => c.id === "main");
-  if (!main) app.challenges.unshift(tpl);
+  if (!main) { if (!app.leftMain) app.challenges.unshift(tpl); }
   else {
     Object.assign(main, { title: tpl.title, goals: tpl.goals, durationDays: tpl.durationDays, buyIn: tpl.buyIn, isPublic: tpl.isPublic });
     if (Sync.enabled) main.currentDay = currentDayFromStart(main.durationDays);
@@ -548,6 +552,15 @@ function createChallenge(o) {
   if (!spend(o.buyIn, o.title)) return false;
   app.challenges.unshift(newChallenge(Object.assign({ currentDay: 1, yesterdayDropouts: 0, startedAt: startOfDay(Date.now()), participants: [{ id: uid(), name: "", isMe: true, state: "active", doneToday: false, todayReps: 0 }] }, o)));
   return true;
+}
+
+// Выход из челленджа: взнос НЕ возвращается, прогресс/результаты пропадают. Челлендж
+// убираем из списка; общий "main" помечаем leftMain, чтобы он не вернулся при перезапуске.
+function leaveChallenge(id) {
+  app.challenges = app.challenges.filter((c) => c.id !== id);
+  if (id === "main") app.leftMain = true;
+  saveApp();
+  track("challenge_left", { challenge_id: id });
 }
 
 // Плюсует подход; возвращает true, если дневная норма закрылась впервые.
@@ -815,15 +828,16 @@ function DetailScreen(id) {
   if (joined) {
     const ended = challengeEnded(c);
     const inviteBtn = `<button class="action-btn" data-act="invite" style="background:var(--white-08);color:#fff">${icon("share")}${t("Invite friends")}</button>`;
+    const leaveBtn = `<button class="action-btn" data-act="askLeave:${c.id}" style="background:transparent;color:var(--red);box-shadow:none">${t("Leave challenge")}</button>`;
     body = ended ? [
       finaleCard(c), totalCard(c), participantsCard(c), potCard(c), rulesCard(c),
-      c.beforePhoto ? beforeAfterCard(c) : "", inviteBtn,
+      c.beforePhoto ? beforeAfterCard(c) : "", inviteBtn, leaveBtn,
     ].join("") : [
       totalCard(c), todayCard(c),
       C.isFinished(c) ? `<button class="action-btn money" data-act="showResult:${c.id}">${iconF("trophy")}${t("Show result")}</button>` : "",
       callToAction(c), inviteBtn,
       potCard(c), socialCard(c), rulesCard(c),
-      c.beforePhoto ? beforeAfterCard(c) : "", participantsCard(c), callToAction(c),
+      c.beforePhoto ? beforeAfterCard(c) : "", participantsCard(c), callToAction(c), leaveBtn,
     ].join("");
   } else {
     body = [potCard(c), callToAction(c), rulesCard(c), participantsCard(c)].join("");
@@ -906,12 +920,26 @@ function StartPicker() {
   if (!c) return "";
   const rows = c.goals.map((g) => {
     const reps = C.myToday(c, g.exercise), norm = C.norm(c, g), done = reps >= norm;
-    return `<button class="between" data-act="play:${c.id}:${g.exercise}" style="width:100%;padding:14px 4px;gap:12px">
+    return `<button class="picker-row" data-act="play:${c.id}:${g.exercise}">
       <span class="row gap12"><span style="display:flex;color:var(--accent)">${exIcon(g.exercise)}</span><span style="font-weight:600;font-size:16px">${esc(Exercise.displayName(g.exercise))}</span></span>
       <span class="row gap12"><span class="money ${done ? "c-money" : "secondary"}" style="font-size:15px">${reps} / ${norm}</span><span style="color:var(--accent);display:flex">${iconF("play")}</span></span>
     </button>`;
   }).join("");
-  return sheetShell(t("Where to start?"), rows, true);
+  return sheetShell(t("Where to start?"), `<div class="picker-list">${rows}</div>`, true);
+}
+// Подтверждение выхода из челленджа: явный warning про невозврат взноса и потерю результатов.
+function LeaveSheet() {
+  const c = app.challenges.find((x) => x.id === ui.form.challengeId);
+  if (!c) return "";
+  const body = `
+    <div class="form-section" style="align-items:center;text-align:center;gap:12px;padding:8px 0">
+      <span style="width:56px;height:56px;border-radius:50%;background:rgba(255,69,58,.14);color:var(--red);display:flex;align-items:center;justify-content:center">${icon("personXmark")}</span>
+      <div style="font-weight:700;font-size:17px">${esc(c.title)}</div>
+      <div class="secondary" style="font-size:14px;line-height:1.45">${t("Your buy-in won't be refunded and you won't be able to see the results.")}</div>
+    </div>
+    <button class="action-btn" data-act="confirmLeave:${c.id}" style="background:var(--red);color:#fff">${t("Leave")}</button>
+    <button class="action-btn" data-act="closeSheet" style="background:var(--white-08);color:#fff">${t("Cancel")}</button>`;
+  return sheetShell(t("Leave challenge?"), body, true);
 }
 function ruleRow(ic, html) { return `<div class="rule-row">${icon(ic)}<div>${html}</div></div>`; }
 function rulesCard(c) {
@@ -1940,6 +1968,7 @@ function openCreate() {
 function openJoin(id) { ui.form = { challengeId: id, weight: store["profile.weightKg"], maxReps: store["profile.maxReps"], photo: null }; ui.sheet = JoinSheet; render(); }
 function openMeasure() { ui.form = { weight: store["profile.weightKg"], maxReps: store["profile.maxReps"] }; ui.sheet = MeasureSheet; render(); }
 function openStartPicker(id) { ui.form = { challengeId: id }; ui.sheet = StartPicker; render(); }
+function openLeave(id) { ui.form = { challengeId: id }; ui.sheet = LeaveSheet; render(); }
 function openParticipant(id) { ui.form = { participantId: id }; ui.sheet = ParticipantSheet; render(); }
 function closeSheet() { ui.sheet = null; ui.form = null; render(); }
 function openDayComplete(c) { ui.fullId = c.id; ui.full = DayCompleteFull; render(); }
@@ -2016,6 +2045,8 @@ root.addEventListener("click", async (e) => {
     case "closeSheet": closeSheet(); return;
     case "closeFull": closeFull(); return;
     case "showResult": openChallengeComplete(app.challenges.find((c) => c.id === arg)); return;
+    case "askLeave": openLeave(arg); return;
+    case "confirmLeave": leaveChallenge(arg); ui.sheet = null; ui.form = null; ui.detailId = null; render(); return;
   }
 
   // Форм-контролы
