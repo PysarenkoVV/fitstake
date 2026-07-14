@@ -388,6 +388,25 @@ img { max-width: 100%; }
 .picker-row { display: flex; align-items: center; justify-content: space-between; width: 100%; padding: 16px 6px; gap: 12px; }
 .picker-row:not(:last-child) { border-bottom: 1px solid var(--border); }
 
+/* ---- Сообщить о проблеме ---- */
+.bug-group { display: flex; flex-direction: column; gap: 8px; }
+.bug-cat { font-family: var(--mono); font-weight: 700; font-size: 11px; text-transform: uppercase; letter-spacing: 1px; color: var(--text-secondary); }
+.bug-chips { display: flex; flex-wrap: wrap; gap: 8px; }
+.bug-chip {
+  padding: 9px 13px; border-radius: 999px;
+  background: var(--white-08); border: 1px solid transparent;
+  color: #fff; font-size: 14px; font-weight: 600; line-height: 1;
+}
+.bug-chip.sel { background: rgba(255, 94, 31, 0.16); border-color: var(--accent); color: var(--accent); }
+.bug-note {
+  width: 100%; min-height: 76px; resize: vertical;
+  padding: 13px 14px; border-radius: 12px;
+  background: var(--white-08); border: 1px solid var(--white-14);
+  color: #fff; font-size: 16px; font-family: inherit;
+}
+.bug-note::placeholder { color: rgba(255, 255, 255, 0.4); }
+.bug-note:focus { outline: none; border-color: rgba(255, 255, 255, 0.3); }
+
 /* полноэкранное поздравление */
 .fullscreen { position: fixed; inset: 0; background: var(--bg); z-index: 95; overflow-y: auto; }
 .celebrate { min-height: 100dvh; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; padding: 24px 20px calc(24px + env(safe-area-inset-bottom)); gap: 18px; }

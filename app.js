@@ -3,6 +3,17 @@
 
 "use strict";
 
+// Версия оболочки — держать в синхроне с CACHE в sw.js; уходит в баг-репорты.
+const APP_VERSION = "v29";
+// Последняя JS-ошибка — прикладываем к баг-репорту, чтобы сразу видеть причину.
+let lastError = "";
+window.addEventListener("error", (e) => {
+  lastError = ((e && e.message) || "") + " @ " + (((e && e.filename) || "").split("/").pop() || "") + ":" + ((e && e.lineno) || "");
+});
+window.addEventListener("unhandledrejection", (e) => {
+  lastError = "promise: " + (((e && e.reason && e.reason.message) || (e && e.reason)) || "");
+});
+
 // ==========================================================================
 // Иконки (упрощённые SVG под SF Symbols из приложения)
 // ==========================================================================
@@ -37,6 +48,7 @@ const PATHS = {
   dollar: '<circle cx="12" cy="12" r="10"/><path d="M12 7v10M14.5 9.2c-.4-1-1.4-1.4-2.5-1.4-1.4 0-2.5.7-2.5 1.9 0 2.7 5 1.3 5 4 0 1.3-1.2 2-2.5 2-1.2 0-2.2-.5-2.6-1.5" stroke="#0a0a0a"/>',
   bolt: '<path d="M13 2L4 14h6l-1 8 9-12h-6z"/>',
   trend: '<path d="M3 17l6-6 4 4 8-8M15 7h6v6"/>',
+  bug: '<ellipse cx="12" cy="13" rx="4.5" ry="6"/><circle cx="12" cy="6" r="2"/><path d="M12 8v10M7.6 11H4M7.6 14H4M8 17l-3 2M16.4 11H20M16.4 14H20M16 17l3 2M10.6 4.4L9.4 2.6M13.4 4.4l1.2-1.8"/>',
   // Упражнения (силуэты сбоку): отжимания у пола, присед, вис на турнике, брусья.
   exPushups: '<circle cx="5" cy="9.5" r="1.8"/><path d="M6.8 10 L19 14.5"/><path d="M8.5 10.6 L8.5 17"/><path d="M3 17.5 H21"/>',
   exSquats: '<circle cx="12" cy="5" r="1.8"/><path d="M12 6.8 L11 12 L16.5 12.5 L16 19"/><path d="M11.5 8.6 L16 8"/>',
@@ -165,6 +177,20 @@ const RU = {
   "Add domain in Firebase (Authorized domains)": "Добавь домен в Firebase (Authorized domains)",
   "Google sign-in unavailable here — use email": "Google-вход тут недоступен — войди по почте",
   "Add to Home Screen: Share → Add to Home Screen": "На экран «Домой»: Поделиться → «На экран Домой»",
+  "Report a problem": "Сообщить о проблеме",
+  "Pick what's wrong — one tap is enough. Details optional.": "Выбери, что не так — хватит одного тапа. Детали по желанию.",
+  "Details (optional)": "Детали (по желанию)", "Send report": "Отправить",
+  "Thanks! Report sent.": "Спасибо! Отчёт отправлен.", "Couldn't send — check connection": "Не отправилось — проверь связь",
+  "Counting & camera": "Счёт и камера", "Money & stakes": "Деньги и ставки",
+  "Design & layout": "Дизайн и вёрстка", "App behavior": "Работа приложения",
+  "Counts extra reps": "Считает лишние повторы", "Doesn't count reps": "Не засчитывает повторы",
+  "Counts when body isn't visible": "Считает, когда тела не видно", "Camera is slow or laggy": "Камера тормозит или лагает",
+  "Skeleton doesn't appear": "Скелет не появляется", "Can't create a challenge": "Не создаётся челлендж",
+  "Can't join or leave": "Не могу вступить или выйти", "Challenge disappeared": "Челлендж пропал сам",
+  "Progress or results are wrong": "Прогресс или результаты неверные", "Wrong balance or buy-in": "Неверный баланс или взнос",
+  "Payout problem": "Проблема с выплатой", "Spacing or elements are off": "Съехали отступы или элементы",
+  "Text cut off or overlapping": "Текст обрезан или налезает", "Hard to see in dark or light theme": "Плохо видно в тёмной или светлой теме",
+  "Froze or crashed": "Зависло или вылетело", "Laggy": "Тормозит", "Something won't load": "Что-то не грузится",
 };
 
 // Перевод + подстановка %lld / %@ по порядку аргументов.
@@ -686,7 +712,7 @@ function lbl(text, extra = "") { return `<span class="label secondary ${extra}" 
 function screenHeader(title, right = "") {
   return `<div class="between" style="padding-top:8px;margin-bottom:2px">
     <h1 class="screen-title">${esc(title)}</h1>
-    <div class="row gap8">${right}${langToggle()}</div>
+    <div class="row gap8">${right}<button class="badge" data-act="openBug" aria-label="${t("Report a problem")}" style="color:var(--text-secondary);display:flex;align-items:center;padding:5px 7px">${icon("bug")}</button>${langToggle()}</div>
   </div>`;
 }
 function langToggle() {
@@ -941,6 +967,46 @@ function LeaveSheet() {
     <button class="action-btn" data-act="closeSheet" style="background:var(--white-08);color:#fff">${t("Cancel")}</button>`;
   return sheetShell(t("Leave challenge?"), body, true);
 }
+
+// Разделы и типовые проблемы для отчёта тестера — под реальные экраны FitStake.
+// Канонические строки английские (стабильны для агента-триажа), в UI переводятся t().
+const BUG_CATS = [
+  ["🎯", "Counting & camera", ["Counts extra reps", "Doesn't count reps", "Counts when body isn't visible", "Camera is slow or laggy", "Skeleton doesn't appear"]],
+  ["🏆", "Challenges", ["Can't create a challenge", "Can't join or leave", "Challenge disappeared", "Progress or results are wrong"]],
+  ["💰", "Money & stakes", ["Wrong balance or buy-in", "Payout problem"]],
+  ["🎨", "Design & layout", ["Spacing or elements are off", "Text cut off or overlapping", "Hard to see in dark or light theme"]],
+  ["⚙️", "App behavior", ["Froze or crashed", "Laggy", "Something won't load"]],
+];
+
+// Лист «Сообщить о проблеме»: выбор проблемы в один тап (чипсы) + необязательный текст.
+function BugSheet() {
+  const groups = BUG_CATS.map(([emoji, cat, problems], ci) => {
+    const chips = problems.map((p, pi) => {
+      const on = ui.bug && ui.bug.pick === ci + "-" + pi;
+      return `<button class="bug-chip ${on ? "sel" : ""}" data-act="bugPick:${ci}-${pi}">${esc(t(p))}</button>`;
+    }).join("");
+    return `<div class="bug-group"><div class="bug-cat">${emoji} ${esc(t(cat))}</div><div class="bug-chips">${chips}</div></div>`;
+  }).join("");
+  const canSend = !!(ui.bug && ui.bug.pick);
+  const body = `
+    <p class="secondary" style="font-size:13px;margin:-2px 0 2px">${t("Pick what's wrong — one tap is enough. Details optional.")}</p>
+    ${groups}
+    <textarea id="bug-note" class="bug-note" placeholder="${t("Details (optional)")}">${esc((ui.bug && ui.bug.note) || "")}</textarea>
+    <button class="action-btn" data-act="sendBug" ${canSend ? "" : "disabled"}>${t("Send report")}</button>`;
+  return sheetShell(t("Report a problem"), body, true);
+}
+
+// Имя текущего экрана для контекста баг-репорта.
+function currentScreenName() {
+  if (liveSession) return "camera";
+  if (ui.screen === "onboarding") return "onboarding";
+  if (ui.full) return "fullscreen";
+  if (ui.detailId) return "challenge-detail";
+  return "tab-" + ui.tab;
+}
+
+function openBug() { ui.bug = { pick: null, note: "" }; ui.sheet = BugSheet; render(); }
+
 function ruleRow(ic, html) { return `<div class="rule-row">${icon(ic)}<div>${html}</div></div>`; }
 function rulesCard(c) {
   const rows = [ruleRow("flame", `<b>${t("Every day: ")}${esc(C.goalsText(c))}</b>`)];
@@ -2047,6 +2113,8 @@ root.addEventListener("click", async (e) => {
     case "showResult": openChallengeComplete(app.challenges.find((c) => c.id === arg)); return;
     case "askLeave": openLeave(arg); return;
     case "confirmLeave": leaveChallenge(arg); ui.sheet = null; ui.form = null; ui.detailId = null; render(); return;
+    case "openBug": openBug(); return;
+    case "bugPick": if (ui.bug) { ui.bug.pick = arg; render(); } return;
   }
 
   // Форм-контролы
@@ -2143,6 +2211,25 @@ root.addEventListener("click", async (e) => {
     store["profile.weightKg"] = ui.form.weight; store["profile.maxReps"] = ui.form.maxReps; storeHook("profile.maxReps");
     closeSheet(); return;
   }
+  if (cmd === "sendBug") {
+    if (!ui.bug || !ui.bug.pick) return;
+    const [ci, pi] = ui.bug.pick.split("-").map(Number);
+    const [, cat, problems] = BUG_CATS[ci];
+    const problem = problems[pi];
+    const noteEl = document.getElementById("bug-note");
+    const note = ((noteEl && noteEl.value) || ui.bug.note || "").trim().slice(0, 1000);
+    track("bug_reported", { category: cat, problem });
+    el.disabled = true;
+    const ok = await Sync.reportBug({
+      category: cat, problem, note,
+      screen: currentScreenName(), version: APP_VERSION,
+      device: (navigator.userAgent || "").slice(0, 300),
+      lang: store.lang, err: (lastError || "").slice(0, 500),
+    });
+    closeSheet();
+    toast(ok ? t("Thanks! Report sent.") : t("Couldn't send — check connection"));
+    return;
+  }
   if (cmd === "saveResult") {
     const f = ui.form, c = app.challenges.find((x) => x.id === arg);
     completeChallenge(c, f.photo, f.weight, f.maxReps);
@@ -2183,6 +2270,7 @@ root.addEventListener("click", async (e) => {
 root.addEventListener("input", (e) => {
   const el = e.target;
   if (el.id === "profile-name") { profileNameDraft = el.value; return; }
+  if (el.id === "bug-note") { if (ui.bug) ui.bug.note = el.value; return; }
   if (el.dataset.model != null) {
     const k = el.dataset.model;
     ui.form[k] = el.type === "number" ? (parseInt(el.value) || 0) : el.value;

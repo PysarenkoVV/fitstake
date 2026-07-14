@@ -198,8 +198,19 @@ window.Sync = (() => {
     });
   }
 
+  // Отчёт о проблеме от тестера → общий узел bugReports (create-only по правилам БД).
+  function reportBug(payload) {
+    return new Promise((resolve) => {
+      if (!enabled) { resolve(false); return; }
+      ready(() => {
+        const rec = Object.assign({}, payload, { uid: uid || "", ts: Date.now() });
+        F.push(F.ref(db, "fitstake/bugReports"), rec).then(() => resolve(true)).catch(() => resolve(false));
+      });
+    });
+  }
+
   return {
-    enabled, state, init, registerUser, join, report, signIn, signUp, signInGoogle, signOutUser,
+    enabled, state, init, registerUser, join, report, reportBug, signIn, signUp, signInGoogle, signOutUser,
     get uid() { return uid; },
     get email() { return accountEmail; },
     get isAnonymous() { return isAnon; },
