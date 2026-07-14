@@ -153,6 +153,7 @@ img { max-width: 100%; }
 /* ---- Иконки ---- */
 .icon { width: 20px; height: 20px; display: inline-block; vertical-align: middle; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
 .icon.filled { fill: currentColor; stroke: none; }
+.icon.ring-ic { width: 26px; height: 26px; }
 
 /* ---- Основной контейнер экрана ---- */
 .screen {

@@ -649,6 +649,23 @@ function bar(frac, money) {
   const f = Math.max(0, Math.min(1, frac || 0)) * 100;
   return `<div class="progress ${money ? "money" : ""}"><span style="width:${f}%"></span></div>`;
 }
+// Кольцо прогресса упражнения в комбо-карточке: тап → запуск именно этого упражнения.
+function progressRing(id, g, reps, norm, done) {
+  const circ = 2 * Math.PI * 30;
+  const off = circ * (1 - Math.max(0, Math.min(1, norm ? reps / norm : 0)));
+  const col = done ? "var(--money)" : "var(--accent)";
+  return `<button data-act="play:${id}:${g.exercise}" style="flex:1;min-width:0;display:flex;flex-direction:column;align-items:center;gap:5px">
+    <span style="position:relative;width:72px;height:72px;display:flex;align-items:center;justify-content:center">
+      <svg width="72" height="72" viewBox="0 0 72 72" style="position:absolute;inset:0;transform:rotate(-90deg)">
+        <circle cx="36" cy="36" r="30" fill="none" stroke="var(--white-08)" stroke-width="6"/>
+        <circle cx="36" cy="36" r="30" fill="none" stroke="${col}" stroke-width="6" stroke-linecap="round" stroke-dasharray="${circ.toFixed(1)}" stroke-dashoffset="${off.toFixed(1)}"/>
+      </svg>
+      <span style="display:flex;color:${col}">${exIcon(g.exercise, "ring-ic")}</span>
+    </span>
+    <span class="money ${done ? "c-money" : "c-white"}" style="font-size:13px;line-height:1">${reps}/${norm}</span>
+    <span class="secondary" style="font-size:10px;line-height:1;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(Exercise.displayName(g.exercise))}</span>
+  </button>`;
+}
 function badge(text, color) { return `<span class="badge" style="color:${color}">${esc(text)}</span>`; }
 function streakPill(n) { return n >= 2 ? `<span class="streak-pill">🔥 ${n}</span>` : ""; }
 function lbl(text, extra = "") { return `<span class="label secondary ${extra}" style="font-size:11px">${esc(text)}</span>`; }
@@ -860,10 +877,11 @@ function todayCard(c) {
     const g = c.goals[0], reps = C.myToday(c, g.exercise), norm = C.norm(c, g), d = reps >= norm;
     inner = `<div class="between" style="align-items:baseline">${lbl(t("Today"), "tracking-1")}<span class="money ${d ? "c-money" : "c-white"}" style="font-size:24px">${reps} / ${norm}</span></div>${bar(reps / norm, d)}`;
   } else {
-    inner = lbl(t("Today"), "tracking-1") + c.goals.map((g) => {
+    const rings = c.goals.map((g) => {
       const reps = C.myToday(c, g.exercise), norm = C.norm(c, g), d = reps >= norm;
-      return `<div class="between"><span class="row gap8" style="font-weight:600;font-size:15px"><span style="display:flex;color:var(--text-secondary)">${exIcon(g.exercise)}</span>${esc(Exercise.displayName(g.exercise))}</span><span class="row gap12"><span class="money ${d ? "c-money" : "c-white"}" style="font-size:18px">${reps} / ${norm}</span><button data-act="play:${c.id}:${g.exercise}" style="color:var(--accent);display:flex;padding:2px">${iconF("play")}</button></span></div>${bar(reps / norm, d)}`;
+      return progressRing(c.id, g, reps, norm, d);
     }).join("");
+    inner = lbl(t("Today"), "tracking-1") + `<div style="display:flex;gap:8px;align-items:flex-start;padding-top:4px">${rings}</div>`;
   }
   return `<div class="card ${done ? "done" : ""}" style="padding:16px;display:flex;flex-direction:column;gap:10px">${inner}</div>`;
 }
