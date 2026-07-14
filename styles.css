@@ -191,7 +191,7 @@ img { max-width: 100%; }
   display: flex;
   align-items: center;
   gap: 10px;
-  height: 52px;
+  min-height: 52px;
   padding: 0 12px;
   padding-top: max(8px, env(safe-area-inset-top));
   background: rgba(10, 10, 10, 0.82);
