@@ -1326,14 +1326,11 @@ function saveChallengeForm() {
 // Карточка условий картинкой — тот же генератор, что и для результатов (Web Share API → инста и т.п.).
 function shareChallengeCard(f) {
   const sel = selectedExercises(f);
-  shareCard({
-    title: f.title.trim() || defaultTitle(f),
-    headline: t("%lld-day challenge", f.duration),
-    metrics: [
-      ...sel.map((e) => [Exercise.displayName(e), t("%lld / day", f[e])]),
-      [t("Missed days"), MissPolicy.displayName(f.miss)],
-      [t("Buy-in"), (store.currencyUSD ? "$" : Currency.symbol) + fmt(f.buyIn)],
-    ],
+  shareChallengePoster({
+    duration: f.duration,
+    exercises: sel.map((e) => ({ ex: e, name: Exercise.displayName(e), reps: f[e] })),
+    stake: (store.currencyUSD ? "$" : Currency.symbol) + fmt(f.buyIn),
+    miss: MissPolicy.displayName(f.miss),
   });
 }
 
@@ -1702,6 +1699,215 @@ async function shareCard(data) {
     try { await navigator.share({ files: [file], title: "FitStake" }); return; } catch {}
   }
   const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = "fitstake.png"; a.click();
+}
+
+// SVG-иконку → data-URI, чтобы нарисовать её на canvas через drawImage с нужным цветом.
+function posterIconURI(markup, { stroke = "#ff5e1f", fill = "none", sw = 2 } = {}) {
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="${fill}" stroke="${stroke}" stroke-width="${sw}" stroke-linecap="round" stroke-linejoin="round">${markup}</svg>`;
+  return "data:image/svg+xml;charset=utf-8," + encodeURIComponent(svg);
+}
+function hexPath(g, cx, cy, r) {
+  g.beginPath();
+  for (let i = 0; i < 6; i++) { const a = (Math.PI / 180) * (60 * i - 90); const x = cx + r * Math.cos(a), y = cy + r * Math.sin(a); i ? g.lineTo(x, y) : g.moveTo(x, y); }
+  g.closePath();
+}
+
+// Промо-карточка челленджа для шеринга (сторис-формат, тёмный full-bleed постер под инсту).
+async function shareChallengePoster(data) {
+  const ru = store.lang === "ru";
+  const ORANGE = "#ff5e1f";
+  const single = data.exercises.length === 1;
+  const ex0 = data.exercises[0];
+  const L = ru ? {
+    badge: `ЧЕЛЛЕНДЖ · ${data.duration} ДН.`, aDay: "В ДЕНЬ",
+    combo: "КОМБО", exCount: `${data.exercises.length} УПРАЖНЕНИЯ`,
+    stakeT: "СТАВКА", stakeS: "Деньги на кону.",
+    missT: "ПРОПУСКИ", missS: "Держи ритм каждый день.",
+    camT: "КАМЕРА СЧИТАЕТ", camS: "Каждый повтор проверяется.",
+    keep: "СЛАБО ПОВТОРИТЬ?", cta: "ПРИНЯТЬ ВЫЗОВ",
+    fOpen: "Открой ", fEnd: " и прими вызов.",
+    micro: "СОРЕВНУЙСЯ · НЕ СЛИВАЙСЯ · ПОБЕЖДАЙ",
+    sub: single ? `Мой челлендж: ${ex0.reps} ${ex0.name.toLowerCase()} каждый день, ${data.duration} дн.` : `Мой челлендж: это комбо каждый день, ${data.duration} дн.`,
+  } : {
+    badge: `${data.duration}-DAY CHALLENGE`, aDay: "A DAY",
+    combo: "COMBO", exCount: `${data.exercises.length} EXERCISES`,
+    stakeT: "STAKE", stakeS: "Money on the line.",
+    missT: "MISSES ALLOWED", missS: "Stay consistent.",
+    camT: "CAMERA VERIFIED", camS: "Every rep is checked.",
+    keep: "THINK YOU CAN KEEP UP?", cta: "JOIN MY CHALLENGE",
+    fOpen: "Open ", fEnd: " and accept the challenge.",
+    micro: "COMPETE · STAY ACCOUNTABLE · WIN",
+    sub: single ? `Join me: ${ex0.reps} ${ex0.name.toLowerCase()} every day for ${data.duration} days.` : `Join me: this combo every day for ${data.duration} days.`,
+  };
+
+  // Иконки грузим один раз как картинки нужного цвета.
+  const icons = {
+    flame: posterIconURI(PATHS.flame, { fill: ORANGE, stroke: "none" }),
+    bolt: posterIconURI(PATHS.bolt, { fill: ORANGE, stroke: "none" }),
+    dollar: posterIconURI('<line x1="12" y1="2.5" x2="12" y2="21.5"/><path d="M16.5 6.5H10a3 3 0 0 0 0 6h4a3 3 0 0 1 0 6H6.5"/>', { stroke: ORANGE }),
+    calendar: posterIconURI(PATHS.calendar, { stroke: ORANGE }),
+    shield: posterIconURI('<path d="M12 3l7 3v5c0 4.6-3 7.7-7 9-4-1.3-7-4.4-7-9V6z"/><path d="M9 12l2.2 2.2L15.5 10"/>', { stroke: ORANGE }),
+    phone: posterIconURI('<rect x="6" y="2.5" width="12" height="19" rx="2.5"/><path d="M10.5 18.5h3"/>', { stroke: "rgba(255,255,255,.6)" }),
+  };
+  data.exercises.forEach((e) => { icons["ex_" + e.ex] = posterIconURI(PATHS[EXERCISE_ICON[e.ex]] || PATHS.flame, { stroke: ORANGE }); });
+  const loaded = {};
+  await Promise.all(Object.entries(icons).map(([k, uri]) => loadImg(uri).then((im) => { loaded[k] = im; })));
+
+  const scale = 3, W = 540, pad = 34, cx = W / 2, Wu = W - pad * 2;
+  const cv = document.createElement("canvas");
+  const g = cv.getContext("2d");
+  const drawIcon = (k, ix, iy, s) => { const im = loaded[k]; if (im) g.drawImage(im, ix - s / 2, iy - s / 2, s, s); };
+  const setLS = (v) => { if ("letterSpacing" in g) g.letterSpacing = v; };
+  const fitSize = (txt, start, weight, maxW, ls) => {
+    let s = start;
+    for (; s > 18; s -= 2) { g.font = `${weight} ${s}px -apple-system,system-ui,sans-serif`; setLS(ls || "0px"); if (g.measureText(txt).width <= maxW) break; }
+    setLS("0px"); return s;
+  };
+  // Центрированная строка: визуальный верх ~ yTop, продвигаем на lh.
+  const ctext = (txt, yTop, size, weight, color, ls, lh) => {
+    g.font = `${weight} ${size}px -apple-system,system-ui,sans-serif`;
+    g.fillStyle = color; g.textAlign = "center"; g.textBaseline = "alphabetic"; setLS(ls || "0px");
+    g.fillText(txt, cx, yTop + size * 0.8); setLS("0px");
+    return yTop + (lh || size);
+  };
+
+  // --- замеры до установки размеров холста ---
+  const nameUpper = single ? ex0.name.toUpperCase() : "";
+  const nameSize = single ? fitSize(nameUpper, 58, 900, Wu, "1px") : 0;
+  const nameLh = Math.round(nameSize * 1.06);
+  g.font = "500 17px -apple-system,system-ui,sans-serif"; setLS("0px");
+  const subLines = wrapLines(g, L.sub, Wu, 3);
+
+  const cards = [];
+  if (!single) data.exercises.forEach((e) => cards.push({ icon: "ex_" + e.ex, title: e.name.toUpperCase(), sub: ru ? `${e.reps} / день` : `${e.reps} / day` }));
+  cards.push({ icon: "dollar", title: `${L.stakeT}: ${data.stake}`, sub: L.stakeS });
+  cards.push({ icon: "calendar", title: `${L.missT}: ${data.miss}`, sub: L.missS });
+  cards.push({ icon: "shield", title: L.camT, sub: L.camS });
+
+  const LOGO_H = 28, GAP1 = 20, BADGE_H = 32, GAP2 = 32, GAP_HERO = 24;
+  const SUB_LH = 25, GAP3 = 30, CARD_H = 74, CARD_GAP = 12, GAP4 = 28;
+  const TAG_H = 22, GAP5 = 20, CTA_H = 60, GAP6 = 22, FOOT_H = 20, GAP7 = 14, MICRO_H = 16;
+  const heroH = single ? 128 + nameLh + 50 : 74 + 40;
+  const subH = subLines.length * SUB_LH;
+  const cardsH = cards.length * CARD_H + (cards.length - 1) * CARD_GAP;
+  const contentH = LOGO_H + GAP1 + BADGE_H + GAP2 + heroH + GAP_HERO + subH + GAP3
+    + cardsH + GAP4 + TAG_H + GAP5 + CTA_H + GAP6 + FOOT_H + GAP7 + MICRO_H;
+  const H = Math.max(Math.ceil(contentH) + 72, 960);
+  cv.width = W * scale; cv.height = H * scale; g.scale(scale, scale);
+
+  // --- фон: тёплый near-black + свечения + искры ---
+  g.fillStyle = "#0a0806"; g.fillRect(0, 0, W, H);
+  let rg = g.createRadialGradient(W / 2, H * 0.9, 30, W / 2, H * 0.9, H * 0.62);
+  rg.addColorStop(0, "rgba(255,94,31,.20)"); rg.addColorStop(1, "rgba(255,94,31,0)");
+  g.fillStyle = rg; g.fillRect(0, 0, W, H);
+  rg = g.createRadialGradient(W * 0.85, H * 0.1, 20, W * 0.85, H * 0.1, 280);
+  rg.addColorStop(0, "rgba(255,120,40,.12)"); rg.addColorStop(1, "rgba(255,120,40,0)");
+  g.fillStyle = rg; g.fillRect(0, 0, W, H);
+  for (let i = 0; i < 28; i++) {
+    const x = Math.random() * W, yy = Math.random() * H, r = Math.random() * 1.5 + 0.4;
+    g.fillStyle = `rgba(255,${(140 + Math.random() * 70) | 0},60,${(Math.random() * 0.5 + 0.1).toFixed(2)})`;
+    g.beginPath(); g.arc(x, yy, r, 0, 7); g.fill();
+  }
+  g.strokeStyle = "rgba(255,94,31,.09)"; g.lineWidth = 3; g.lineCap = "round";
+  for (const side of [-1, 1]) for (let k = 0; k < 2; k++) {
+    const bx = cx + side * (Wu / 2 + 16 + k * 12), by = H * 0.45;
+    g.beginPath(); g.moveTo(bx - side * 6, by - 9); g.lineTo(bx, by); g.lineTo(bx - side * 6, by + 9); g.stroke();
+  }
+
+  let y = (H - contentH) / 2;
+
+  // Логотип
+  setLS("3px"); g.font = "800 20px -apple-system,system-ui,sans-serif";
+  const brand = "FITSTAKE", bw = g.measureText(brand).width, fl = 22, gapL = 9, lw = fl + gapL + bw, lsx = cx - lw / 2;
+  drawIcon("flame", lsx + fl / 2, y + 11, fl);
+  g.fillStyle = "#fff"; g.textAlign = "left"; g.textBaseline = "middle"; g.fillText(brand, lsx + fl + gapL, y + 12);
+  setLS("0px"); y += LOGO_H + GAP1;
+
+  // Бейдж
+  setLS("2px"); g.font = "700 12px -apple-system,system-ui,sans-serif";
+  const btw = g.measureText(L.badge).width, bpad = 18, bwd = btw + bpad * 2, bh = 32, bx0 = cx - bwd / 2;
+  roundRectPath(g, bx0, y, bwd, bh, 16); g.fillStyle = "rgba(255,94,31,.10)"; g.fill();
+  roundRectPath(g, bx0, y, bwd, bh, 16); g.strokeStyle = "rgba(255,94,31,.6)"; g.lineWidth = 1.5; g.stroke();
+  g.fillStyle = ORANGE; g.textAlign = "center"; g.textBaseline = "middle"; g.fillText(L.badge, cx, y + bh / 2 + 1);
+  setLS("0px"); y += BADGE_H + GAP2;
+
+  // Герой
+  if (single) {
+    g.save(); g.shadowColor = "rgba(255,255,255,.18)"; g.shadowBlur = 22;
+    y = ctext(String(ex0.reps), y, 150, 900, "#fff", "0px", 128);
+    g.restore();
+    y = ctext(nameUpper, y, nameSize, 900, "#fff", "1px", nameLh);
+    y = ctext(L.aDay, y, 40, 900, ORANGE, "4px", 50);
+  } else {
+    y = ctext(L.combo, y, 76, 900, "#fff", "3px", 74);
+    y = ctext(L.exCount, y, 28, 800, ORANGE, "2px", 40);
+  }
+  y += GAP_HERO;
+
+  // Подзаголовок
+  for (const line of subLines) y = ctext(line, y, 17, 500, "rgba(255,255,255,.72)", "0px", SUB_LH);
+  y += GAP3;
+
+  // Карточки-условия
+  cards.forEach((c, i) => {
+    roundRectPath(g, pad, y, Wu, CARD_H, 16); g.fillStyle = "rgba(255,255,255,.045)"; g.fill();
+    roundRectPath(g, pad, y, Wu, CARD_H, 16); g.strokeStyle = "rgba(255,255,255,.09)"; g.lineWidth = 1; g.stroke();
+    const midY = y + CARD_H / 2, hcx = pad + 44;
+    hexPath(g, hcx, midY, 23); g.fillStyle = "rgba(255,94,31,.12)"; g.fill();
+    hexPath(g, hcx, midY, 23); g.strokeStyle = "rgba(255,94,31,.55)"; g.lineWidth = 1.6; g.stroke();
+    drawIcon(c.icon, hcx, midY, 24);
+    g.strokeStyle = "rgba(255,255,255,.1)"; g.lineWidth = 1; g.beginPath(); g.moveTo(pad + 82, y + 16); g.lineTo(pad + 82, y + CARD_H - 16); g.stroke();
+    const tx = pad + 98, ts = fitSize(c.title, 18, 800, Wu - 98 - 18, "0px");
+    g.fillStyle = "#fff"; g.font = `800 ${ts}px -apple-system,system-ui,sans-serif`; g.textAlign = "left"; g.textBaseline = "alphabetic"; setLS("0px");
+    g.fillText(c.title, tx, midY - 4);
+    g.fillStyle = "rgba(255,255,255,.55)"; g.font = "500 12px -apple-system,system-ui,sans-serif";
+    g.fillText(c.sub, tx, midY + 16);
+    y += CARD_H + (i < cards.length - 1 ? CARD_GAP : 0);
+  });
+  y += GAP4;
+
+  // Слоган с молниями
+  g.font = "800 15px -apple-system,system-ui,sans-serif"; setLS("1px");
+  const ttw = g.measureText(L.keep).width, bsz = 16, tg = 10, tgW = bsz + tg + ttw + tg + bsz, tgx = cx - tgW / 2;
+  drawIcon("bolt", tgx + bsz / 2, y + 9, bsz);
+  g.fillStyle = "#fff"; g.textAlign = "left"; g.textBaseline = "middle"; g.fillText(L.keep, tgx + bsz + tg, y + 10);
+  drawIcon("bolt", tgx + bsz + tg + ttw + tg + bsz / 2, y + 9, bsz);
+  setLS("0px"); y += TAG_H + GAP5;
+
+  // CTA
+  g.save(); g.shadowColor = "rgba(255,94,31,.5)"; g.shadowBlur = 28; g.shadowOffsetY = 6;
+  roundRectPath(g, pad, y, Wu, CTA_H, 16);
+  const lg = g.createLinearGradient(0, y, 0, y + CTA_H); lg.addColorStop(0, "#ff8a3d"); lg.addColorStop(1, ORANGE);
+  g.fillStyle = lg; g.fill(); g.restore();
+  g.font = "900 20px -apple-system,system-ui,sans-serif"; setLS("1px");
+  const cw = g.measureText(L.cta).width, asz = 20, ag = 12, cgW = cw + ag + asz, cgx = cx - cgW / 2, cmy = y + CTA_H / 2;
+  g.fillStyle = "#fff"; g.textAlign = "left"; g.textBaseline = "middle"; g.fillText(L.cta, cgx, cmy + 1);
+  setLS("0px");
+  const ax = cgx + cw + ag + asz / 2;
+  g.strokeStyle = "#fff"; g.lineWidth = 2.6; g.lineJoin = "round";
+  g.beginPath(); g.moveTo(ax - 9, cmy); g.lineTo(ax + 9, cmy); g.moveTo(ax + 2, cmy - 7); g.lineTo(ax + 9, cmy); g.lineTo(ax + 2, cmy + 7); g.stroke();
+  y += CTA_H + GAP6;
+
+  // Футер
+  g.font = "600 13px -apple-system,system-ui,sans-serif"; setLS("0px");
+  const w1 = g.measureText(L.fOpen).width, w2 = g.measureText("FitStake").width, w3 = g.measureText(L.fEnd).width;
+  const pIc = 14, pg = 8, fgW = pIc + pg + w1 + w2 + w3, fx = cx - fgW / 2;
+  drawIcon("phone", fx + pIc / 2, y + 8, pIc);
+  g.textAlign = "left"; g.textBaseline = "middle";
+  g.fillStyle = "rgba(255,255,255,.6)"; g.fillText(L.fOpen, fx + pIc + pg, y + 9);
+  g.fillStyle = ORANGE; g.fillText("FitStake", fx + pIc + pg + w1, y + 9);
+  g.fillStyle = "rgba(255,255,255,.6)"; g.fillText(L.fEnd, fx + pIc + pg + w1 + w2, y + 9);
+  y += FOOT_H + GAP7;
+
+  // Микро-футер
+  ctext(L.micro, y, 11, 700, "rgba(255,255,255,.3)", "2px", MICRO_H);
+
+  const blob = await new Promise((res) => cv.toBlob(res, "image/png"));
+  const file = new File([blob], "fitstake-challenge.png", { type: "image/png" });
+  if (navigator.canShare && navigator.canShare({ files: [file] })) {
+    try { await navigator.share({ files: [file], title: "FitStake" }); return; } catch {}
+  }
+  const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = "fitstake-challenge.png"; a.click();
 }
 
 // ==========================================================================
