@@ -23,7 +23,7 @@ window.Sync = (() => {
   let accountEmail = null;     // email, если вошёл в аккаунт; null у анонима
   let isAnon = true;
 
-  const state = { users: null, participants: null };
+  const state = { users: null, participants: null, challenges: null };
   let db = null, F = null, A = null, authInstance = null, onChange = null;
   let resolveAuthReady;
   const authReady = new Promise((resolve) => { resolveAuthReady = resolve; });
@@ -59,6 +59,10 @@ window.Sync = (() => {
       });
       F.onValue(F.ref(db, "fitstake/challenge_main/participants"), (snap) => {
         state.participants = snap.val() || {};
+        if (onChange) onChange();
+      });
+      F.onValue(F.ref(db, "fitstake/challenges"), (snap) => {
+        state.challenges = snap.val() || {};
         if (onChange) onChange();
       });
       // Состояние авторизации. Нет пользователя — входим анонимно (приложение работает сразу).
@@ -209,6 +213,31 @@ window.Sync = (() => {
     });
   }
 
+  function createChallenge(id, meta, name) {
+    return new Promise((resolve) => ready(() => {
+      const base = "fitstake/challenges/" + id;
+      const updates = {};
+      updates[base + "/meta"] = Object.assign({}, meta, { ownerId: uid, createdAt: Date.now() });
+      updates[base + "/participants/" + uid] = { name: name || "Player", joinedAt: Date.now(), total: 0 };
+      F.update(F.ref(db), updates).then(() => resolve(true)).catch(() => resolve(false));
+    }));
+  }
+
+  function joinChallenge(id, name) {
+    return new Promise((resolve) => ready(() => {
+      F.update(F.ref(db, "fitstake/challenges/" + id + "/participants/" + uid),
+        { name: name || "Player", joinedAt: Date.now(), total: 0 }).then(() => resolve(true)).catch(() => resolve(false));
+    }));
+  }
+
+  function reportChallenge(id, dateKey, perExercise, total) {
+    ready(() => {
+      const upd = { total };
+      for (const [ex, reps] of Object.entries(perExercise)) upd["days/" + dateKey + "/" + ex] = reps;
+      write("fitstake/challenges/" + id + "/participants/" + uid, upd);
+    });
+  }
+
   // Отчёт о проблеме от тестера → общий узел bugReports (create-only по правилам БД).
   function reportBug(payload) {
     return new Promise((resolve) => {
@@ -221,7 +250,7 @@ window.Sync = (() => {
   }
 
   return {
-    enabled, state, init, registerUser, join, report, reportBug, signIn, signUp, signInGoogle, signOutUser,
+    enabled, state, init, registerUser, join, report, createChallenge, joinChallenge, reportChallenge, reportBug, signIn, signUp, signInGoogle, signOutUser,
     get uid() { return uid; },
     get email() { return accountEmail; },
     get isAnonymous() { return isAnon; },

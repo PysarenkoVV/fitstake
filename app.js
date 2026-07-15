@@ -4,7 +4,7 @@
 "use strict";
 
 // Версия оболочки — держать в синхроне с CACHE в sw.js; уходит в баг-репорты.
-const APP_VERSION = "v44";
+const APP_VERSION = "v45";
 // Последняя JS-ошибка — прикладываем к баг-репорту, чтобы сразу видеть причину.
 let lastError = "";
 window.addEventListener("error", (e) => {
@@ -559,10 +559,10 @@ app.history = Sync.enabled ? [] : mockHistory(app.challenges.filter(C.isJoined))
 function applySync() {
   const ch = app.challenges.find((c) => c.id === "main");
   const parts = Sync.state.participants;
-  if (!ch || !parts) return;
-  ch.currentDay = currentDayFromStart(ch.durationDays); // свежий день для расчёта пропусков/стрика
   const today = dateKey();
-  ch.participants = Object.entries(parts).map(([id, p]) => {
+  if (ch && parts) {
+    ch.currentDay = currentDayFromStart(ch.durationDays); // свежий день для расчёта пропусков/стрика
+    ch.participants = Object.entries(parts).map(([id, p]) => {
     const pdays = p.days || {};
     const day = pdays[today] || {};
     const todayReps = Object.values(day).reduce((a, b) => a + b, 0);
@@ -570,9 +570,9 @@ function applySync() {
     const eliminated = eliminatedByMisses(ch, pdays);
     return { id, name: p.name || "?", isMe: id === Sync.uid, state: eliminated ? "eliminated" : "active",
       doneToday, todayReps, _days: pdays, _total: p.total || 0, _streak: streakOf(ch, pdays) };
-  });
-  const me = ch.participants.find((p) => p.isMe);
-  if (me) {
+    });
+    const me = ch.participants.find((p) => p.isMe);
+    if (me) {
     ch.myTodayReps = Object.assign({}, me._days[today] || {});
     ch.myTotalReps = me._total;
     app.totalReps = me._total;
@@ -580,7 +580,34 @@ function applySync() {
       id: date, date: new Date(date + "T00:00:00").getTime(),
       entries: [{ id: date + "e", title: ch.title, norm: C.repsNorm(ch), reps: Object.values(per).reduce((a, b) => a + b, 0) }],
     }));
+    }
   }
+  applyPublicChallenges(today);
+}
+
+function applyPublicChallenges(today) {
+  const remote = Sync.state.challenges;
+  if (!remote) return;
+  for (const [id, rec] of Object.entries(remote)) {
+    if (!rec.meta) continue;
+    let c = app.challenges.find((x) => x.id === id);
+    const m = rec.meta;
+    if (!c) {
+      c = newChallenge({ id, title: m.title, goals: Object.values(m.goals || {}), durationDays: m.durationDays,
+        buyIn: m.buyIn, isPublic: true, missPolicy: m.missPolicy, progression: { step: m.progressionStep || 0, period: m.progressionPeriod || "day" },
+        startedAt: m.createdAt, currentDay: Math.min(Math.floor((startOfDay(Date.now()) - startOfDay(m.createdAt)) / DAY) + 1, m.durationDays),
+        yesterdayDropouts: 0, participants: [], myTodayReps: {}, myTotalReps: 0 });
+      app.challenges.push(c);
+    }
+    c.participants = Object.entries(rec.participants || {}).map(([pid, p]) => {
+      const days = p.days || {}, day = days[today] || {};
+      return { id: pid, name: p.name || "?", isMe: pid === Sync.uid, state: eliminatedByMisses(c, days) ? "eliminated" : "active",
+        doneToday: c.goals.every((g) => (day[g.exercise] || 0) >= C.norm(c, g)), todayReps: Object.values(day).reduce((a, b) => a + b, 0), _days: days, _total: p.total || 0, _streak: streakOf(c, days) };
+    });
+    const me = C.me(c);
+    if (me) { c.myTodayReps = Object.assign({}, me._days[today] || {}); c.myTotalReps = me._total; }
+  }
+  if (JOIN_ID && app.challenges.some((c) => c.id === JOIN_ID) && !ui.full && !ui.sheet) { ui.tab = "challenges"; ui.detailId = JOIN_ID; }
 }
 // ---- Персистентность: баланс, челленджи, история и замеры живут в localStorage ----
 const SAVE_KEY = "fs.state";
@@ -680,13 +707,17 @@ function joinChallenge(ch, weight, maxReps, beforePhoto) {
   ch.participants.unshift({ id: Sync.uid || uid(), name: "", isMe: true, state: "active", doneToday: false, todayReps: 0, _days: {}, _total: 0 });
   ch.startWeight = weight; ch.startMaxReps = maxReps; ch.beforePhoto = beforePhoto || null;
   if (ch.id === "main") Sync.join(store["profile.name"]);
+  else if (ch.isPublic) Sync.joinChallenge(ch.id, store["profile.name"]);
   track("challenge_joined", { challenge_id: ch.id, buy_in: ch.buyIn, exercises: ch.goals.map((g) => g.exercise).join(",") });
   return true;
 }
 
 function createChallenge(o) {
   if (!spend(o.buyIn, o.title)) return false;
-  app.challenges.unshift(newChallenge(Object.assign({ currentDay: 1, yesterdayDropouts: 0, startedAt: startOfDay(Date.now()), participants: [{ id: uid(), name: "", isMe: true, state: "active", doneToday: false, todayReps: 0 }] }, o)));
+  const id = o.id || ("ch_" + (Sync.uid || "local") + "_" + Date.now().toString(36));
+  app.challenges.unshift(newChallenge(Object.assign({ id, currentDay: 1, yesterdayDropouts: 0, startedAt: startOfDay(Date.now()), participants: [{ id: Sync.uid || uid(), name: store["profile.name"] || "", isMe: true, state: "active", doneToday: false, todayReps: 0 }] }, o)));
+  if (o.isPublic && Sync.enabled) Sync.createChallenge(id, { title: o.title, goals: o.goals, durationDays: o.durationDays, buyIn: o.buyIn,
+    missPolicy: o.missPolicy, progressionStep: o.progression.step, progressionPeriod: o.progression.period }, store["profile.name"]).then((ok) => { if (!ok) toast(t("Couldn't publish challenge")); });
   return true;
 }
 
@@ -716,6 +747,7 @@ function addReps(ch, counts) {
   me.todayReps = C.myTodayTotal(ch);
   if (C.isTodayDone(ch)) me.doneToday = true;
   if (ch.id === "main") Sync.report(dateKey(), ch.myTodayReps, ch.myTotalReps);
+  else if (ch.isPublic) Sync.reportChallenge(ch.id, dateKey(), ch.myTodayReps, ch.myTotalReps);
   const closed = !wasDone && C.isTodayDone(ch);
   track("reps_added", { challenge_id: ch.id, total, exercises: Object.keys(counts).filter((k) => counts[k] > 0).join(",") });
   if (closed) track("workout_completed", { challenge_id: ch.id, day: ch.currentDay });
@@ -1750,11 +1782,11 @@ function finishOnboarding() {
   phIdentify();
   track("onboarding_completed", { level: store["profile.level"], daily_goal: store.dailyGoal });
   ui.screen = "tabs";
-  // Пришёл по ссылке-приглашению — сразу открываем вступление в общий челлендж.
+  // Пришёл по ссылке-приглашению — сразу открываем нужный публичный челлендж.
   if (JOIN_INTENT) {
     ui.tab = "challenges";
     render();
-    if (isGuest()) openAuthGate("join", "main"); else openJoin("main");
+    if (isGuest()) openAuthGate("join", JOIN_ID); else if (app.challenges.some((c) => c.id === JOIN_ID)) openJoin(JOIN_ID);
     return;
   }
   render();
@@ -3207,26 +3239,29 @@ function navRender(dir) {
 // ==========================================================================
 // Приглашение друзей
 // ==========================================================================
-const INVITE_URL = "https://pysarenkovv.github.io/fitstake/?join=main";
 async function shareInvite() {
-  track("invite_shared", {});
-  const text = t("Join my challenge — 150 push-ups + 50 squats a day!");
+  const c = (ui.detailId && app.challenges.find((x) => x.id === ui.detailId)) || app.challenges.find(C.isJoined) || app.challenges[0];
+  if (!c) return;
+  const url = "https://pysarenkovv.github.io/fitstake/?join=" + encodeURIComponent(c.id);
+  track("invite_shared", { challenge_id: c.id });
+  const text = t("Join my challenge") + " — " + c.title;
   if (navigator.share) {
-    try { await navigator.share({ title: "FitStake", text, url: INVITE_URL }); return; } catch {}
+    try { await navigator.share({ title: "FitStake", text, url }); return; } catch {}
   }
-  try { await navigator.clipboard.writeText(INVITE_URL); toast(t("Link copied")); }
-  catch { prompt("URL", INVITE_URL); }
+  try { await navigator.clipboard.writeText(url); toast(t("Link copied")); }
+  catch { prompt("URL", url); }
 }
 
 // ==========================================================================
 // Старт
 // ==========================================================================
 // Пришли по ссылке-приглашению: запоминаем и чистим URL, чтобы обновление страницы не повторяло действие.
-const JOIN_INTENT = new URLSearchParams(location.search).has("join");
+const JOIN_ID = new URLSearchParams(location.search).get("join") || null;
+const JOIN_INTENT = !!JOIN_ID;
 if (JOIN_INTENT && history.replaceState) history.replaceState(null, "", location.pathname);
 ui.screen = store.onboarded ? "tabs" : "onboarding";
 // Уже онбордился — открываем общий челлендж (там кнопка вступления, если ещё не внутри).
-if (store.onboarded && JOIN_INTENT) { ui.tab = "challenges"; ui.detailId = "main"; }
+if (store.onboarded && JOIN_INTENT) { ui.tab = "challenges"; ui.detailId = JOIN_ID; }
 pendingStagger = !ui.detailId; // каскад карточек на первом экране (если это не сразу деталь)
 render();
 

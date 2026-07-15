@@ -54,3 +54,9 @@ test("account screen exposes email and Google entry points", async ({ page }) =>
   await expect(page.getByRole("textbox", { name: "Email" })).toBeVisible();
   await expect(page.getByRole("button", { name: "Sign up" })).toBeVisible();
 });
+
+test("invite link opens the requested challenge", async ({ page }) => {
+  await page.goto("/?join=main");
+  await expect(page.getByText("150 Push-ups + 50 Squats", { exact: true }).first()).toBeVisible();
+  await expect(page).not.toHaveURL(/\?join=/);
+});
