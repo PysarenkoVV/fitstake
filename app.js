@@ -152,6 +152,8 @@ const RU = {
   "Your starting point — at the finish you'll see how far you've come.": "Твоя точка отсчёта — на финише увидишь, как далеко ушёл.",
   "Your weight": "Твой вес", "Your whole body must be in frame": "В кадре должно быть всё тело целиком", "Yours": "Твои",
   "Language": "Язык", "Edit": "Изменить", "Increase by": "Прирост",
+  "Progress": "Прогресс", "Settings": "Настройки", "Continue workout": "Продолжить тренировку",
+  "All done for today": "На сегодня всё", "%lld left": "осталось %lld", "%lldh %lldm": "%lldч %lldм",
   "Invite friends": "Пригласить друзей", "Link copied": "Ссылка скопирована",
   "Your name": "Твоё имя", "Friends will see it in the leaderboard.": "Друзья увидят его в таблице лидеров.",
   "Join my challenge — 150 push-ups + 50 squats a day!": "Залетай в мой челлендж — 150 отжиманий и 50 приседаний в день!",
@@ -841,10 +843,6 @@ function lbl(text, extra = "") { return `<span class="label secondary ${extra}" 
 // (жучок + язык, по правому краю), крупный заголовок ниже. Кнопок-действий тут нет.
 function screenHeader(title) {
   return `<div class="screen-head">
-    <div class="head-tools">
-      <button class="badge" data-act="openBug" aria-label="${t("Report a problem")}" style="color:var(--text-secondary);display:flex;align-items:center;padding:5px 7px">${icon("bug")}</button>
-      ${langToggle()}
-    </div>
     <h1 class="screen-title">${esc(title)}</h1>
   </div>`;
 }
@@ -854,7 +852,7 @@ function langToggle() {
 }
 
 function TabBar() {
-  const tabs = [["yours", t("Yours"), "trophy"], ["challenges", t("Challenges"), "flame"], ["stats", t("Stats"), "chartBar"], ["profile", t("Profile"), "person"]];
+  const tabs = [["yours", t("Today"), "calendar"], ["challenges", t("Challenges"), "flame"], ["stats", t("Progress"), "chartBar"], ["profile", t("Profile"), "person"]];
   return `<nav class="tabbar">${tabs.map(([k, name, ic]) =>
     `<button data-act="tab:${k}" class="${ui.tab === k && !ui.detailId ? "active" : ""}">${icon(ic)}<span>${esc(name)}</span></button>`).join("")}</nav>`;
 }
@@ -878,7 +876,7 @@ function ChallengeCard(c, withPlay) {
     ${todayRows}
     <div class="between" style="align-items:baseline">
       <div><div>${lbl(t("Challenge total"), "tracking-1")}</div><div class="money" style="font-size:20px">${c.myTotalReps}</div></div>
-      <div style="text-align:right"><div>${lbl(t("Prize pool"), "tracking-1")}</div><div class="c-money" style="font-size:16px">${coin(C.pot(c))}</div></div>
+      <div style="text-align:right"><div>${lbl(t("You'd win"), "tracking-1")}</div><div class="c-money" style="font-size:20px">${coin(C.payout(c))}</div></div>
     </div>`;
   const openFooter = `
     <div class="between" style="align-items:baseline">
@@ -896,17 +894,9 @@ function ChallengeCard(c, withPlay) {
       <div style="font-size:20px;font-weight:700">${esc(c.title)}</div>
       <div class="row gap6">${joined ? streakPill(myStreak(c)) : ""}${challengeEnded(c) ? badge(t("Completed"), "var(--money)") : badge(c.isPublic ? t("Public") : t("Private"), c.isPublic ? "var(--text-secondary)" : "var(--purple)")}</div>
     </div>
-    <div class="between">
-      ${!joined ? lbl(C.goalsText(c)) : "<span></span>"}
-      ${lbl(t("Day %lld of %lld", c.currentDay, c.durationDays))}
-    </div>
-    ${bar(c.currentDay / c.durationDays)}
+    ${!joined ? `<div class="between">${lbl(C.goalsText(c))}${lbl(t("Day %lld of %lld", c.currentDay, c.durationDays))}</div>` : ""}
     ${joined ? joinedFooter : openFooter}
-    <hr class="hr">
-    <div class="between label" style="font-size:11px">
-      <span class="secondary">${t("Members: %lld", c.participants.length)}${C.eliminated(c) > 0 ? ` &nbsp;<span style="color:var(--red)">${t("Eliminated: %lld", C.eliminated(c))}</span>` : ""}</span>
-      ${playBtn}
-    </div>
+    ${playBtn ? `<div style="display:flex;justify-content:flex-end">${playBtn}</div>` : ""}
   </div>`;
 }
 
@@ -915,11 +905,39 @@ function ChallengeCard(c, withPlay) {
 // ==========================================================================
 function YoursTab() {
   const mine = app.challenges.filter(C.isJoined);
+  const active = mine.filter((c) => !challengeEnded(c));
   const doneToday = mine.filter(C.isTodayDone).length;
-  const nextUp = mine.find((c) => !C.isTodayDone(c) && !challengeEnded(c));
+  const nextUp = active.find((c) => !C.isTodayDone(c));
+
+  // Блок «Сегодня» — главный вопрос пользователя: что сделать сейчас. Агрегат по активным.
+  const todayReps = active.reduce((s, c) => s + C.myTodayTotal(c), 0);
+  const todayNorm = active.reduce((s, c) => s + C.repsNorm(c), 0);
+  const remaining = Math.max(0, todayNorm - todayReps);
+  const streak = mine.length ? Math.max(0, ...mine.map((c) => myStreak(c))) : 0;
+  const msLeft = startOfDay(Date.now()) + DAY - Date.now();
+  const hh = Math.floor(msLeft / 3600000), mm = Math.floor((msLeft % 3600000) / 60000);
+  const allDone = active.length > 0 && !nextUp;
+
+  const meta = [`<span>${t("%lld left", remaining)}</span>`];
+  if (streak >= 2) meta.push(`<span>🔥 ${t("%lld-day streak", streak)}</span>`);
+  if (!allDone) meta.push(`<span>⏳ ${t("%lldh %lldm", hh, mm)}</span>`);
+
+  const todayHero = active.length ? `<div class="card" style="padding:22px 20px;display:flex;flex-direction:column;gap:10px">
+    ${lbl(t("Today"), "tracking-15")}
+    <div class="row" style="align-items:baseline;gap:10px">
+      <span class="money ${todayReps >= todayNorm ? "c-money" : "c-white"}" style="font-size:52px;line-height:1">${todayReps}</span>
+      <span class="secondary" style="font-size:24px;font-weight:800">/ ${todayNorm}</span>
+    </div>
+    ${bar(todayNorm ? todayReps / todayNorm : 0, todayReps >= todayNorm)}
+    <div class="row label secondary" style="gap:14px;font-size:12px;flex-wrap:wrap;margin-top:2px">${meta.join("")}</div>
+    ${allDone
+      ? `<div class="action-btn" style="background:var(--white-08);color:var(--money);pointer-events:none;margin-top:4px">${iconF("checkCircle")}${t("All done for today")}</div>`
+      : `<button class="action-btn" data-act="play:${nextUp.id}" style="margin-top:4px">${iconF("play")}${t("Continue workout")}</button>`}
+  </div>` : "";
+
   const statsCard = `<div class="card" style="padding:24px 16px;display:flex;flex-direction:column;align-items:center;gap:6px;text-align:center">
     ${lbl(t("All-time reps"), "tracking-15")}
-    <div class="money" style="font-size:56px">${app.totalPushups}</div>
+    <div class="money" style="font-size:44px">${app.totalPushups}</div>
     ${mine.length ? `<div class="row label" style="justify-content:center;gap:18px;font-size:11px">
       <span class="secondary">${t("Active challenges: %lld", mine.length)}</span>
       <span style="color:${doneToday === mine.length ? "var(--money)" : "#fff"}">${t("Done today: %lld/%lld", doneToday, mine.length)}</span></div>` : ""}
@@ -929,10 +947,10 @@ function YoursTab() {
     <div class="secondary" style="font-weight:500">${t("You're not in any challenge yet. Join one and put some coins on the line.")}</div>
     <button class="action-btn" data-act="findChallenge">${icon("search")}${t("Find a challenge")}</button>
   </div>`;
-  return screenHeader(t("Your Challenges")) + `<div class="stack">
-    ${statsCard}
-    ${nextUp ? `<button class="action-btn" data-act="play:${nextUp.id}">${iconF("play")}${t("Start today's workout")}</button>` : ""}
+  return screenHeader(t("Today")) + `<div class="stack">
+    ${todayHero}
     ${mine.length ? mine.map((c) => ChallengeCard(c, true)).join("") : empty}
+    ${mine.length ? statsCard : ""}
     <button class="action-btn" data-act="invite" style="background:var(--white-08);color:#fff">${icon("share")}${t("Invite friends")}</button>
     ${friendsCard()}
   </div>`;
@@ -1367,7 +1385,13 @@ function ProfileTab() {
       <span class="money" style="font-size:15px;color:${tx.amount > 0 ? "var(--money)" : "var(--red)"}">${tx.amount > 0 ? "+" + tx.amount : tx.amount}</span></div>`).join("")}
   </div>`;
 
-  return screenHeader(t("Profile")) + `<div class="stack">${summary}${bodyCard}${measurements}${photosCard}${accountCard()}${wallet}</div>`;
+  const settingsCard = `<div class="card" style="padding:16px;display:flex;flex-direction:column;gap:12px">
+    ${lbl(t("Settings"), "tracking-1")}
+    <div class="settings-row"><span>${t("Language")}</span>${langToggle()}</div>
+    <button class="action-btn" data-act="openBug" style="background:var(--white-08);color:#fff">${icon("bug")}${t("Report a problem")}</button>
+  </div>`;
+
+  return screenHeader(t("Profile")) + `<div class="stack">${summary}${bodyCard}${measurements}${photosCard}${accountCard()}${wallet}${settingsCard}</div>`;
 }
 function photoSlot(dataURL, caption) {
   return `<div style="display:flex;flex-direction:column;gap:5px"><div class="photo-slot" style="height:150px">${dataURL ? `<img src="${dataURL}" alt="${esc(caption || "")}">` : icon("camera")}</div>${lbl(caption)}</div>`;
