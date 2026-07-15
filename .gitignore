@@ -1,1 +1,13 @@
 .DS_Store
+
+# AI Team
+.env
+.env.local
+node_modules/
+.ai-team/reports/*
+.ai-team/current-spec.md
+
+# Build и временные файлы
+dist/
+build/
+*.log

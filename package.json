@@ -1,0 +1,20 @@
+{
+  "name": "fitstake-web",
+  "version": "1.0.0",
+  "description": "FitStake — веб-версия приложения для подсчёта повторов с камеры",
+  "type": "module",
+  "scripts": {
+    "ai-team": "node ai-team.js"
+  },
+  "keywords": [
+    "fitness",
+    "tracking",
+    "ai",
+    "openai"
+  ],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "openai": "^4.52.0"
+  }
+}

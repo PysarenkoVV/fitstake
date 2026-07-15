@@ -244,14 +244,11 @@ async function getLandmarker() {
 class PoseSession {
   constructor(exercises, opts = {}) {
     this.exercises = exercises;
-    this.voice = !!opts.voice;
-    this.lang = opts.lang || "en-US";
     this.counters = exercises.map((e) => new RepCounter(e));
     this.active = 0; // комбо последовательное: считается только текущее упражнение — нет конфликтов
     this.snapshot = { results: exercises.map((e) => ({ exercise: e, repCount: 0, status: "noBody", bendAngle: null })), points: {}, imageSize: { width: 0, height: 0 } };
     this._running = false;
     this._stream = null;
-    this._lastCounts = exercises.map(() => 0);
     this._recording = false;
     this._recorder = null;
     this._recCanvas = null;
@@ -310,8 +307,6 @@ class PoseSession {
         // Неактивные упражнения комбо на паузе: счёт заморожен, кадр не обрабатываем.
         if (i !== this.active) return { exercise: c.exercise, repCount: c.count, status: "paused", bendAngle: null };
         const r = c.process(points, size);
-        if (this.voice && c.count > this._lastCounts[i]) this.say(String(c.count));
-        this._lastCounts[i] = c.count;
         return { exercise: c.exercise, repCount: c.count, status: r.status, bendAngle: r.bendAngle };
       });
       // Всё нужное для активного упражнения в кадре — скелет зеленеет.
