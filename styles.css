@@ -124,21 +124,24 @@ img { max-width: 100%; }
   font-weight: 900;
   font-stretch: 75%;
   font-size: 18px;
-  transition: transform 0.52s var(--ease-spring), opacity 0.25s ease;
+  transition: transform 0.6s var(--ease-spring), opacity 0.28s ease;
 }
 .action-btn:active { opacity: 0.75; transform: scale(0.96); }
 .action-btn.money { background: var(--money); }
 
 /* Единый iOS-отклик на тап: лёгкое сжатие + возврат с пружиной.
    Круглые/мелкие контролы жмём чуть сильнее. */
+/* Фолбэк для всех кнопок без своего правила (текстовые, карточки-опции, назад и т.д.). */
+button { transition: transform 0.55s var(--ease-spring); }
+button:active:not(:disabled) { transform: scale(0.96); }
 .card, .entry-row, .picker-row, .bug-chip, .segmented button,
 .stepper button, .sess-nav button, .day-chip, .streak-pill {
-  transition: transform 0.52s var(--ease-spring);
+  transition: transform 0.6s var(--ease-spring);
 }
 .entry-row:active, .picker-row:active, .bug-chip:active,
 .segmented button:active, .day-chip:active { transform: scale(0.97); }
 .cam-btn, .stepper button, .sess-nav button, .tabbar button svg, .navbar .icon-btn {
-  transition: transform 0.42s var(--ease-spring);
+  transition: transform 0.5s var(--ease-spring);
 }
 .cam-btn:active, .stepper button:active, .sess-nav button:active,
 .navbar .icon-btn:active { transform: scale(0.9); }
@@ -304,7 +307,7 @@ img { max-width: 100%; }
   transition: transform 0.2s;
 }
 .toggle.on::after { transform: translateX(20px); }
-.toggle::after { transition: transform 0.48s var(--ease-spring); }
+.toggle::after { transition: transform 0.54s var(--ease-spring); }
 
 .form-section { display: flex; flex-direction: column; gap: 12px; }
 .form-label { font-family: var(--mono); font-weight: 700; font-size: 11px; text-transform: uppercase; letter-spacing: 1px; color: var(--text-secondary); }
@@ -411,7 +414,7 @@ img { max-width: 100%; }
   background: rgba(0, 0, 0, 0.5);
   z-index: 90;
   display: flex; align-items: flex-end;
-  animation: backdrop-in 0.5s ease both;
+  animation: backdrop-in 0.58s ease both;
 }
 @keyframes backdrop-in { from { background: rgba(0, 0, 0, 0); } to { background: rgba(0, 0, 0, 0.5); } }
 .sheet {
@@ -420,7 +423,7 @@ img { max-width: 100%; }
   background: var(--bg);
   border-radius: 20px 20px 0 0;
   overflow-y: auto;
-  animation: slideup 0.6s var(--ease-ios);
+  animation: slideup 0.7s var(--ease-ios);
   padding-bottom: env(safe-area-inset-bottom);
 }
 @keyframes slideup { from { transform: translateY(100%); } to { transform: translateY(0); } }
@@ -444,7 +447,7 @@ img { max-width: 100%; }
   background: var(--white-08); border: 1px solid transparent;
   color: #fff; font-size: 14px; font-weight: 600; line-height: 1;
 }
-.bug-chip.sel { background: rgba(255, 94, 31, 0.16); border-color: var(--accent); color: var(--accent); animation: chip-pop 0.48s var(--ease-spring); }
+.bug-chip.sel { background: rgba(255, 94, 31, 0.16); border-color: var(--accent); color: var(--accent); animation: chip-pop 0.54s var(--ease-spring); }
 .bug-chip:active { transform: scale(0.92); }
 @keyframes chip-pop { 0% { transform: scale(0.86); } 55% { transform: scale(1.08); } 100% { transform: scale(1); } }
 .bug-note {
@@ -460,7 +463,7 @@ img { max-width: 100%; }
 /* полноэкранное поздравление */
 .fullscreen { position: fixed; inset: 0; background: var(--bg); z-index: 95; overflow-y: auto; }
 .celebrate { min-height: 100dvh; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; padding: 24px 20px calc(24px + env(safe-area-inset-bottom)); gap: 18px; }
-.pop-in { animation: popin 0.85s var(--ease-spring); }
+.pop-in { animation: popin 0.98s var(--ease-spring); }
 @keyframes popin { from { transform: scale(0.72); opacity: 0; } to { transform: scale(1); opacity: 1; } }
 
 /* конфетти */

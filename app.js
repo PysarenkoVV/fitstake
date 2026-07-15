@@ -668,22 +668,42 @@ function haptic(pattern) { if (!REDUCE_MOTION() && navigator.vibrate) { try { na
 // Короткие синтезированные звуки (без файлов): "tap" — нажатие кнопки, "tick" — прокрутка колеса.
 // AudioContext создаётся/возобновляется внутри пользовательского жеста (тап/скролл) — iOS это требует.
 let _audioCtx = null;
+// Палитра звуков: у каждого действия свой тембр. f2 (если есть) — глиссандо частоты.
+const SFX = {
+  tap:       { wave: "triangle", f1: 620,  dur: 0.05,  peak: 0.08 }, // обычная кнопка
+  soft:      { wave: "sine",     f1: 380,  dur: 0.055, peak: 0.06 }, // назад/закрыть
+  toggle:    { wave: "square",   f1: 480,  f2: 640,  dur: 0.04,  peak: 0.045 }, // тумблер/сегмент
+  tick:      { wave: "sine",     f1: 1150, dur: 0.022, peak: 0.045 }, // прокрутка колеса
+  input:     { wave: "sine",     f1: 300,  dur: 0.045, peak: 0.05 }, // фокус на поле ввода
+  challenge: { wave: "triangle", f1: 660,  f2: 990,  dur: 0.11,  peak: 0.09 }, // челленджи
+  coin:      { wave: "triangle", f1: 880,  f2: 1400, dur: 0.13,  peak: 0.09 }, // монеты/покупка
+  start:     { wave: "sawtooth", f1: 440,  f2: 880,  dur: 0.14,  peak: 0.08 }, // старт тренировки
+};
 function sfx(type) {
+  const p = SFX[type] || SFX.tap;
   try {
     if (!_audioCtx) _audioCtx = new (window.AudioContext || window.webkitAudioContext)();
     if (_audioCtx.state === "suspended") _audioCtx.resume();
     const ctx = _audioCtx, now = ctx.currentTime;
     const o = ctx.createOscillator(), g = ctx.createGain();
-    const tick = type === "tick";
-    o.type = tick ? "sine" : "triangle";
-    o.frequency.value = tick ? 1150 : 620;
-    const peak = tick ? 0.05 : 0.08, dur = tick ? 0.025 : 0.05;
+    o.type = p.wave;
+    o.frequency.setValueAtTime(p.f1, now);
+    if (p.f2) o.frequency.exponentialRampToValueAtTime(p.f2, now + p.dur);
     g.gain.setValueAtTime(0.0001, now);
-    g.gain.exponentialRampToValueAtTime(peak, now + 0.005);
-    g.gain.exponentialRampToValueAtTime(0.0001, now + dur);
+    g.gain.exponentialRampToValueAtTime(p.peak, now + 0.005);
+    g.gain.exponentialRampToValueAtTime(0.0001, now + p.dur);
     o.connect(g); g.connect(ctx.destination);
-    o.start(now); o.stop(now + dur + 0.02);
+    o.start(now); o.stop(now + p.dur + 0.02);
   } catch (e) {}
+}
+// Какой звук проиграть на команду.
+function sfxFor(cmd, arg) {
+  if (cmd === "toggle" || cmd === "seg") return "toggle";
+  if (cmd === "buyCoins" || cmd === "openBuyCoins") return "coin";
+  if (cmd === "play") return "start";
+  if (["open", "join", "create", "findChallenge", "showResult", "startPick", "participant"].includes(cmd) || (cmd === "tab" && arg === "challenges")) return "challenge";
+  if (["back", "closeSheet", "closeFull", "closeSheetBg", "onbBack"].includes(cmd)) return "soft";
+  return "tap";
 }
 // Плавный «счёт вверх» чисел между перерисовками: помним последнее показанное значение по ключу.
 const countMemo = {};
@@ -1755,7 +1775,7 @@ async function openSession(challengeId, startExercise) {
           haptic(12);
           if (numEl.animate && !REDUCE_MOTION()) {
             numEl.animate([{ transform: "scale(1)" }, { transform: "scale(1.18)" }, { transform: "scale(1)" }],
-              { duration: 440, easing: "cubic-bezier(0.34,1.28,0.7,1)" });
+              { duration: 500, easing: "cubic-bezier(0.34,1.28,0.7,1)" });
           }
         }
         prevTotal = total;
@@ -2187,11 +2207,11 @@ root.addEventListener("click", async (e) => {
   const el = e.target.closest("[data-act]");
   if (!el) return;
   const act = el.dataset.act;
-  sfx("tap"); // звук нажатия на любую кнопку
+  const [cmd, arg] = act.split(":");
+  sfx(sfxFor(cmd, arg)); // звук нажатия — свой для разных действий
   if (el.classList.contains("action-btn")) haptic(8); // лёгкий тактильный отклик на первичных кнопках
 
   if (act === "closeSheetBg") { if (e.target.classList.contains("sheet-backdrop")) closeSheet(); return; }
-  const [cmd, arg] = act.split(":");
 
   switch (cmd) {
     case "tab": go(arg); return;
@@ -2380,6 +2400,11 @@ root.addEventListener("click", async (e) => {
   if (cmd === "skipAuth") { store.skippedAuth = true; ui.onbStep++; render(); return; }
 });
 
+// Звук при фокусе на поле ввода.
+root.addEventListener("focusin", (e) => {
+  if (e.target.matches && e.target.matches("input, textarea")) sfx("input");
+});
+
 root.addEventListener("input", (e) => {
   const el = e.target;
   if (el.id === "profile-name") { profileNameDraft = el.value; return; }
@@ -2424,7 +2449,7 @@ function afterRender() {
     const from = prev != null ? prev : (el.dataset.countFrom != null ? +el.dataset.countFrom : target);
     countMemo[key] = target;
     if (from === target || REDUCE_MOTION()) { el.textContent = sym + fmt(target); return; }
-    const t0 = performance.now(), DUR = 1000;
+    const t0 = performance.now(), DUR = 1150;
     const tick = (now) => {
       const p = Math.min(1, (now - t0) / DUR);
       const v = Math.round(from + (target - from) * (1 - Math.pow(1 - p, 3))); // easeOutCubic
@@ -2444,7 +2469,7 @@ function afterRender() {
         if (i === 0) return; // трофей/печать — своя pop-in анимация, не дублируем
         if (el.animate) el.animate(
           [{ opacity: 0, transform: "translateY(16px) scale(0.98)" }, { opacity: 1, transform: "none" }],
-          { duration: 720, delay: Math.min(i * 130, 780), easing: "cubic-bezier(0.34,1.28,0.7,1)", fill: "backwards" });
+          { duration: 820, delay: Math.min(i * 145, 850), easing: "cubic-bezier(0.34,1.28,0.7,1)", fill: "backwards" });
       });
     }
   }
@@ -2462,7 +2487,7 @@ function afterRender() {
       items.forEach((el, i) => {
         if (el.animate) el.animate(
           [{ opacity: 0, transform: "translateY(14px)" }, { opacity: 1, transform: "none" }],
-          { duration: 560, delay: Math.min(i * 70, 490), easing: "cubic-bezier(0.32,0.72,0,1)", fill: "backwards" });
+          { duration: 640, delay: Math.min(i * 80, 560), easing: "cubic-bezier(0.32,0.72,0,1)", fill: "backwards" });
       });
     }
   }
@@ -2518,7 +2543,7 @@ function navRender(dir) {
   root._navBusy = true;
   root.classList.add("nav-layer");
 
-  const push = dir === "push", DUR = 560;
+  const push = dir === "push", DUR = 640;
   root.style.zIndex = push ? "71" : "70";
   snap.style.zIndex = push ? "70" : "71";
   root.style.transform = push ? "translateX(100%)" : "translateX(-30%)";
