@@ -715,13 +715,14 @@ function sfxMilestone() {
     });
   } catch (e) {}
 }
-// Какой звук проиграть на команду.
+// Какой звук проиграть на команду. Вся навигация — один глухой «пуп» (soft).
+const NAV_CMDS = ["tab", "open", "back", "closeSheet", "closeFull", "closeSheetBg", "onbBack", "onbNext",
+  "participant", "findChallenge", "startPick", "showResult", "join", "create", "addMeasure", "openBug", "askLeave"];
 function sfxFor(cmd, arg) {
   if (cmd === "toggle" || cmd === "seg") return "toggle";
   if (cmd === "buyCoins" || cmd === "openBuyCoins") return "coin";
   if (cmd === "play") return "start";
-  if (["open", "join", "create", "findChallenge", "showResult", "startPick", "participant"].includes(cmd) || (cmd === "tab" && arg === "challenges")) return "challenge";
-  if (["back", "closeSheet", "closeFull", "closeSheetBg", "onbBack"].includes(cmd)) return "soft";
+  if (NAV_CMDS.includes(cmd)) return "soft";
   return "tap";
 }
 // Плавный «счёт вверх» чисел между перерисовками: помним последнее показанное значение по ключу.
