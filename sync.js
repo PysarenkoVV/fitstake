@@ -23,7 +23,7 @@ window.Sync = (() => {
   let accountEmail = null;     // email, если вошёл в аккаунт; null у анонима
   let isAnon = true;
 
-  const state = { users: null, participants: null, challenges: null };
+  const state = { users: null, participants: null, challenges: null, ready: false, error: null };
   let db = null, F = null, A = null, authInstance = null, onChange = null;
   let resolveAuthReady;
   const authReady = new Promise((resolve) => { resolveAuthReady = resolve; });
@@ -63,8 +63,10 @@ window.Sync = (() => {
       });
       F.onValue(F.ref(db, "fitstake/challenges"), (snap) => {
         state.challenges = snap.val() || {};
+        state.ready = true;
+        state.error = null;
         if (onChange) onChange();
-      });
+      }, () => { state.ready = true; state.error = "sync"; if (onChange) onChange(); });
       // Состояние авторизации. Нет пользователя — входим анонимно (приложение работает сразу).
       authMod.onAuthStateChanged(authInstance, (user) => {
         if (user) {
@@ -230,6 +232,12 @@ window.Sync = (() => {
     }));
   }
 
+  function leaveChallenge(id) {
+    return new Promise((resolve) => ready(() => {
+      F.remove(F.ref(db, "fitstake/challenges/" + id + "/participants/" + uid)).then(() => resolve(true)).catch(() => resolve(false));
+    }));
+  }
+
   function reportChallenge(id, dateKey, perExercise, total) {
     ready(() => {
       const upd = { total };
@@ -250,7 +258,7 @@ window.Sync = (() => {
   }
 
   return {
-    enabled, state, init, registerUser, join, report, createChallenge, joinChallenge, reportChallenge, reportBug, signIn, signUp, signInGoogle, signOutUser,
+    enabled, state, init, registerUser, join, report, createChallenge, joinChallenge, leaveChallenge, reportChallenge, reportBug, signIn, signUp, signInGoogle, signOutUser,
     get uid() { return uid; },
     get email() { return accountEmail; },
     get isAnonymous() { return isAnon; },

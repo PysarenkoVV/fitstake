@@ -4,7 +4,7 @@
 "use strict";
 
 // Версия оболочки — держать в синхроне с CACHE в sw.js; уходит в баг-репорты.
-const APP_VERSION = "v45";
+const APP_VERSION = "v46";
 // Последняя JS-ошибка — прикладываем к баг-репорту, чтобы сразу видеть причину.
 let lastError = "";
 window.addEventListener("error", (e) => {
@@ -594,7 +594,7 @@ function applyPublicChallenges(today) {
     const m = rec.meta;
     if (!c) {
       c = newChallenge({ id, title: m.title, goals: Object.values(m.goals || {}), durationDays: m.durationDays,
-        buyIn: m.buyIn, isPublic: true, missPolicy: m.missPolicy, progression: { step: m.progressionStep || 0, period: m.progressionPeriod || "day" },
+        buyIn: m.buyIn, isPublic: true, ownerId: m.ownerId, missPolicy: m.missPolicy, progression: { step: m.progressionStep || 0, period: m.progressionPeriod || "day" },
         startedAt: m.createdAt, currentDay: Math.min(Math.floor((startOfDay(Date.now()) - startOfDay(m.createdAt)) / DAY) + 1, m.durationDays),
         yesterdayDropouts: 0, participants: [], myTodayReps: {}, myTotalReps: 0 });
       app.challenges.push(c);
@@ -703,7 +703,10 @@ function logEntry(title, norm, reps) {
 }
 
 function joinChallenge(ch, weight, maxReps, beforePhoto) {
-  if (C.isJoined(ch) || !spend(ch.buyIn, ch.title)) return false;
+  if (C.isJoined(ch)) return false;
+  const paidKey = "fs.paid." + ch.id;
+  if (!localStorage.getItem(paidKey) && !spend(ch.buyIn, ch.title)) return false;
+  localStorage.setItem(paidKey, "1");
   ch.participants.unshift({ id: Sync.uid || uid(), name: "", isMe: true, state: "active", doneToday: false, todayReps: 0, _days: {}, _total: 0 });
   ch.startWeight = weight; ch.startMaxReps = maxReps; ch.beforePhoto = beforePhoto || null;
   if (ch.id === "main") Sync.join(store["profile.name"]);
@@ -715,7 +718,9 @@ function joinChallenge(ch, weight, maxReps, beforePhoto) {
 function createChallenge(o) {
   if (!spend(o.buyIn, o.title)) return false;
   const id = o.id || ("ch_" + (Sync.uid || "local") + "_" + Date.now().toString(36));
-  app.challenges.unshift(newChallenge(Object.assign({ id, currentDay: 1, yesterdayDropouts: 0, startedAt: startOfDay(Date.now()), participants: [{ id: Sync.uid || uid(), name: store["profile.name"] || "", isMe: true, state: "active", doneToday: false, todayReps: 0 }] }, o)));
+  app.challenges.unshift(newChallenge(Object.assign({ id, ownerId: o.isPublic ? Sync.uid : null, currentDay: 1, yesterdayDropouts: 0, startedAt: startOfDay(Date.now()), participants: [{ id: Sync.uid || uid(), name: store["profile.name"] || "", isMe: true, state: "active", doneToday: false, todayReps: 0 }] }, o)));
+  localStorage.setItem("fs.paid." + id, "1");
+  ui.createdChallengeId = id;
   if (o.isPublic && Sync.enabled) Sync.createChallenge(id, { title: o.title, goals: o.goals, durationDays: o.durationDays, buyIn: o.buyIn,
     missPolicy: o.missPolicy, progressionStep: o.progression.step, progressionPeriod: o.progression.period }, store["profile.name"]).then((ok) => { if (!ok) toast(t("Couldn't publish challenge")); });
   return true;
@@ -724,8 +729,11 @@ function createChallenge(o) {
 // Выход из челленджа: взнос НЕ возвращается, прогресс/результаты пропадают. Челлендж
 // убираем из списка; общий "main" помечаем leftMain, чтобы он не вернулся при перезапуске.
 function leaveChallenge(id) {
+  const leaving = app.challenges.find((c) => c.id === id);
   app.challenges = app.challenges.filter((c) => c.id !== id);
   if (id === "main") app.leftMain = true;
+  else if (leaving && leaving.isPublic) Sync.leaveChallenge(id).then((ok) => { if (!ok) toast(t("Couldn't leave challenge")); });
+  localStorage.removeItem("fs.paid." + id);
   saveApp();
   track("challenge_left", { challenge_id: id });
 }
@@ -1030,7 +1038,7 @@ function ChallengeCard(c, withPlay) {
   return `<div class="card challenge-card ${doneBorder}"><button class="challenge-card-main" data-act="open:${c.id}">
     <div class="between" style="align-items:flex-start">
       <div style="font-size:20px;font-weight:700">${esc(c.title)}</div>
-      <div class="row gap6">${joined ? streakPill(myStreak(c)) : ""}${challengeEnded(c) ? badge(t("Completed"), "var(--money)") : badge(c.isPublic ? t("Public") : t("Private"), c.isPublic ? "var(--text-secondary)" : "var(--purple)")}</div>
+      <div class="row gap6">${c.ownerId === Sync.uid ? badge(t("Creator"), "var(--accent)") : joined && c.isPublic ? badge(t("Joined"), "var(--money)") : ""}${joined ? streakPill(myStreak(c)) : ""}${challengeEnded(c) ? badge(t("Completed"), "var(--money)") : badge(c.isPublic ? t("Public") : t("Private"), c.isPublic ? "var(--text-secondary)" : "var(--purple)")}</div>
     </div>
     ${!joined ? `<div class="between">${lbl(C.goalsText(c))}${lbl(t("Day %lld of %lld", c.currentDay, c.durationDays))}</div>` : ""}
     ${joined ? joinedFooter : openFooter}
@@ -1140,7 +1148,10 @@ function FriendsSheet() {
 // Вкладка «Челленджи»
 // ==========================================================================
 function ChallengesTab() {
+  const syncState = Sync.enabled && !Sync.state.ready ? `<div class="card card-soft center" style="padding:14px"><span class="secondary">${t("Loading public challenges…")}</span></div>`
+    : Sync.state.error ? `<div class="card center" style="padding:14px;border-color:var(--red)"><span>${t("Couldn't load public challenges. Check connection.")}</span></div>` : "";
   return screenHeader(t("Challenges")) + `<div class="stack">
+    ${syncState}
     ${app.challenges.map((c) => ChallengeCard(c, false)).join("")}
     <button class="action-btn" data-act="create">${icon("plus")}${t("Create Challenge")}</button>
   </div>`;
@@ -1904,6 +1915,19 @@ function saveChallengeForm() {
   const ok = createChallenge({ title: f.title.trim() || defaultTitle(f), goals, durationDays: Math.min(Math.max(f.duration, 1), 365), buyIn: Math.max(f.buyIn, 0), isPublic: f.isPublic, missPolicy: f.miss, progression: f.progOn ? { step: f.progStep, period: f.progPeriod } : { step: 0, period: "day" } });
   if (!ok) { toast(t("Not enough coins")); return false; }
   return true;
+}
+function ChallengeCreatedFull() {
+  const c = app.challenges.find((x) => x.id === ui.createdChallengeId);
+  if (!c) return "";
+  return `<div class="fullscreen"><div class="celebrate">
+    <div class="prep-hero">${iconF("checkCircle")}</div>
+    <div class="display" style="font-size:34px">${t("Challenge created")}</div>
+    <div class="secondary" style="text-align:center">${esc(c.title)}<br>${t("Invite people now or share it later from the challenge page.")}</div>
+    <div class="spacer"></div>
+    <button class="action-btn" data-act="shareCreated">${icon("share")}${t("Share invite")}</button>
+    <button class="action-btn" data-act="copyCreated" style="background:var(--white-08);color:#fff">${t("Copy link")}</button>
+    <button class="text-btn" data-act="openCreated">${t("Open challenge")}</button>
+  </div></div>`;
 }
 // Карточка условий картинкой — тот же генератор, что и для результатов (Web Share API → инста и т.п.).
 function shareChallengeCard(f) {
@@ -2917,9 +2941,17 @@ root.addEventListener("click", async (e) => {
   }
   if (cmd === "saveChallenge") {
     if (ui.form.isPublic && isGuest()) { openAuthGate("publicCreate"); return; }
-    if (saveChallengeForm()) { ui.full = null; ui.form = null; go("yours"); }
+    const wasPublic = ui.form.isPublic;
+    if (saveChallengeForm()) { ui.form = null; if (wasPublic) { ui.full = ChallengeCreatedFull; render(); } else { ui.full = null; go("yours"); } }
     return;
   }
+  if (cmd === "shareCreated") { shareInvite(); return; }
+  if (cmd === "copyCreated") {
+    const url = "https://pysarenkovv.github.io/fitstake/?join=" + encodeURIComponent(ui.createdChallengeId);
+    try { await navigator.clipboard.writeText(url); toast(t("Link copied")); } catch { prompt("URL", url); }
+    return;
+  }
+  if (cmd === "openCreated") { const id = ui.createdChallengeId; ui.full = null; ui.tab = "challenges"; ui.detailId = id; render(); return; }
   if (cmd === "savePreset") {
     if (saveChallengeForm()) { ui.full = null; ui.form = null; go("yours"); }
     return;
@@ -3240,7 +3272,7 @@ function navRender(dir) {
 // Приглашение друзей
 // ==========================================================================
 async function shareInvite() {
-  const c = (ui.detailId && app.challenges.find((x) => x.id === ui.detailId)) || app.challenges.find(C.isJoined) || app.challenges[0];
+  const c = (ui.createdChallengeId && app.challenges.find((x) => x.id === ui.createdChallengeId)) || (ui.detailId && app.challenges.find((x) => x.id === ui.detailId)) || app.challenges.find(C.isJoined) || app.challenges[0];
   if (!c) return;
   const url = "https://pysarenkovv.github.io/fitstake/?join=" + encodeURIComponent(c.id);
   track("invite_shared", { challenge_id: c.id });
