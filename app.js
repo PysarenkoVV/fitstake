@@ -26,7 +26,7 @@ const PATHS = {
   plus: '<path d="M12 5v14M5 12h14"/>',
   xmark: '<path d="M6 6l12 12M18 6L6 18"/>',
   check: '<path d="M4 12l5 5L20 6"/>',
-  checkCircle: '<circle cx="12" cy="12" r="10"/><path d="M8 12l3 3 5-5" stroke="#0a0a0a"/>',
+  checkCircle: '<circle cx="12" cy="12" r="10"/><path d="M8 12l3 3 5-5"/>',
   seal: '<path d="M12 2l2.4 1.8 3-.2 1 2.8 2.6 1.5-.9 2.9.9 2.9-2.6 1.5-1 2.8-3-.2L12 22l-2.4-1.8-3 .2-1-2.8L3 16.3l.9-2.9L3 10.5l2.6-1.5 1-2.8 3 .2z"/><path d="M8.5 12l2.5 2.5 4.5-4.5" stroke="#0a0a0a"/>',
   search: '<circle cx="11" cy="11" r="7"/><path d="M20 20l-4-4"/>',
   camera: '<path d="M3 8a2 2 0 012-2h2l1.5-2h7L17 6h2a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V8z"/><circle cx="12" cy="12.5" r="3.5"/>',
@@ -665,6 +665,26 @@ const REDUCE_MOTION = () => window.matchMedia && window.matchMedia("(prefers-red
 // Тактильный отклик. Работает на Android/поддерживающих браузерах; на iOS Safari вибро
 // недоступно — тихо игнорируется. При «уменьшить движение» не срабатывает.
 function haptic(pattern) { if (!REDUCE_MOTION() && navigator.vibrate) { try { navigator.vibrate(pattern); } catch (e) {} } }
+// Короткие синтезированные звуки (без файлов): "tap" — нажатие кнопки, "tick" — прокрутка колеса.
+// AudioContext создаётся/возобновляется внутри пользовательского жеста (тап/скролл) — iOS это требует.
+let _audioCtx = null;
+function sfx(type) {
+  try {
+    if (!_audioCtx) _audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    if (_audioCtx.state === "suspended") _audioCtx.resume();
+    const ctx = _audioCtx, now = ctx.currentTime;
+    const o = ctx.createOscillator(), g = ctx.createGain();
+    const tick = type === "tick";
+    o.type = tick ? "sine" : "triangle";
+    o.frequency.value = tick ? 1150 : 620;
+    const peak = tick ? 0.05 : 0.08, dur = tick ? 0.025 : 0.05;
+    g.gain.setValueAtTime(0.0001, now);
+    g.gain.exponentialRampToValueAtTime(peak, now + 0.005);
+    g.gain.exponentialRampToValueAtTime(0.0001, now + dur);
+    o.connect(g); g.connect(ctx.destination);
+    o.start(now); o.stop(now + dur + 0.02);
+  } catch (e) {}
+}
 // Плавный «счёт вверх» чисел между перерисовками: помним последнее показанное значение по ключу.
 const countMemo = {};
 
@@ -1321,7 +1341,21 @@ function accountCard() {
 // Онбординг
 // ==========================================================================
 // С Firebase последний шаг — обязательный вход (9); без Firebase онбординг кончается итогом (8).
-const LAST_STEP = (window.Sync && window.Sync.enabled) ? 9 : 8;
+const SYNC_ON = !!(window.Sync && window.Sync.enabled);
+const LAST_STEP = SYNC_ON ? 9 : 8;
+// Порядок шагов онбординга. С Firebase вход (auth) идёт первым — сразу после приветствия.
+// Без Firebase шага auth нет, остальные сдвинуты на 1.
+const STEP = {
+  auth: SYNC_ON ? 1 : -1,
+  name: SYNC_ON ? 2 : 1,
+  gender: SYNC_ON ? 3 : 2,
+  age: SYNC_ON ? 4 : 3,
+  height: SYNC_ON ? 5 : 4,
+  weight: SYNC_ON ? 6 : 5,
+  fitness: SYNC_ON ? 7 : 6,
+  maxReps: SYNC_ON ? 8 : 7,
+  goal: LAST_STEP,
+};
 function Onboarding() {
   const step = ui.onbStep, gender = store["profile.gender"], level = store["profile.level"], maxReps = store["profile.maxReps"];
   const goal = recommendedDailyReps(level, maxReps);
@@ -1345,15 +1379,18 @@ function Onboarding() {
     <div style="color:var(--accent);width:76px;height:76px;display:flex">${iconF("flame")}</div>
     <div class="display" style="font-size:46px">FitStake</div>
     <div class="form-footer" style="max-width:320px;font-weight:500">${t("Every rep is verified by the camera. Coins on the line. Miss too many days and you're out.")}</div></div>`;
-  else if (step === 1) content = question(t("Your name"), t("Friends will see it in the leaderboard."),
+  // Вход — сразу после приветствия (только с Firebase).
+  else if (step === STEP.auth) content = question(t("Create your account"), t("So your progress is saved and syncs across your devices."), authForm());
+  else if (step === STEP.name) content = question(t("Your name"), t("Friends will see it in the leaderboard."),
     `<input class="field" id="onb-name" value="${esc(store["profile.name"] || "")}" placeholder="${esc(t("Your name"))}" maxlength="20" autocomplete="name">`);
-  else if (step === 2) content = question(t("Your gender"), null, Gender.all.map((g) => optionCard(Gender.name(g), null, gender === g, `onbSet:profile.gender:${g}`)).join(""));
-  else if (step === 3) content = question(t("Your age"), null, wheel("profile.age", 14, 80, (v) => t("%lld years", v)));
-  else if (step === 4) content = question(t("Your height"), null, wheel("profile.heightCm", 120, 220, (v) => t("%lld cm", v)));
-  else if (step === 5) content = question(t("Your weight"), null, wheel("profile.weightKg", 35, 180, (v) => t("%lld kg", v)));
-  else if (step === 6) content = question(t("Your fitness level"), null, Level.all.map((l) => optionCard(Level.name(l), Level.subtitle(l), level === l, `onbSet:profile.level:${l}`)).join(""));
-  else if (step === 7) content = question(t("How many push-ups can you do in one set?"), t("Honestly — the daily goal is built from this."), wheel("profile.maxReps", 1, 120, (v) => String(v)));
-  else if (step === 8) content = `<div class="center" style="height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px">
+  else if (step === STEP.gender) content = question(t("Your gender"), null, Gender.all.map((g) => optionCard(Gender.name(g), null, gender === g, `onbSet:profile.gender:${g}`)).join(""));
+  else if (step === STEP.age) content = question(t("Your age"), null, wheel("profile.age", 14, 80, (v) => t("%lld years", v)));
+  else if (step === STEP.height) content = question(t("Your height"), null, wheel("profile.heightCm", 120, 220, (v) => t("%lld cm", v)));
+  else if (step === STEP.weight) content = question(t("Your weight"), null, wheel("profile.weightKg", 35, 180, (v) => t("%lld kg", v)));
+  else if (step === STEP.fitness) content = question(t("Your fitness level"), null, Level.all.map((l) => optionCard(Level.name(l), Level.subtitle(l), level === l, `onbSet:profile.level:${l}`)).join(""));
+  else if (step === STEP.maxReps) content = question(t("How many push-ups can you do in one set?"), t("Honestly — the daily goal is built from this."), wheel("profile.maxReps", 1, 120, (v) => String(v)));
+  // Итоговый шаг: дневная норма (кнопка «Погнали» завершает онбординг).
+  else content = `<div class="center" style="height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px">
     ${lbl(t("Your daily goal"), "tracking-15")}
     <div class="money" style="font-size:72px">${goal}</div>
     ${lbl(t("reps per day"), "tracking-1")}
@@ -1362,11 +1399,9 @@ function Onboarding() {
       ${[[t("Gender"), Gender.name(gender)], [t("Age"), t("%lld years", store["profile.age"])], [t("Height"), t("%lld cm", store["profile.heightCm"])], [t("Weight"), t("%lld kg", store["profile.weightKg"])], [t("Fitness level"), Level.name(level)]]
         .map(([k, v]) => `<div class="between">${lbl(k)}<span style="font-weight:600;font-size:15px">${esc(v)}</span></div>`).join("")}
     </div></div>`;
-  // Шаг 9 (только с Firebase): обязательный вход — без аккаунта в приложение не пускаем.
-  else content = question(t("Create your account"), t("So your progress is saved and syncs across your devices."), authForm());
 
   // На шаге входа CTA — сами кнопки формы, отдельной кнопки «дальше» нет.
-  const authStep = Sync.enabled && step === LAST_STEP;
+  const authStep = Sync.enabled && step === STEP.auth;
   const footerLabel = step === 0 ? t("Get started") : step === LAST_STEP ? t("Let's go") : t("Continue");
   const footer = authStep
     ? `<div style="padding:0 20px 8px;padding-bottom:calc(8px + env(safe-area-inset-bottom))"><button class="text-btn" data-act="skipAuth" style="width:100%">${t("Skip for now")}</button></div>`
@@ -2152,6 +2187,7 @@ root.addEventListener("click", async (e) => {
   const el = e.target.closest("[data-act]");
   if (!el) return;
   const act = el.dataset.act;
+  sfx("tap"); // звук нажатия на любую кнопку
   if (el.classList.contains("action-btn")) haptic(8); // лёгкий тактильный отклик на первичных кнопках
 
   if (act === "closeSheetBg") { if (e.target.classList.contains("sheet-backdrop")) closeSheet(); return; }
@@ -2247,7 +2283,7 @@ root.addEventListener("click", async (e) => {
     const res = mode === "signup" ? await Sync.signUp(email, pass) : await Sync.signIn(email, pass);
     if (res.ok) {
       track("account_linked", { method: "email", mode });
-      if (ui.screen === "onboarding") { finishOnboarding(); return; }
+      if (ui.screen === "onboarding") { ui.onbStep++; render(); return; } // вход — первый шаг, идём дальше по анкете
       if (store["profile.name"]) Sync.registerUser(store["profile.name"]);
       toast(t("Signed in"));
       render();
@@ -2263,7 +2299,7 @@ root.addEventListener("click", async (e) => {
     const res = await Sync.signInGoogle();
     if (res.ok) {
       track("account_linked", { method: "google" });
-      if (ui.screen === "onboarding") { finishOnboarding(); return; }
+      if (ui.screen === "onboarding") { ui.onbStep++; render(); return; } // вход — первый шаг, идём дальше по анкете
       if (store["profile.name"]) Sync.registerUser(store["profile.name"]);
       toast(t("Signed in"));
       render();
@@ -2328,21 +2364,20 @@ root.addEventListener("click", async (e) => {
   // Онбординг
   if (cmd === "onbBack") { if (ui.onbStep > 0) { ui.onbStep--; render(); } return; }
   if (cmd === "onbNext") {
-    if (ui.onbStep === 1) {
+    if (ui.onbStep === STEP.name) {
       const inp = document.getElementById("onb-name");
       const name = inp ? inp.value.trim() : "";
       if (!name) { toast(t("Your name")); return; }
       store["profile.name"] = name;
     }
-    // LAST_STEP без Firebase — это итог (кнопка завершает). С Firebase LAST_STEP это вход
-    // без кнопки onbNext, поэтому сюда попадаем только когда входа не требуется.
+    // LAST_STEP — итоговый экран дневной нормы; кнопка «Погнали» завершает онбординг.
     if (ui.onbStep === LAST_STEP) { finishOnboarding(); }
     else { ui.onbStep++; render(); }
     return;
   }
   if (cmd === "onbSet") { store[arg] = act.split(":")[2]; render(); return; }
   // Пропустить создание аккаунта — временно входим без входа (флаг гасит обязательный возврат).
-  if (cmd === "skipAuth") { store.skippedAuth = true; finishOnboarding(); return; }
+  if (cmd === "skipAuth") { store.skippedAuth = true; ui.onbStep++; render(); return; }
 });
 
 root.addEventListener("input", (e) => {
@@ -2435,9 +2470,10 @@ function afterRender() {
   document.querySelectorAll(".wheel").forEach((w) => {
     const key = w.dataset.wheel, min = +w.dataset.min, max = +w.dataset.max;
     w.scrollTop = (store[key] - min) * 44;
-    let timer;
+    let timer, lastVal = store[key];
     w.addEventListener("scroll", () => {
       const val = Math.min(Math.max(min + Math.round(w.scrollTop / 44), min), max);
+      if (val !== lastVal) { sfx("tick"); haptic(6); lastVal = val; } // звук + вибро при смене числа
       w.querySelectorAll(".opt").forEach((o) => o.classList.toggle("active", +o.dataset.val === val));
       clearTimeout(timer);
       timer = setTimeout(() => { store[key] = val; }, 120);
@@ -2536,7 +2572,7 @@ Sync.init(() => {
   applySync();
   phIdentify(); // uid из auth готов — связываем аналитику с игроком
   // Без инкогнито: онбордился, но остался анонимом (или вышел) — на обязательный вход.
-  if (Sync.enabled && Sync.isAnonymous && store.onboarded && !store.skippedAuth && ui.screen === "tabs") { ui.screen = "onboarding"; ui.onbStep = LAST_STEP; }
+  if (Sync.enabled && Sync.isAnonymous && store.onboarded && !store.skippedAuth && ui.screen === "tabs") { ui.screen = "onboarding"; ui.onbStep = STEP.auth; }
   // Не дёргаем перерисовку поверх открытых форм и камеры.
   if (!ui.sheet && !ui.full && !liveSession) render();
 });
