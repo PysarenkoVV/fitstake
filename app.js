@@ -140,7 +140,12 @@ const RU = {
   "The goal grows by %lld reps every week — by day %lld it's %lld.": "Норма растёт на %lld повторов каждую неделю — к дню %lld это %lld.",
   "The photo stays hidden until the finish — then it appears next to your AFTER photo.": "Фото скрыто до финиша — там оно встанет рядом с фото ПОСЛЕ.",
   "Title": "Название", "Today": "Сегодня", "Total reps": "Всего повторов", "Total reps over the last 4 weeks.": "Сумма повторов за последние 4 недели.",
-  "Unlock with Face ID": "Открыть по Face ID", "Upload from library": "Загрузить из галереи", "Week %lld": "Неделя %lld",
+  "Show photos": "Показать фото", "Upload from library": "Загрузить из галереи", "Week %lld": "Неделя %lld",
+  "Body & measurements": "Тело и замеры", "Wallet": "Кошелёк", "Privacy & data": "Приватность и данные",
+  "Video is processed on your device by the camera — not recorded and not sent to any server.": "Видео обрабатывается на твоём устройстве камерой — не записывается и не отправляется на сервер.",
+  "Before / After photos are stored on your device — the app doesn't upload them to our servers.": "Фото до/после хранятся на твоём устройстве — приложение не загружает их на наши серверы.",
+  "Weight and measurements stay on this device.": "Вес и замеры остаются на этом устройстве.",
+  "Nothing is used to train any models.": "Ничего не используется для обучения моделей.",
   "Weekly volume": "Недельный объём", "Weight": "Вес", "Weight: %lld kg": "Вес: %lld кг",
   "Yesterday %lld dropped out": "Вчера выбыло: %lld", "You": "Ты",
   "You can miss 1 day during the whole challenge, more and you're out. The pot is split between everyone who finishes.": "Можно пропустить 1 день за весь челлендж, больше — выбываешь. Банк делится между всеми, кто дошёл до конца.",
@@ -220,7 +225,7 @@ function t(key, ...args) {
 const DEFAULTS = {
   onboarded: false, "profile.name": "", "profile.gender": "male", "profile.age": 25, "profile.heightCm": 178,
   "profile.weightKg": 75, "profile.level": "regular", "profile.maxReps": 15, dailyGoal: 50,
-  currencyUSD: true, voiceEnabled: false, lang: (navigator.language || "en").startsWith("ru") ? "ru" : "en",
+  voiceEnabled: false, lang: (navigator.language || "en").startsWith("ru") ? "ru" : "en",
 };
 const store = new Proxy({}, {
   get(_, k) {
@@ -234,35 +239,18 @@ const store = new Proxy({}, {
 // ==========================================================================
 // Валюта: тестовые коины как $ или локальная валюта устройства
 // ==========================================================================
-const REGION_CCY = {
-  RU: "RUB", UA: "UAH", BY: "BYN", KZ: "KZT", GB: "GBP", US: "USD", CA: "CAD", AU: "AUD",
-  JP: "JPY", CN: "CNY", IN: "INR", BR: "BRL", TR: "TRY", PL: "PLN", CH: "CHF", SE: "SEK",
-  NO: "NOK", DK: "DKK", DE: "EUR", FR: "EUR", ES: "EUR", IT: "EUR", NL: "EUR", PT: "EUR",
-};
-const Currency = (() => {
-  let region = "US";
-  try { region = new Intl.Locale(navigator.language).maximize().region || "US"; } catch {}
-  const code = REGION_CCY[region] || "USD";
-  let symbol = "$";
-  try {
-    const parts = new Intl.NumberFormat(navigator.language, { style: "currency", currency: code }).formatToParts(1);
-    symbol = (parts.find((p) => p.type === "currency") || {}).value || code;
-  } catch {}
-  return { code, symbol };
-})();
 
 const fmt = (n) => Number(n).toLocaleString("en-US");
+// Игровая валюта: не реальные деньги. Единый символ вместо валютных знаков ($/€/₴).
+const COIN_SYM = "🔥";
 function coin(value) {
-  const sym = store.currencyUSD ? "$" : Currency.symbol;
-  return `<span class="money">${sym}${fmt(value)}</span>`;
+  return `<span class="money">${COIN_SYM}${fmt(value)}</span>`;
 }
 // Как coin(), но число плавно «досчитывается» при изменении (см. count-up в afterRender).
 // fromZero — считать от нуля при первом появлении (для экрана победы).
 function coinCountUp(value, key, fromZero) {
-  const sym = store.currencyUSD ? "$" : Currency.symbol;
-  return `<span class="money count-up" data-count="${value}" data-count-key="${esc(key)}" data-count-sym="${sym}"${fromZero ? ' data-count-from="0"' : ""}>${sym}${fmt(value)}</span>`;
+  return `<span class="money count-up" data-count="${value}" data-count-key="${esc(key)}" data-count-sym="${COIN_SYM}"${fromZero ? ' data-count-from="0"' : ""}>${COIN_SYM}${fmt(value)}</span>`;
 }
-const showCurrencyToggle = Currency.code !== "USD";
 
 // ==========================================================================
 // Модели и вычисляемые свойства (порт Models.swift)
@@ -682,7 +670,7 @@ function commitWheelIfEditing() {
 // ==========================================================================
 // UI-состояние и рендер (см. app-ui.js — экраны ниже в этом же файле)
 // ==========================================================================
-const ui = { screen: "onboarding", tab: "yours", detailId: null, sheet: null, full: null, onbStep: 0, form: null, wheelEdit: null };
+const ui = { screen: "onboarding", tab: "yours", detailId: null, sheet: null, full: null, onbStep: 0, form: null, wheelEdit: null, profileSection: null };
 
 function esc(s) { return String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c])); }
 
@@ -788,7 +776,7 @@ function pwaHint() {
   </div>`;
 }
 
-function go(tab) { ui.tab = tab; ui.detailId = null; pendingStagger = true; render(); window.scrollTo(0, 0); }
+function go(tab) { ui.tab = tab; ui.detailId = null; ui.profileSection = null; pendingStagger = true; render(); window.scrollTo(0, 0); }
 function openDetail(id) { ui.detailId = id; navRender("push"); }
 function back() { ui.detailId = null; navRender("pop"); }
 function toast(msg) {
@@ -1409,16 +1397,15 @@ function ProfileTab() {
   else if (photosUnlocked) photosInner = withPhotos.map((c) => `<div style="display:flex;flex-direction:column;gap:8px">
     <div style="font-weight:600;font-size:15px">${esc(c.title)}</div>
     <div class="grid2">${photoSlot(c.beforePhoto, t("Before"))}${photoSlot(c.afterPhoto, t("After"))}</div></div>`).join("");
-  else photosInner = `<button class="action-btn" data-act="unlockPhotos">${iconF("faceid")}${t("Unlock with Face ID")}</button>`;
+  else photosInner = `<button class="action-btn" data-act="unlockPhotos" style="background:var(--white-08);color:#fff">${t("Show photos")}</button>`;
   const photosCard = `<div class="card" style="padding:16px;display:flex;flex-direction:column;gap:12px">
-    <div class="between">${lbl(t("Before / After photos"), "tracking-1")}<span style="color:${photosUnlocked ? "var(--money)" : "var(--text-secondary)"};display:flex">${iconF(photosUnlocked ? "lockOpen" : "lock")}</span></div>
+    ${lbl(t("Before / After photos"), "tracking-1")}
     ${photosInner}</div>`;
 
   const txLabel = (tx) => tx.kind === "start" ? t("Starting balance") : tx.kind === "topup" ? t("Coins purchased") : t("Buy-in: %@", esc(tx.challenge));
   const wallet = `<div class="card" style="padding:16px;display:flex;flex-direction:column;gap:14px">
     <div class="between">${lbl(t("Balance"), "tracking-1")}<span class="c-money" style="font-size:24px">${coinCountUp(app.balance, "balance")}</span></div>
     <div class="form-footer">${t("Test currency — no real money.")}</div>
-    ${showCurrencyToggle ? currencyToggle() : ""}
     <button class="action-btn" data-act="openBuyCoins">${icon("plus")}${t("Buy coins")}</button>
     <hr class="hr">
     ${app.transactions.map((tx) => `<div class="between" style="padding:6px 0">
@@ -1432,14 +1419,45 @@ function ProfileTab() {
     <button class="action-btn" data-act="openBug" style="background:var(--white-08);color:#fff">${icon("bug")}${t("Report a problem")}</button>
   </div>`;
 
-  return screenHeader(t("Profile")) + `<div class="stack">${summary}${bodyCard}${measurements}${photosCard}${accountCard()}${wallet}${settingsCard}</div>`;
+  // Приватность и данные — честный текст о том, что происходит с видео/фото/замерами.
+  const privacyRow = (txt) => `<div class="row gap8" style="align-items:flex-start"><span style="color:var(--money);font-weight:800">✓</span><span style="font-size:14px;line-height:1.45">${esc(txt)}</span></div>`;
+  const privacyCard = `<div class="card" style="padding:16px;display:flex;flex-direction:column;gap:12px">
+    ${lbl(t("Privacy & data"), "tracking-1")}
+    ${privacyRow(t("Video is processed on your device by the camera — not recorded and not sent to any server."))}
+    ${privacyRow(t("Before / After photos are stored on your device — the app doesn't upload them to our servers."))}
+    ${privacyRow(t("Weight and measurements stay on this device."))}
+    ${privacyRow(t("Nothing is used to train any models."))}
+    <div class="form-footer">${t("Test currency — no real money.")}</div>
+  </div>`;
+
+  // Профиль разбит на разделы: меню → раздел. Крупный экран не смешивает разные сущности.
+  const sections = {
+    body: [t("Body & measurements"), bodyCard + measurements + photosCard],
+    wallet: [t("Wallet"), wallet],
+    account: [t("Account"), accountCard()],
+    privacy: [t("Privacy & data"), privacyCard],
+    settings: [t("Settings"), settingsCard],
+  };
+  const cur = ui.profileSection;
+  if (cur && sections[cur]) {
+    return `<div class="screen-head row gap8" style="align-items:center">
+      <button data-act="profileHome" aria-label="${t("Back")}" style="width:40px;height:40px;display:flex;align-items:center;justify-content:center;color:#fff;margin-left:-8px">${icon("chevronLeft")}</button>
+      <h1 class="screen-title" style="font-size:28px">${esc(sections[cur][0])}</h1>
+    </div><div class="stack">${sections[cur][1]}</div>`;
+  }
+  const row = (key, label) => `<button class="card" data-act="profileSection:${key}" style="padding:16px 18px;width:100%;display:flex;align-items:center;gap:12px;text-align:left">
+    <span style="flex:1;font-weight:600;font-size:16px">${esc(label)}</span>
+    <span style="color:var(--text-secondary);display:flex">${icon("chevronRight")}</span></button>`;
+  return screenHeader(t("Profile")) + `<div class="stack">${summary}
+    ${row("body", t("Body & measurements"))}
+    ${row("wallet", t("Wallet"))}
+    ${Sync.enabled ? row("account", t("Account")) : ""}
+    ${row("privacy", t("Privacy & data"))}
+    ${row("settings", t("Settings"))}
+  </div>`;
 }
 function photoSlot(dataURL, caption) {
   return `<div style="display:flex;flex-direction:column;gap:5px"><div class="photo-slot" style="height:150px">${dataURL ? `<img src="${dataURL}" alt="${esc(caption || "")}">` : icon("camera")}</div>${lbl(caption)}</div>`;
-}
-function currencyToggle() {
-  return `<div class="segmented"><button data-act="seg" data-store="currencyUSD" data-val="true" class="${store.currencyUSD ? "active" : ""}">$ USD</button>
-    <button data-act="seg" data-store="currencyUSD" data-val="false" class="${!store.currencyUSD ? "active" : ""}">${Currency.symbol} ${Currency.code}</button></div>`;
 }
 // Форма входа (Google + email/пароль) — общая для профиля и онбординга.
 function authForm() {
@@ -1594,7 +1612,7 @@ function defaultTitle(f) {
 function createSummary(f) {
   const sel = selectedExercises(f);
   const row = (k, v) => `<div class="between" style="gap:12px"><span class="label secondary" style="font-size:12px">${esc(k)}</span><span style="font-weight:600;font-size:15px;text-align:right">${esc(v)}</span></div>`;
-  const buyIn = (store.currencyUSD ? "$" : Currency.symbol) + fmt(f.buyIn);
+  const buyIn = COIN_SYM + fmt(f.buyIn);
   return `<div style="padding-top:20px;display:flex;flex-direction:column;gap:16px;height:100%;justify-content:center">
     <div class="display" style="font-size:26px;text-align:center;text-wrap:balance">${esc(f.title.trim() || defaultTitle(f))}</div>
     <div class="card" style="padding:16px;display:flex;flex-direction:column;gap:12px">
@@ -1638,8 +1656,7 @@ function CreateWizard() {
       <div class="settings-row"><span id="lbl-progOn">${t("Progressive overload")}</span><button data-act="toggle" data-key="progOn" role="switch" aria-checked="${f.progOn}" aria-labelledby="lbl-progOn" class="toggle ${f.progOn ? "on" : ""}"></button></div>
       ${f.progOn ? fieldStepper(t("Increase by"), "progStep", 1, 50, 1) + seg([["day", t("per day")], ["week", t("per week")]], "progPeriod", f.progPeriod) : ""}`);
   else if (step === 3) content = question(t("Stake amount"), t("The buy-in is deducted from your balance right away. Test currency — no real money."), `
-      ${showCurrencyToggle ? currencyToggle() : ""}
-      <div class="row gap8"><span class="secondary money" style="font-size:24px">${store.currencyUSD ? "$" : Currency.symbol}</span><input class="field money" type="number" inputmode="numeric" data-model="buyIn" value="${f.buyIn}" style="font-size:24px"></div>`);
+      <div class="row gap8"><span class="secondary money" style="font-size:24px">${COIN_SYM}</span><input class="field money" type="number" inputmode="numeric" data-model="buyIn" value="${f.buyIn}" style="font-size:24px"></div>`);
   else if (step === 4) { content = question(t("Name your challenge"), t("Friends will see it in the leaderboard."),
       `<input class="field" data-model="title" value="${esc(f.title)}" placeholder="${esc(defaultTitle(f))}" maxlength="40">`); label = t("Done"); }
   else content = createSummary(f);
@@ -1676,7 +1693,7 @@ function shareChallengeCard(f) {
   shareChallengePoster({
     duration: f.duration,
     exercises: sel.map((e) => ({ ex: e, name: Exercise.displayName(e), reps: f[e] })),
-    stake: (store.currencyUSD ? "$" : Currency.symbol) + fmt(f.buyIn),
+    stake: COIN_SYM + fmt(f.buyIn),
     miss: MissPolicy.displayName(f.miss),
   });
 }
@@ -2045,7 +2062,7 @@ async function shareCard(data) {
     g.fillStyle = "rgba(255,255,255,.62)"; g.font = "700 10px monospace"; g.textAlign = "left";
     g.fillText(store.lang === "ru" ? "ЗАБИРАЕШЬ" : "YOU TAKE HOME", pad, y + 8);
     g.fillStyle = "#4dc280"; g.font = "800 23px monospace"; g.textAlign = "right";
-    g.fillText((store.currencyUSD ? "$" : Currency.symbol) + fmt(data.payout), W - pad, y + 12); g.textAlign = "left";
+    g.fillText(COIN_SYM + fmt(data.payout), W - pad, y + 12); g.textAlign = "left";
     y += 30;
   }
 
@@ -2343,6 +2360,8 @@ root.addEventListener("click", async (e) => {
     case "join": openJoin(arg); return;
     case "addMeasure": openMeasure(); return;
     case "unlockPhotos": photosUnlocked = true; render(); return;
+    case "profileSection": ui.profileSection = arg; render(); window.scrollTo(0, 0); return;
+    case "profileHome": ui.profileSection = null; render(); window.scrollTo(0, 0); return;
     case "editProfile": profileEditing = true; profileNameDraft = null; render(); return;
     case "saveProfile": {
       const inp = document.getElementById("profile-name");
