@@ -80,7 +80,7 @@ const RU = {
   "%lld reps/day": "%lld повторов в день", "%lld years": "%lld лет", "+%lld more": "и ещё %lld",
   "1 per 2 weeks": "1 в 2 недели", "1 per challenge": "1 за весь челлендж",
   "A few times a week": "Пару раз в неделю", "Active challenges: %lld": "Активных: %lld",
-  "After": "После", "Age": "Возраст", "All-time": "За всё время", "All-time reps": "Повторов за всё время",
+  "After": "После", "Age": "Возраст", "All-time": "За всё время", "All-time reps": "Повторов за всё время", "Earlier reps": "Прежние повторы",
   "Almost every day": "Почти каждый день", "Athlete": "Атлет", "Balance": "Баланс", "Before": "До",
   "Before / After": "До / После", "Before / After photos": "Фото До / После", "Before you start": "Перед стартом",
   "Beginner": "Новичок", "Both arms must be fully in frame": "В кадре должны быть обе руки целиком",
@@ -113,6 +113,7 @@ const RU = {
   "How many push-ups can you do in one set?": "Сколько отжиманий делаешь за один подход?",
   "I barely train": "Почти не тренируюсь", "Increase by: %lld reps": "Прирост: %lld повторов",
   "Join for": "Вступить за", "kg": "кг", "Leaderboard": "Таблица итогов", "Let's go": "Погнали",
+  "Test coins · no cash value": "Тест-монеты · без денежной стоимости",
   "Leave challenge": "Выйти из челленджа", "Leave challenge?": "Выйти из челленджа?", "Leave": "Выйти", "Cancel": "Отмена",
   "Your buy-in won't be refunded and you won't be able to see the results.": "Взнос не вернётся, и результаты ты больше не сможешь посмотреть.",
   "Male": "Мужской", "Max reps": "Максимум за подход", "Max reps in one set": "Максимум за подход",
@@ -459,21 +460,22 @@ const app = {
   challenges: mockChallenges(),
   history: [],
   measurements: [],
-  totalPushups: Sync.enabled ? 0 : 1760,
+  totalReps: Sync.enabled ? 0 : 1760,
   repsByExercise: {}, // сумма повторов за всё время по типам упражнений
   leftMain: false,
 };
 // Фиксированный порядок упражнений; новые типы появляются после существующих.
 const EX_ORDER = ["pushups", "squats", "pullups", "dips"];
 // Разбивка all-time повторов по упражнениям. Легаси/синхронизированные повторы, не
-// привязанные к типу, относим к отжиманиям — так сумма разбивки всегда равна totalPushups.
+// привязанные к типу, показываем отдельной строкой «Прежние повторы» — не приписываем
+// их к отжиманиям, чтобы не искажать статистику. Сумма всех строк = totalReps.
 function exerciseBreakdown() {
   const by = {};
   for (const ex of EX_ORDER) by[ex] = 0;
   for (const [ex, n] of Object.entries(app.repsByExercise || {})) by[ex] = (by[ex] || 0) + n;
   const known = Object.values(by).reduce((a, b) => a + b, 0);
-  const gap = (app.totalPushups || 0) - known;
-  if (gap > 0) by.pushups += gap;
+  const gap = (app.totalReps || 0) - known;
+  if (gap > 0) by.other = gap;
   return by;
 }
 app.history = Sync.enabled ? [] : mockHistory(app.challenges.filter(C.isJoined));
@@ -498,7 +500,7 @@ function applySync() {
   if (me) {
     ch.myTodayReps = Object.assign({}, me._days[today] || {});
     ch.myTotalReps = me._total;
-    app.totalPushups = me._total;
+    app.totalReps = me._total;
     app.history = Object.entries(me._days).sort(([a], [b]) => (a < b ? -1 : 1)).map(([date, per]) => ({
       id: date, date: new Date(date + "T00:00:00").getTime(),
       entries: [{ id: date + "e", title: ch.title, norm: C.repsNorm(ch), reps: Object.values(per).reduce((a, b) => a + b, 0) }],
@@ -509,7 +511,7 @@ function applySync() {
 const SAVE_KEY = "fs.state";
 function snapshotApp() {
   return { balance: app.balance, transactions: app.transactions, challenges: app.challenges,
-    history: app.history, measurements: app.measurements, totalPushups: app.totalPushups, repsByExercise: app.repsByExercise, dayKey: app.dayKey, leftMain: app.leftMain };
+    history: app.history, measurements: app.measurements, totalReps: app.totalReps, repsByExercise: app.repsByExercise, dayKey: app.dayKey, leftMain: app.leftMain };
 }
 let saveTimer = null;
 function saveApp() {
@@ -534,7 +536,7 @@ function saveApp() {
   app.challenges = saved.challenges;
   app.history = saved.history || [];
   app.measurements = saved.measurements || [];
-  app.totalPushups = saved.totalPushups || 0;
+  app.totalReps = saved.totalReps != null ? saved.totalReps : (saved.totalPushups || 0); // миграция старого ключа
   app.repsByExercise = saved.repsByExercise || {};
   app.dayKey = saved.dayKey || dateKey();
   app.leftMain = saved.leftMain || false;
@@ -629,7 +631,7 @@ function addReps(ch, counts) {
   const me = C.me(ch);
   if (!me) return false;
   const wasDone = C.isTodayDone(ch);
-  app.totalPushups += total;
+  app.totalReps += total;
   logEntry(ch.title, C.repsNorm(ch), total);
   for (const [ex, reps] of Object.entries(counts)) if (reps > 0) {
     ch.myTodayReps[ex] = (ch.myTodayReps[ex] || 0) + reps;
@@ -948,13 +950,14 @@ function YoursTab() {
 
   const by = exerciseBreakdown();
   const exKeys = EX_ORDER.concat(Object.keys(by).filter((k) => !EX_ORDER.includes(k)));
-  const exRow = (ex) => `<div class="between" style="align-items:baseline">
-    <span style="font-size:15px">${esc(Exercise.displayName(ex))}</span>
-    <span class="money" style="font-size:15px;font-weight:700">${by[ex] || 0}</span></div>`;
+  const exLabel = (ex) => ex === "other" ? t("Earlier reps") : Exercise.displayName(ex);
+  const exRow = (ex) => { const n = by[ex] || 0; return `<div class="between" style="align-items:baseline">
+    <span style="font-size:15px;${n ? "" : "color:var(--text-secondary)"}">${esc(exLabel(ex))}</span>
+    <span class="money" style="font-size:15px;${n ? "font-weight:700" : "color:var(--text-secondary)"}">${n}</span></div>`; };
   const statsCard = `<div class="card" style="padding:24px 16px 18px;display:flex;flex-direction:column;gap:6px">
     <div style="text-align:center;display:flex;flex-direction:column;gap:4px">
       ${lbl(t("All-time"), "tracking-15")}
-      <div class="money" style="font-size:44px">${app.totalPushups}</div>
+      <div class="money" style="font-size:44px">${app.totalReps}</div>
       ${lbl(t("Total reps"))}
     </div>
     <hr class="hr">
@@ -1045,6 +1048,7 @@ function potCard(c) {
       <div>${lbl(t("Prize pool"), "tracking-1")}<div class="c-money" style="font-size:38px">${coin(C.pot(c))}</div></div>
       <div style="text-align:right">${lbl(t("You'd win"), "tracking-1")}<div class="money" style="font-size:24px">${coin(C.payout(c))}</div></div>
     </div>
+    <div class="form-footer" style="font-size:11px">🔥 ${t("Test coins · no cash value")}</div>
     ${bar(c.currentDay / c.durationDays)}
     <div class="wrap label secondary" style="font-size:10px">
       <span>${esc(C.exerciseNames(c))}</span><span>${t("Day %lld of %lld", c.currentDay, c.durationDays)}</span>
@@ -1369,7 +1373,7 @@ function ProfileTab() {
 
   const summary = `<div class="card center" style="padding:24px 16px">
     ${lbl(t("All-time reps"), "tracking-15")}
-    <div class="money" style="font-size:52px;margin:6px 0">${app.totalPushups}</div>
+    <div class="money" style="font-size:52px;margin:6px 0">${app.totalReps}</div>
     <div class="row label" style="justify-content:center;gap:18px;font-size:10px">
       <span class="secondary">${t("Active challenges: %lld", activeCount)}</span><span class="secondary">${t("Finished: %lld", finished)}</span></div>
   </div>`;
@@ -1736,7 +1740,8 @@ function JoinSheet() {
       <button class="action-btn" data-act="pickPhoto:library" style="background:var(--white-08);color:#fff">${iconF("photo")}${t("Upload from library")}</button>
       <div class="form-footer">${t("The photo stays hidden until the finish — then it appears next to your AFTER photo.")}</div>
     </div>
-    <button class="action-btn" data-act="submitJoin">${t("Join for")} ${coin(c.buyIn)}</button>`;
+    <button class="action-btn" data-act="submitJoin">${t("Join for")} ${coin(c.buyIn)}</button>
+    <div class="form-footer" style="text-align:center;font-size:11px">🔥 ${t("Test coins · no cash value")}</div>`;
   return sheetShell(c.title, body, false);
 }
 
