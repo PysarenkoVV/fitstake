@@ -4,7 +4,9 @@
   "description": "FitStake — веб-версия приложения для подсчёта повторов с камеры",
   "type": "module",
   "scripts": {
-    "ai-team": "node ai-team.js"
+    "ai-team": "node ai-team.js",
+    "test:smoke": "playwright test",
+    "test:smoke:mobile": "playwright test --project=mobile"
   },
   "keywords": [
     "fitness",
@@ -16,5 +18,8 @@
   "license": "MIT",
   "dependencies": {
     "openai": "^4.52.0"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.61.1"
   }
 }
