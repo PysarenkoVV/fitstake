@@ -6,7 +6,8 @@
   "scripts": {
     "ai-team": "node ai-team.js",
     "test:smoke": "playwright test",
-    "test:smoke:mobile": "playwright test --project=mobile"
+    "test:smoke:mobile": "playwright test --project=mobile",
+    "test:firebase": "RUN_FIREBASE_INTEGRATION=1 playwright test tests/firebase-public.spec.js --project=desktop"
   },
   "keywords": [
     "fitness",
