@@ -154,6 +154,12 @@ const RU = {
   "Language": "Язык", "Edit": "Изменить", "Increase by": "Прирост",
   "Progress": "Прогресс", "Settings": "Настройки", "Continue workout": "Продолжить тренировку",
   "All done for today": "На сегодня всё", "%lld left": "осталось %lld", "%lldh %lldm": "%lldч %lldм",
+  "Insights": "Выводы", "This week +%lld% more reps": "На этой неделе на %lld% больше повторов",
+  "This week %lld% fewer reps": "На этой неделе на %lld% меньше повторов",
+  "On track %lld days in a row": "Норма %lld дней подряд",
+  "%lld reps to your daily record": "До рекорда дня осталось %lld повторов",
+  "Most active day — %@": "Самый активный день — %@",
+  "Complete your first workout and your weekly trend will appear here.": "Заверши первую тренировку — здесь появится недельная динамика.",
   "Invite friends": "Пригласить друзей", "Link copied": "Ссылка скопирована",
   "Your name": "Твоё имя", "Friends will see it in the leaderboard.": "Друзья увидят его в таблице лидеров.",
   "Join my challenge — 150 push-ups + 50 squats a day!": "Залетай в мой челлендж — 150 отжиманий и 50 приседаний в день!",
@@ -837,7 +843,7 @@ function progressRing(id, g, reps, norm, done) {
 }
 function badge(text, color) { return `<span class="badge" style="color:${color}">${esc(text)}</span>`; }
 function streakPill(n) { return n >= 2 ? `<span class="streak-pill">🔥 ${n}</span>` : ""; }
-function lbl(text, extra = "") { return `<span class="label secondary ${extra}" style="font-size:12px">${esc(text)}</span>`; }
+function lbl(text, extra = "") { return `<span class="label secondary ${extra}" style="font-size:13px">${esc(text)}</span>`; }
 
 // Хедер в две строки (ТЗ: убрать переполнение): компактная служебная строка сверху
 // (жучок + язык, по правому краю), крупный заголовок ниже. Кнопок-действий тут нет.
@@ -886,8 +892,8 @@ function ChallengeCard(c, withPlay) {
 
   const canPlay = joined && !C.isTodayDone(c) && !challengeEnded(c);
   const playBtn = canPlay ? (withPlay
-    ? `<button data-act="play:${c.id}" style="width:36px;height:36px;border-radius:50%;background:var(--accent);color:#000;display:flex;align-items:center;justify-content:center">${iconF("play")}</button>`
-    : `<span style="width:36px;height:36px;border-radius:50%;background:var(--accent);color:#000;display:flex;align-items:center;justify-content:center">${iconF("play")}</span>`) : "";
+    ? `<button data-act="play:${c.id}" style="width:44px;height:44px;border-radius:50%;background:var(--accent);color:#000;display:flex;align-items:center;justify-content:center">${iconF("play")}</button>`
+    : `<span style="width:44px;height:44px;border-radius:50%;background:var(--accent);color:#000;display:flex;align-items:center;justify-content:center">${iconF("play")}</span>`) : "";
 
   return `<div class="card ${doneBorder}" data-act="open:${c.id}" style="padding:20px;display:flex;flex-direction:column;gap:14px">
     <div class="between" style="align-items:flex-start">
@@ -922,7 +928,7 @@ function YoursTab() {
   if (streak >= 2) meta.push(`<span>🔥 ${t("%lld-day streak", streak)}</span>`);
   if (!allDone) meta.push(`<span>⏳ ${t("%lldh %lldm", hh, mm)}</span>`);
 
-  const todayHero = active.length ? `<div class="card" style="padding:22px 20px;display:flex;flex-direction:column;gap:10px">
+  const todayHero = active.length ? `<div class="card card-hero" style="padding:22px 20px;display:flex;flex-direction:column;gap:10px">
     ${lbl(t("Today"), "tracking-15")}
     <div class="row" style="align-items:baseline;gap:10px">
       <span class="money ${todayReps >= todayNorm ? "c-money" : "c-white"}" style="font-size:52px;line-height:1">${todayReps}</span>
@@ -978,7 +984,7 @@ function friendsCard() {
       <span class="secondary" style="font-size:13px">${relDate(u.joinedAt)}</span>
     </div>`;
   }).join("");
-  return `<div class="card" style="padding:16px;display:flex;flex-direction:column;gap:10px">
+  return `<div class="card card-soft" style="padding:16px;display:flex;flex-direction:column;gap:10px">
     ${lbl(t("In the app: %lld", list.length), "tracking-1")}${rows}</div>`;
 }
 
@@ -1235,6 +1241,14 @@ function StatsTab() {
   const joined = app.challenges.filter(C.isJoined);
   const dot = (color, title) => `<div class="row gap8"><span class="chart-dot" style="background:${color}"></span><span class="label" style="font-size:11px;letter-spacing:1px">${esc(title)}</span></div>`;
 
+  // Пустое состояние: пока нет ни одной завершённой тренировки — объясняем, как получить данные.
+  const hasData = app.history.some((d) => d.entries && d.entries.length);
+  if (!hasData) return screenHeader(t("Progress")) + `<div class="stack">
+    <div class="card center" style="padding:36px 22px;display:flex;flex-direction:column;align-items:center;gap:14px">
+      <span style="color:var(--accent);display:flex">${icon("trend")}</span>
+      <div class="secondary" style="font-weight:500;text-align:center;max-width:280px;font-size:15px">${t("Complete your first workout and your weekly trend will appear here.")}</div>
+    </div></div>`;
+
   // Суммы по календарным дням: в истории бывают пропуски, слайс «по записям» сдвигал графики
   const byDay = new Map(app.history.map((d) => [startOfDay(d.date), d.entries.reduce((s, e) => s + e.reps, 0)]));
   const today0 = startOfDay(Date.now());
@@ -1246,6 +1260,33 @@ function StatsTab() {
 
   // Активность по дням
   const days = series(30).map((reps, i) => ({ date: today0 - (29 - i) * DAY, reps }));
+
+  // Выводы: превращаем цифры в мотивацию вместо голых графиков.
+  const loc = store.lang === "ru" ? "ru-RU" : "en-US";
+  const thisWeek = weeks[3], lastWeek = weeks[2];
+  const allTotals = [...byDay.values()];
+  const bestDay = allTotals.length ? Math.max(...allTotals) : 0;
+  const todayTotal = byDay.get(today0) || 0;
+  const streak = joined.length ? Math.max(0, ...joined.map((c) => myStreak(c))) : 0;
+  const weekdayTotals = [0, 0, 0, 0, 0, 0, 0];
+  days.forEach((d) => { weekdayTotals[new Date(d.date).getDay()] += d.reps; });
+  const bestWd = weekdayTotals.indexOf(Math.max(...weekdayTotals));
+
+  const insights = [];
+  if (lastWeek > 0 && thisWeek !== lastWeek) {
+    const pct = Math.round((thisWeek - lastWeek) / lastWeek * 100);
+    insights.push(pct > 0 ? t("This week +%lld% more reps", pct) : t("This week %lld% fewer reps", -pct));
+  }
+  if (streak >= 2) insights.push(t("On track %lld days in a row", streak));
+  if (bestDay > 0 && todayTotal > 0 && todayTotal < bestDay) insights.push(t("%lld reps to your daily record", bestDay - todayTotal));
+  if (Math.max(...weekdayTotals) > 0) {
+    const sample = days.find((d) => new Date(d.date).getDay() === bestWd);
+    if (sample) insights.push(t("Most active day — %@", new Date(sample.date).toLocaleDateString(loc, { weekday: "long" })));
+  }
+  const insightsCard = insights.length ? `<div class="card" style="padding:16px;display:flex;flex-direction:column;gap:10px">
+    ${lbl(t("Insights"), "tracking-1")}
+    ${insights.map((s) => `<div class="row gap8" style="align-items:flex-start"><span style="color:var(--accent);font-weight:800">•</span><span style="font-size:14px;font-weight:500">${esc(s)}</span></div>`).join("")}
+  </div>` : "";
 
   const weeklyCard = `<div class="card" style="padding:16px;display:flex;flex-direction:column;gap:4px">
     ${dot("var(--money)", t("Weekly volume"))}
@@ -1275,7 +1316,7 @@ function StatsTab() {
   }
   const journalCard = `<div class="card" style="padding:16px;display:flex;flex-direction:column;gap:10px">${journal}</div>`;
 
-  return screenHeader(t("Statistics")) + `<div class="stack">${weeklyCard}${dailyCard}${journalCard}</div>`;
+  return screenHeader(t("Progress")) + `<div class="stack">${insightsCard}${weeklyCard}${dailyCard}${journalCard}</div>`;
 }
 function weeklyChart(weeks) {
   const W = 300, H = 150, pad = 20, max = Math.max(...weeks, 1);
@@ -1385,7 +1426,7 @@ function ProfileTab() {
       <span class="money" style="font-size:15px;color:${tx.amount > 0 ? "var(--money)" : "var(--red)"}">${tx.amount > 0 ? "+" + tx.amount : tx.amount}</span></div>`).join("")}
   </div>`;
 
-  const settingsCard = `<div class="card" style="padding:16px;display:flex;flex-direction:column;gap:12px">
+  const settingsCard = `<div class="card card-soft" style="padding:16px;display:flex;flex-direction:column;gap:12px">
     ${lbl(t("Settings"), "tracking-1")}
     <div class="settings-row"><span>${t("Language")}</span>${langToggle()}</div>
     <button class="action-btn" data-act="openBug" style="background:var(--white-08);color:#fff">${icon("bug")}${t("Report a problem")}</button>

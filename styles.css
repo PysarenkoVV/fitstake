@@ -60,9 +60,8 @@ img { max-width: 100%; }
   letter-spacing: -0.5px;
 }
 .label {
-  font-family: var(--mono);
+  font-family: var(--sans);
   font-weight: 700;
-  text-transform: uppercase;
 }
 .money { font-family: var(--mono); font-weight: 800; font-variant-numeric: tabular-nums; }
 .secondary { color: var(--text-secondary); }
@@ -78,13 +77,16 @@ img { max-width: 100%; }
 }
 .card.done { border-color: rgba(77, 194, 128, 0.45); }
 .card.selected { border-color: var(--accent); }
+/* Иерархия: hero — акцентный и приподнятый; soft — вторичная секция без тяжёлой рамки. */
+.card-hero { border-color: rgba(255, 94, 31, 0.35); background: linear-gradient(180deg, rgba(255, 94, 31, 0.07), var(--card)); }
+.card-soft { background: rgba(255, 255, 255, 0.02); border-color: transparent; }
 
 /* ---- Бейдж ---- */
 .badge {
   display: inline-block;
   font-family: var(--mono);
   font-weight: 700;
-  font-size: 11px;
+  font-size: 12px;
   text-transform: uppercase;
   letter-spacing: 0.5px;
   padding: 4px 8px;
@@ -202,7 +204,7 @@ button:active:not(:disabled) { transform: scale(0.96); }
   justify-content: center;
   gap: 3px;
   color: var(--text-secondary);
-  font-size: 10px;
+  font-size: 11px;
   font-weight: 600;
 }
 .tabbar button.active { color: var(--accent); }
@@ -227,7 +229,7 @@ button:active:not(:disabled) { transform: scale(0.96); }
   border-bottom: 1px solid var(--border);
 }
 .navbar .title { font-weight: 700; font-size: 17px; flex: 1; min-width: 0; text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.navbar .icon-btn { width: 32px; height: 32px; display: flex; align-items: center; justify-content: center; color: #fff; }
+.navbar .icon-btn { width: 40px; height: 40px; display: flex; align-items: center; justify-content: center; color: #fff; }
 .navbar .icon-btn svg { width: 20px; height: 20px; }
 
 /* ---- Инпут-боксы ---- */
@@ -267,7 +269,7 @@ button:active:not(:disabled) { transform: scale(0.96); }
 /* степпер: [-] число [+] */
 .stepper { display: flex; align-items: center; gap: 8px; }
 .stepper button {
-  width: 34px; height: 34px;
+  width: 44px; height: 44px;
   border-radius: 999px;
   background: var(--white-08);
   color: #fff;
