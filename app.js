@@ -677,7 +677,7 @@ const SFX = {
   input:     { wave: "sine",     f1: 300,  dur: 0.045, peak: 0.05 }, // фокус на поле ввода
   challenge: { wave: "triangle", f1: 660,  f2: 990,  dur: 0.11,  peak: 0.09 }, // челленджи
   coin:      { wave: "triangle", f1: 880,  f2: 1400, dur: 0.13,  peak: 0.09 }, // монеты/покупка
-  start:     { wave: "triangle", f1: 240,  f2: 380,  dur: 0.15,  peak: 0.09 }, // старт тренировки (низкий, мягкий)
+  start:     { wave: "sine",     f1: 300,  f2: 200,  dur: 0.16,  peak: 0.05 }, // старт тренировки (низкий, тихий, мягкий)
   rep:       { wave: "sine",     f1: 950,  dur: 0.035, peak: 0.05 }, // обычный засчитанный повтор
 };
 function sfx(type) {
