@@ -25,6 +25,8 @@ window.Sync = (() => {
 
   const state = { users: null, participants: null };
   let db = null, F = null, A = null, authInstance = null, onChange = null;
+  let resolveAuthReady;
+  const authReady = new Promise((resolve) => { resolveAuthReady = resolve; });
   // Операции, вызванные до готовности auth+db, — выполняем после подключения.
   const queued = [];
   function ready(fn) { (db && uid) ? fn() : queued.push(fn); }
@@ -32,7 +34,7 @@ window.Sync = (() => {
 
   async function init(cb) {
     onChange = cb;
-    if (!enabled) return false;
+    if (!enabled) { resolveAuthReady(false); return false; }
     try {
       const [appMod, dbMod, authMod] = await Promise.all([
         import(V + "firebase-app.js"),
@@ -44,6 +46,7 @@ window.Sync = (() => {
       F = dbMod;
       A = authMod;
       authInstance = authMod.getAuth(fbApp);
+      resolveAuthReady(true);
       // Google Analytics (Firebase) — грузим лениво и только где поддерживается,
       // чтобы не сыпать ошибками в installed-PWA/webview. Fire-and-forget: сбой не ломает sync.
       import(V + "firebase-analytics.js")
@@ -75,16 +78,22 @@ window.Sync = (() => {
       });
       return true;
     } catch (e) {
+      resolveAuthReady(false);
       console.warn("Sync off:", e);
       return false;
     }
+  }
+
+  async function waitForAuth() {
+    if (A && authInstance) return true;
+    return authReady;
   }
 
   // Регистрация нового аккаунта. Сейчас аноним — привязываем email к нему через
   // linkWithCredential, сохраняя uid и весь прогресс; иначе создаём новый аккаунт.
   // Если email уже занят — вернём email-taken (пусть пользователь войдёт).
   async function signUp(email, password) {
-    if (!enabled || !A || !authInstance) return { ok: false, error: "offline" };
+    if (!enabled || !(await waitForAuth())) return { ok: false, error: "offline" };
     const cur = authInstance.currentUser;
     try {
       if (cur && cur.isAnonymous) {
@@ -102,7 +111,7 @@ window.Sync = (() => {
 
   // Вход в существующий аккаунт по email+паролю. Прогресс аккаунта подтянет applySync.
   async function signIn(email, password) {
-    if (!enabled || !A || !authInstance) return { ok: false, error: "offline" };
+    if (!enabled || !(await waitForAuth())) return { ok: false, error: "offline" };
     try {
       await A.signInWithEmailAndPassword(authInstance, email, password);
       refreshAuthState();
@@ -115,7 +124,7 @@ window.Sync = (() => {
   // Вход через Google (popup — остаёмся внутри установленной PWA, без redirect).
   // Аноним → linkWithPopup: uid и весь прогресс сохраняются. Иначе — обычный вход.
   async function signInGoogle() {
-    if (!enabled || !A || !authInstance) return { ok: false, error: "offline" };
+    if (!enabled || !(await waitForAuth())) return { ok: false, error: "offline" };
     const provider = new A.GoogleAuthProvider();
     const cur = authInstance.currentUser;
     try {
@@ -157,8 +166,10 @@ window.Sync = (() => {
     if (c.includes("wrong-password") || c.includes("invalid-credential")) return "wrong-password";
     if (c.includes("weak-password")) return "weak-password";
     if (c.includes("invalid-email")) return "invalid-email";
+    if (c.includes("operation-not-allowed") || c.includes("configuration-not-found")) return "provider-disabled";
+    if (c.includes("unauthorized-domain")) return "unauthorized-domain";
     if (c.includes("network")) return "network";
-    return "error";
+    return c || ((e && e.message) ? String(e.message) : "error");
   }
 
   // Регистрация в списке «кто в приложении»; joinedAt пишется один раз на этот uid.

@@ -1,6 +1,10 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
+  <script>
+    // Firebase Auth не поддерживает file:// origin. Локальную сборку всегда открываем через dev-сервер.
+    if (location.protocol === "file:") location.replace("http://localhost:8000/" + location.search + location.hash);
+  </script>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <meta name="theme-color" content="#0A0A0A" />
@@ -10,7 +14,7 @@
   <link rel="manifest" href="manifest.json" />
   <link rel="apple-touch-icon" href="icons/icon-180.png" />
   <link rel="icon" href="icons/icon-192.png" />
-  <link rel="stylesheet" href="styles.css" />
+  <link rel="stylesheet" href="styles.css?v=44" />
   <title>FitStake</title>
   <!-- PostHog — продуктовая аналитика (воронка, ретеншн) -->
   <script>
@@ -25,9 +29,9 @@
 <body>
   <div id="app"></div>
   <script src="firebase-config.js"></script>
-  <script src="sync.js"></script>
-  <script src="pose.js"></script>
-  <script src="app.js"></script>
+  <script src="sync.js?v=44"></script>
+  <script src="pose.js?v=44"></script>
+  <script src="app.js?v=44"></script>
   <script>
     if ("serviceWorker" in navigator) {
       window.addEventListener("load", () => navigator.serviceWorker.register("sw.js").catch(() => {}));

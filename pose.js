@@ -84,7 +84,7 @@ class RepCounter {
     this.maxAnchorDrift = cfg.maxAnchorDrift != null ? cfg.maxAnchorDrift : 0.7;
   }
 
-  process(points, size) {
+  process(points, size, countingEnabled = true) {
     const sides = ["left", "right"].filter((s) => this._limbVisible(s, points));
     if (!(sides.length === 2 || (this.tracking && sides.length > 0))) {
       if (this.tracking && this.lostFrames < this.graceFrames) {
@@ -117,7 +117,7 @@ class RepCounter {
       }
     } else if (angle > this.upThreshold && this.wasDown) {
       this.wasDown = false;
-      if (this._isRealRep(points, size)) this.count++;
+      if (countingEnabled && this._isRealRep(points, size)) this.count++;
     }
     return { status: this.wasDown ? "down" : "up", bendAngle: angle };
   }
@@ -236,13 +236,19 @@ async function getLandmarker() {
         runningMode: "VIDEO",
         numPoses: 1,
       });
-    })();
+    })().catch((e) => {
+      landmarkerPromise = null; // разрешить повторную попытку после ошибки загрузки
+      // Модель/wasm грузятся из сети — без интернета это самая частая причина сбоя.
+      const err = new Error(String(e && e.message || e));
+      err.code = navigator.onLine === false ? "offline" : "poseLoad";
+      throw err;
+    });
   }
   return landmarkerPromise;
 }
 
 class PoseSession {
-  constructor(exercises, opts = {}) {
+  constructor(exercises) {
     this.exercises = exercises;
     this.counters = exercises.map((e) => new RepCounter(e));
     this.active = 0; // комбо последовательное: считается только текущее упражнение — нет конфликтов
@@ -253,10 +259,22 @@ class PoseSession {
     this._recorder = null;
     this._recCanvas = null;
     this._lastTs = -1;
+    this.countingEnabled = false;
   }
 
   // Переключить активное упражнение комбо (считается только оно).
   setActive(i) { if (i >= 0 && i < this.counters.length) this.active = i; }
+
+  setCountingEnabled(on) {
+    this.countingEnabled = !!on;
+    if (on) {
+      const c = this.counters[this.active];
+      if (c) {
+        c.wasDown = false;
+        c.bodyAtDown = c.leftAnchorAtDown = c.rightAnchorAtDown = c.feetAtDown = null;
+      }
+    }
+  }
 
   async start(video, canvas) {
     this._video = video;
@@ -306,7 +324,7 @@ class PoseSession {
       const results = this.counters.map((c, i) => {
         // Неактивные упражнения комбо на паузе: счёт заморожен, кадр не обрабатываем.
         if (i !== this.active) return { exercise: c.exercise, repCount: c.count, status: "paused", bendAngle: null };
-        const r = c.process(points, size);
+        const r = c.process(points, size, this.countingEnabled);
         return { exercise: c.exercise, repCount: c.count, status: r.status, bendAngle: r.bendAngle };
       });
       // Всё нужное для активного упражнения в кадре — скелет зеленеет.
@@ -344,17 +362,6 @@ class PoseSession {
       ctx.arc(p.x * size.width, p.y * size.height, r, 0, Math.PI * 2);
       ctx.fill();
     }
-  }
-
-  // --- Голос (аналог SpeechCounter) ---
-  setVoice(on) { this.voice = on; if (!on && window.speechSynthesis) window.speechSynthesis.cancel(); }
-  say(text) {
-    if (!this.voice || !window.speechSynthesis) return;
-    const u = new SpeechSynthesisUtterance(text);
-    u.rate = 1.15;
-    u.lang = this.lang;
-    window.speechSynthesis.cancel();
-    window.speechSynthesis.speak(u);
   }
 
   // --- Запись ролика: кадр камеры + скелет + счётчик (для шеринга) ---
@@ -401,11 +408,12 @@ class PoseSession {
     g.textAlign = "left";
   }
 
+  isRecording() { return !!this._recording; }
+
   stop() {
     this._running = false;
     if (this._recording && this._recorder) { try { this._recorder.stop(); } catch {} this._recording = false; }
     if (this._stream) this._stream.getTracks().forEach((t) => t.stop());
-    if (window.speechSynthesis) window.speechSynthesis.cancel();
   }
 }
 

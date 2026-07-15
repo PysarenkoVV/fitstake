@@ -4,7 +4,7 @@
 "use strict";
 
 // Версия оболочки — держать в синхроне с CACHE в sw.js; уходит в баг-репорты.
-const APP_VERSION = "v33";
+const APP_VERSION = "v44";
 // Последняя JS-ошибка — прикладываем к баг-репорту, чтобы сразу видеть причину.
 let lastError = "";
 window.addEventListener("error", (e) => {
@@ -31,8 +31,6 @@ const PATHS = {
   search: '<circle cx="11" cy="11" r="7"/><path d="M20 20l-4-4"/>',
   camera: '<path d="M3 8a2 2 0 012-2h2l1.5-2h7L17 6h2a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V8z"/><circle cx="12" cy="12.5" r="3.5"/>',
   photo: '<rect x="3" y="4" width="18" height="14" rx="2"/><path d="M3 15l5-5 4 4 3-3 6 6"/><circle cx="8" cy="9" r="1.4"/>',
-  speakerOn: '<path d="M4 9v6h4l5 4V5L8 9H4z"/><path d="M16 8a5 5 0 010 8M18.5 5.5a9 9 0 010 13"/>',
-  speakerOff: '<path d="M4 9v6h4l5 4V5L8 9H4z"/><path d="M22 9l-5 6M17 9l5 6"/>',
   record: '<circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="4" class="rec-dot"/>',
   stop: '<circle cx="12" cy="12" r="10"/><rect x="8" y="8" width="8" height="8" rx="1.5" stroke="#0a0a0a"/>',
   lock: '<rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V8a4 4 0 018 0v3"/>',
@@ -89,6 +87,59 @@ const RU = {
   "Buy-in: %lld. Drop out — it stays in the pot for the finishers.": "Взнос: %lld. Вылетел — он остаётся в банке для дошедших.",
   "Camera access is needed for the photo.": "Для фото нужен доступ к камере.",
   "Camera access is needed to count your reps.": "Для подсчёта повторов нужен доступ к камере.",
+  "Try a demo workout": "Попробовать демо-тренировку",
+  "Camera setup": "Подготовка камеры",
+  "Set your phone down": "Поставь телефон устойчиво",
+  "Keep the camera still so every rep can be verified.": "Зафиксируй камеру, чтобы каждый повтор можно было проверить.",
+  "Fit your whole body in frame": "Помести всё тело в кадр",
+  "Step back until your arms and legs are clearly visible.": "Отойди так, чтобы руки и ноги были полностью видны.",
+  "Use good lighting": "Добавь света",
+  "Face the light and avoid a bright window behind you.": "Встань лицом к свету и не ставь яркое окно за спиной.",
+  "Your video stays on this device and is not uploaded.": "Видео остаётся на устройстве и никуда не загружается.",
+  "Open camera": "Открыть камеру",
+  "Not now": "Не сейчас",
+  "Demo complete — join a challenge to save progress.": "Демо завершено — вступи в челлендж, чтобы сохранять прогресс.",
+  "Step into frame": "Встань в кадр",
+  "Body found — hold still": "Тело найдено — не двигайся",
+  "Ready — start moving": "Готово — начинай движение",
+  "Lower your chest": "Опусти грудь ниже",
+  "Squat lower": "Присядь ниже",
+  "Pull yourself higher": "Подтянись выше",
+  "Lower your body": "Опустись ниже",
+  "Go a little deeper": "Ещё немного глубже",
+  "Good depth — straighten fully": "Хорошая глубина — полностью выпрямись",
+  "Go!": "Поехали!",
+  "Camera check complete": "Камера работает",
+  "Your reps were recognized correctly. Join a challenge to start saving progress.": "Повторы распознаны правильно. Вступи в челлендж, чтобы сохранять прогресс.",
+  "Try again": "Повторить демо",
+  "Continue as guest": "Продолжить как гость",
+  "You’ll get 50 test coins. Guest progress stays only on this device.": "Ты получишь 50 тестовых коинов. Прогресс гостя хранится только на этом устройстве.",
+  "Guest": "Гость",
+  "Progress is stored only on this device": "Прогресс хранится только на этом устройстве",
+  "Create an account to sync progress and use social challenges.": "Создай аккаунт, чтобы синхронизировать прогресс и участвовать в общих челленджах.",
+  "Create account": "Создать аккаунт",
+  "Account required": "Нужен аккаунт",
+  "To join this challenge, create an account so your progress is saved and visible to other participants.": "Чтобы вступить, создай аккаунт — так прогресс сохранится и будет виден другим участникам.",
+  "To publish or share a challenge, create an account so participants and progress can sync.": "Чтобы опубликовать или отправить челлендж друзьям, создай аккаунт — участники и прогресс будут синхронизироваться.",
+  "Your private challenge works on this device without an account.": "Приватный челлендж работает на этом устройстве без аккаунта.",
+  "Maybe later": "Не сейчас",
+  "Customize preset": "Настрой пресет",
+  "Daily goal": "Дневная норма",
+  "1 month": "1 месяц",
+  "2 months": "2 месяца",
+  "Create challenge": "Создать челлендж",
+  "Private on this device": "Приватный · на этом устройстве",
+  "20 Dips Daily": "20 на брусьях ежедневно",
+  "30 days · 20 a day": "30 дней · 20 в день",
+  "Preparing workout…": "Готовим тренировку…", "Workout sounds": "Звуки тренировки", "Interface sounds": "Звуки интерфейса",
+  "%@ completed": "%@ — готово", "Recording started": "Запись началась",
+  "Finish workout?": "Завершить тренировку?", "Save completed reps?": "Сохранить выполненные повторы?",
+  "Save workout": "Сохранить тренировку", "Exit without saving": "Выйти без сохранения",
+  "Couldn't save. Try again.": "Не удалось сохранить. Попробуй ещё раз.",
+  "Camera permission denied": "Доступ к камере запрещён",
+  "Allow camera access in your browser settings, then retry.": "Разреши доступ к камере в настройках браузера и повтори.",
+  "Camera not found": "Камера не найдена", "Couldn't load pose recognition": "Не удалось загрузить распознавание позы",
+  "Internet connection required": "Нужно интернет-соединение", "Retry": "Повторить",
   "Challenge complete!": "Челлендж пройден!", "Challenge total": "Всего за челлендж", "Challenges": "Челленджи",
   "Back": "Назад", "Voice guidance": "Голосовые подсказки", "Record video": "Записать видео",
   "Close": "Закрыть", "cm": "см", "Combo": "Комбо", "Continue": "Дальше", "Create": "Создать",
@@ -187,6 +238,24 @@ const RU = {
   "Create your account": "Создай аккаунт", "Step %lld of %lld": "Шаг %lld из %lld",
   "Which exercise do you want to start with?": "С какого упражнения начнёшь?",
   "%lld in FitStake": "%lld в FitStake", "Create from scratch": "Создать с нуля",
+  "Review challenge": "Проверь челлендж", "Tap any card to make changes before creating.": "Нажми на карточку, чтобы изменить её перед созданием.",
+  "Exercise & daily goal": "Упражнения и цель", "Pick exercises and set a goal for each.": "Выбери упражнения и цель для каждого.",
+  "How long?": "Как долго?", "Choose how long the challenge will run.": "Выбери длительность челленджа.",
+  "2 weeks": "2 недели", "Good for a quick start": "Подходит для быстрого старта",
+  "1 month": "1 месяц", "Balanced challenge": "Оптимальная длительность",
+  "2 months": "2 месяца", "Long-term progress": "Долгосрочный прогресс",
+  "Custom duration": "Своя длительность",
+  "Rules & stake": "Правила и ставка", "Set the final details before review.": "Настрой последние детали перед проверкой.",
+  "Rules": "Правила", "Challenge name": "Название челленджа", "Save changes": "Сохранить изменения", "Private challenge": "Приватный челлендж",
+  "Missed days decide how many unfinished days you can have before you leave the challenge and lose your stake.": "Пропущенные дни — сколько раз можно не выполнить дневную цель, прежде чем ты выбываешь из челленджа и теряешь ставку.",
+  "No protection": "Без защиты", "Miss one day and you're out.": "Один пропуск — и ты выбываешь.",
+  "One safety day": "Один запасной день", "You can miss once during the whole challenge.": "Можно один раз пропустить за весь челлендж.",
+  "Recurring protection": "Регулярная защита", "You can miss once in every 14 days.": "Можно пропустить один раз в каждые 14 дней.",
+  "Increase your daily target gradually as you get stronger.": "Дневная цель будет постепенно расти вместе с твоей формой.",
+  "Final daily target": "Цель в последний день", "No increase — the daily target stays the same.": "Без повышения — дневная цель останется прежней.",
+  "Authentication service is still loading — try again": "Сервис входа ещё загружается — попробуй ещё раз",
+  "Email registration is temporarily unavailable. Try Google.": "Регистрация по email временно недоступна. Попробуй Google.",
+  "Open the app at http://localhost:8000 to sign in": "Открой приложение через http://localhost:8000 для входа",
   "30-day Push-up Challenge": "Отжимания: 30 дней", "50 push-ups a day for a month": "50 отжиманий в день месяц",
   "100 Squats Daily": "100 приседаний в день", "30 days · 100 a day": "30 дней · 100 в день",
   "Pull-up Progression": "Подтягивания: прогрессия", "Grows a bit every week": "Растёт каждую неделю",
@@ -232,7 +301,7 @@ function t(key, ...args) {
 const DEFAULTS = {
   onboarded: false, "profile.name": "", "profile.gender": "male", "profile.age": 25, "profile.heightCm": 178,
   "profile.weightKg": 75, "profile.level": "regular", "profile.maxReps": 15, "profile.startExercise": "pushups", dailyGoal: 50,
-  voiceEnabled: false, lang: (navigator.language || "en").startsWith("ru") ? "ru" : "en",
+  workoutSounds: true, interfaceSounds: true, lang: (navigator.language || "en").startsWith("ru") ? "ru" : "en",
 };
 const store = new Proxy({}, {
   get(_, k) {
@@ -461,8 +530,8 @@ function mockHistory(joined) {
 // AppState
 // ==========================================================================
 const app = {
-  balance: 500,
-  transactions: [{ id: uid(), kind: "start", amount: 500, date: Date.now() }],
+  balance: 50,
+  transactions: [{ id: uid(), kind: "start", amount: 50, date: Date.now() }],
   challenges: mockChallenges(),
   history: [],
   measurements: [],
@@ -698,6 +767,8 @@ function commitWheelIfEditing() {
 // ==========================================================================
 const ui = { screen: "onboarding", tab: "yours", detailId: null, sheet: null, full: null, onbStep: 0, form: null, wheelEdit: null, profileSection: null };
 
+function isGuest() { return !Sync.enabled || Sync.isAnonymous || !Sync.email; }
+
 function esc(s) { return String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c])); }
 
 const root = document.getElementById("app");
@@ -722,42 +793,58 @@ const SFX = {
   challenge: { wave: "triangle", f1: 660,  f2: 990,  dur: 0.11,  peak: 0.09 }, // челленджи
   coin:      { wave: "triangle", f1: 880,  f2: 1400, dur: 0.13,  peak: 0.09 }, // монеты/покупка
   start:     { wave: "sine",     f1: 300,  f2: 200,  dur: 0.16,  peak: 0.05 }, // старт тренировки (низкий, тихий, мягкий)
-  rep:       { wave: "sine",     f1: 950,  dur: 0.035, peak: 0.05 }, // обычный засчитанный повтор
 };
-function sfx(type) {
-  const p = SFX[type] || SFX.tap;
-  try {
-    if (!_audioCtx) _audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-    if (_audioCtx.state === "suspended") _audioCtx.resume();
-    const ctx = _audioCtx, now = ctx.currentTime;
-    const o = ctx.createOscillator(), g = ctx.createGain();
-    o.type = p.wave;
-    o.frequency.setValueAtTime(p.f1, now);
-    if (p.f2) o.frequency.exponentialRampToValueAtTime(p.f2, now + p.dur);
-    g.gain.setValueAtTime(0.0001, now);
-    g.gain.exponentialRampToValueAtTime(p.peak, now + 0.005);
-    g.gain.exponentialRampToValueAtTime(0.0001, now + p.dur);
-    o.connect(g); g.connect(ctx.destination);
-    o.start(now); o.stop(now + p.dur + 0.02);
-  } catch (e) {}
+// Один осциллятор с огибающей. Общий низкоуровневый примитив для всех звуков.
+function _tone(p, at) {
+  const ctx = _audioCtx, s = (at != null ? at : ctx.currentTime) + (p.delay || 0), dur = p.dur;
+  const o = ctx.createOscillator(), g = ctx.createGain();
+  o.type = p.wave;
+  o.frequency.setValueAtTime(p.f1, s);
+  if (p.f2) o.frequency.exponentialRampToValueAtTime(p.f2, s + dur);
+  g.gain.setValueAtTime(0.0001, s);
+  g.gain.exponentialRampToValueAtTime(p.peak, s + 0.005);
+  g.gain.exponentialRampToValueAtTime(0.0001, s + dur);
+  o.connect(g); g.connect(ctx.destination);
+  o.start(s); o.stop(s + dur + 0.02);
 }
-// Юбилейный аккорд на каждый 10-й повтор — мажорное «фанфарное» трезвучие.
-function sfxMilestone() {
-  try {
-    if (!_audioCtx) _audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-    if (_audioCtx.state === "suspended") _audioCtx.resume();
-    const ctx = _audioCtx, t0 = ctx.currentTime;
-    [784, 988, 1319].forEach((f, i) => { // G5 · B5 · E6
-      const o = ctx.createOscillator(), g = ctx.createGain();
-      const s = t0 + i * 0.05, dur = 0.28;
-      o.type = "triangle"; o.frequency.value = f;
-      g.gain.setValueAtTime(0.0001, s);
-      g.gain.exponentialRampToValueAtTime(0.07, s + 0.01);
-      g.gain.exponentialRampToValueAtTime(0.0001, s + dur);
-      o.connect(g); g.connect(ctx.destination);
-      o.start(s); o.stop(s + dur + 0.02);
-    });
-  } catch (e) {}
+function _ensureCtx() {
+  if (!_audioCtx) _audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  if (_audioCtx.state === "suspended") _audioCtx.resume();
+}
+// Звуки интерфейса (кнопки/переключатели/формы/покупки). Гасятся настройкой Interface sounds.
+function sfx(type) {
+  if (!store.interfaceSounds) return;
+  const p = SFX[type] || SFX.tap;
+  try { _ensureCtx(); _tone(p); } catch (e) {}
+}
+// ==========================================================================
+// Звуки тренировки (повтор/юбилей/завершение/переход/предупреждение/запись).
+// Гасятся настройкой Workout sounds. Приоритет главных событий — см. wsfxMain().
+// ==========================================================================
+const WSFX = {
+  rep:        [{ wave: "sine",     f1: 880,  dur: 0.06, peak: 0.06 }], // обычный повтор — мягкий короткий
+  milestone:  [{ wave: "triangle", f1: 784, dur: 0.28, peak: 0.07 }, { wave: "triangle", f1: 988, dur: 0.28, peak: 0.07, delay: 0.05 }, { wave: "triangle", f1: 1319, dur: 0.28, peak: 0.07, delay: 0.1 }], // юбилей — аккорд G5·B5·E6
+  exercise:   [{ wave: "triangle", f1: 660, f2: 990, dur: 0.16, peak: 0.08 }, { wave: "triangle", f1: 1319, dur: 0.26, peak: 0.08, delay: 0.14 }], // упражнение закрыто
+  workout:    [{ wave: "triangle", f1: 523, dur: 0.16, peak: 0.09 }, { wave: "triangle", f1: 659, dur: 0.16, peak: 0.09, delay: 0.14 }, { wave: "triangle", f1: 784, dur: 0.16, peak: 0.09, delay: 0.28 }, { wave: "triangle", f1: 1047, dur: 0.42, peak: 0.1, delay: 0.42 }], // вся тренировка — восходящая фанфара C·E·G·C
+  transition: [{ wave: "sine",     f1: 500, f2: 760, dur: 0.12, peak: 0.06 }], // переход к следующему упражнению
+  warning:    [{ wave: "square",   f1: 200, dur: 0.14, peak: 0.05 }], // пользователь вышел из кадра
+  recStart:   [{ wave: "sine",     f1: 660, dur: 0.06, peak: 0.06 }], // старт записи
+  recStop:    [{ wave: "sine",     f1: 660, dur: 0.05, peak: 0.06 }, { wave: "sine", f1: 660, dur: 0.05, peak: 0.06, delay: 0.1 }], // стоп записи — двойной
+  recError:   [{ wave: "sawtooth", f1: 400, f2: 200, dur: 0.22, peak: 0.06 }], // ошибка записи
+};
+function wsfx(name) {
+  if (!store.workoutSounds) return;
+  const seq = WSFX[name];
+  if (!seq) return;
+  try { _ensureCtx(); const t0 = _audioCtx.currentTime; seq.forEach((p) => _tone(p, t0)); } catch (e) {}
+}
+// Главное событие повтора — только один звук за раз по приоритету:
+// workout > exercise > milestone > rep. Нельзя проиграть rep+milestone одновременно.
+function wsfxMain(event) {
+  if (event === "workout") wsfx("workout");
+  else if (event === "exercise") wsfx("exercise");
+  else if (event === "milestone") wsfx("milestone");
+  else if (event === "rep") wsfx("rep");
 }
 // Какой звук проиграть на команду. Вся навигация — один глухой «пуп» (soft).
 const NAV_CMDS = ["tab", "open", "back", "closeSheet", "closeFull", "closeSheetBg", "onbBack", "onbNext",
@@ -774,7 +861,7 @@ const countMemo = {};
 
 function render() {
   rolloverIfNeeded();
-  if (ui.screen === "onboarding") { root.innerHTML = Onboarding(); afterRender(); return; }
+  if (ui.screen === "onboarding") { root.innerHTML = Onboarding() + (ui.full ? ui.full() : ""); afterRender(); return; }
   let html = "";
   if (ui.detailId) html = DetailScreen(ui.detailId);
   else {
@@ -859,11 +946,10 @@ function badge(text, color) { return `<span class="badge" style="color:${color}"
 function streakPill(n) { return n >= 2 ? `<span class="streak-pill">🔥 ${n}</span>` : ""; }
 function lbl(text, extra = "") { return `<span class="label secondary ${extra}" style="font-size:13px">${esc(text)}</span>`; }
 
-// Хедер в две строки (ТЗ: убрать переполнение): компактная служебная строка сверху
-// (жучок + язык, по правому краю), крупный заголовок ниже. Кнопок-действий тут нет.
+// Язык всегда доступен справа от заголовка основных экранов.
 function screenHeader(title) {
   return `<div class="screen-head">
-    <h1 class="screen-title">${esc(title)}</h1>
+    <div class="between" style="gap:12px"><h1 class="screen-title">${esc(title)}</h1>${langToggle()}</div>
   </div>`;
 }
 function langToggle() {
@@ -909,15 +995,14 @@ function ChallengeCard(c, withPlay) {
     ? `<button data-act="play:${c.id}" style="width:44px;height:44px;border-radius:50%;background:var(--accent);color:#000;display:flex;align-items:center;justify-content:center">${iconF("play")}</button>`
     : `<span style="width:44px;height:44px;border-radius:50%;background:var(--accent);color:#000;display:flex;align-items:center;justify-content:center">${iconF("play")}</span>`) : "";
 
-  return `<div class="card ${doneBorder}" data-act="open:${c.id}" style="padding:20px;display:flex;flex-direction:column;gap:14px">
+  return `<div class="card challenge-card ${doneBorder}"><button class="challenge-card-main" data-act="open:${c.id}">
     <div class="between" style="align-items:flex-start">
       <div style="font-size:20px;font-weight:700">${esc(c.title)}</div>
       <div class="row gap6">${joined ? streakPill(myStreak(c)) : ""}${challengeEnded(c) ? badge(t("Completed"), "var(--money)") : badge(c.isPublic ? t("Public") : t("Private"), c.isPublic ? "var(--text-secondary)" : "var(--purple)")}</div>
     </div>
     ${!joined ? `<div class="between">${lbl(C.goalsText(c))}${lbl(t("Day %lld of %lld", c.currentDay, c.durationDays))}</div>` : ""}
     ${joined ? joinedFooter : openFooter}
-    ${playBtn ? `<div style="display:flex;justify-content:flex-end">${playBtn}</div>` : ""}
-  </div>`;
+  </button>${playBtn ? `<div class="challenge-card-action">${playBtn}</div>` : ""}</div>`;
 }
 
 // ==========================================================================
@@ -973,6 +1058,7 @@ function YoursTab() {
     ${icon("flame", "")}
     <div class="secondary" style="font-weight:500">${t("You're not in any challenge yet. Join one and put some coins on the line.")}</div>
     <button class="action-btn" data-act="findChallenge">${icon("search")}${t("Find a challenge")}</button>
+    <button class="text-btn" data-act="demo">${t("Try a demo workout")}</button>
   </div>`;
   return screenHeader(t("Today")) + `<div class="stack">
     ${todayHero}
@@ -1392,17 +1478,23 @@ function ProfileTab() {
     <div class="row label" style="justify-content:center;gap:18px;font-size:10px">
       <span class="secondary">${t("Active challenges: %lld", activeCount)}</span><span class="secondary">${t("Finished: %lld", finished)}</span></div>
   </div>`;
+  const guestNotice = isGuest() ? `<div class="card card-hero" style="padding:16px;display:flex;flex-direction:column;gap:10px">
+    <div class="between">${lbl(t("Account"), "tracking-1")}<span class="badge" style="color:var(--accent)">${t("Guest")}</span></div>
+    <div style="font-weight:700">${t("Progress is stored only on this device")}</div>
+    <div class="form-footer">${t("Create an account to sync progress and use social challenges.")}</div>
+    <button class="action-btn" data-act="openAccountGate">${t("Create account")}</button>
+  </div>` : "";
 
   const editing = profileEditing;
   const seg = (key, opts, cur) => `<div class="segmented">${opts.map(([v, n]) => `<button data-act="seg" data-store="${key}" data-val="${v}" class="${cur === v ? "active" : ""}">${esc(n)}</button>`).join("")}</div>`;
-  const numStore = (label, key, min, max, unit) => `<div class="settings-row"><span>${esc(label)}</span>
+  const numStore = (label, key, min, max, unit) => `<div class="settings-row"><span id="lbl-store-${key}">${esc(label)}</span>
     <div class="stepper"><button data-act="dec" data-store="${key}" data-min="${min}" data-max="${max}">−</button>
-      <input class="mono" type="number" data-store="${key}" value="${store[key]}"><span class="mono secondary" style="font-size:13px;min-width:20px">${unit || ""}</span>
+      <input class="mono" type="number" data-store="${key}" value="${store[key]}" aria-labelledby="lbl-store-${key}"><span class="mono secondary" style="font-size:13px;min-width:20px">${unit || ""}</span>
       <button data-act="inc" data-store="${key}" data-min="${min}" data-max="${max}">+</button></div></div>`;
   const roRow = (label, value, unit) => `<div class="settings-row"><span>${esc(label)}</span><span class="mono" style="font-weight:700;font-size:15px">${esc(value)}${unit ? ` <span class="secondary" style="font-size:13px">${esc(unit)}</span>` : ""}</span></div>`;
 
   const editControls = `
-    <input class="field" id="profile-name" value="${esc(profileNameDraft != null ? profileNameDraft : (store["profile.name"] || ""))}" placeholder="${esc(t("Your name"))}" maxlength="20">
+    <input class="field" id="profile-name" value="${esc(profileNameDraft != null ? profileNameDraft : (store["profile.name"] || ""))}" placeholder="${esc(t("Your name"))}" aria-label="${esc(t("Your name"))}" maxlength="20">
     ${seg("profile.gender", Gender.all.map((g) => [g, Gender.name(g)]), gender)}
     ${numStore(t("Age"), "profile.age", 14, 80)}
     ${numStore(t("Height"), "profile.heightCm", 120, 220, t("cm"))}
@@ -1456,9 +1548,11 @@ function ProfileTab() {
       <span class="money" style="font-size:15px;color:${tx.amount > 0 ? "var(--money)" : "var(--red)"}">${tx.amount > 0 ? "+" + tx.amount : tx.amount}</span></div>`).join("")}
   </div>`;
 
+  const soundToggle = (key, label) => `<div class="settings-row"><span id="lbl-${key}">${esc(label)}</span><button data-act="toggleStore" data-key="${key}" role="switch" aria-checked="${!!store[key]}" aria-labelledby="lbl-${key}" class="toggle ${store[key] ? "on" : ""}"></button></div>`;
   const settingsCard = `<div class="card card-soft" style="padding:16px;display:flex;flex-direction:column;gap:12px">
     ${lbl(t("Settings"), "tracking-1")}
-    <div class="settings-row"><span>${t("Language")}</span>${langToggle()}</div>
+    ${soundToggle("workoutSounds", t("Workout sounds"))}
+    ${soundToggle("interfaceSounds", t("Interface sounds"))}
     <button class="action-btn" data-act="openBug" style="background:var(--white-08);color:#fff">${icon("bug")}${t("Report a problem")}</button>
   </div>`;
 
@@ -1491,7 +1585,7 @@ function ProfileTab() {
   const row = (key, label) => `<button class="card" data-act="profileSection:${key}" style="padding:16px 18px;width:100%;display:flex;align-items:center;gap:12px;text-align:left">
     <span style="flex:1;font-weight:600;font-size:16px">${esc(label)}</span>
     <span style="color:var(--text-secondary);display:flex">${icon("chevronRight")}</span></button>`;
-  return screenHeader(t("Profile")) + `<div class="stack">${summary}
+  return screenHeader(t("Profile")) + `<div class="stack">${guestNotice}${summary}
     ${row("body", t("Body & measurements"))}
     ${row("wallet", t("Wallet"))}
     ${Sync.enabled ? row("account", t("Account")) : ""}
@@ -1506,7 +1600,9 @@ function photoSlot(dataURL, caption) {
 function authForm() {
   return `<button class="action-btn" data-act="googleAuth" style="background:#fff;color:#1f1f1f">${t("Continue with Google")}</button>
     <div class="form-footer" style="text-align:center;opacity:.5">${t("or")}</div>
+    <label class="form-label" for="auth-email">${t("Email")}</label>
     <input class="field" id="auth-email" type="email" inputmode="email" autocomplete="email" placeholder="${esc(t("Email"))}">
+    <label class="form-label" for="auth-pass">${t("Password")}</label>
     <input class="field" id="auth-pass" type="password" autocomplete="current-password" placeholder="${esc(t("Password"))}">
     <div style="display:flex;gap:8px">
       <button class="action-btn" data-act="submitAuth" data-mode="signin" style="flex:1;background:var(--white-08);color:#fff">${t("Log in")}</button>
@@ -1523,6 +1619,43 @@ function accountCard() {
        <button class="action-btn" data-act="signOut" style="background:var(--white-08);color:#fff">${t("Log out")}</button>`
     : `<div class="form-footer">${t("Sign in to sync progress across your devices")}</div>${authForm()}`;
   return `<div class="card" style="padding:16px;display:flex;flex-direction:column;gap:12px">${header}${inner}</div>`;
+}
+
+function AuthGateFull() {
+  const intent = ui.authIntent || {};
+  const reason = intent.kind === "join"
+    ? t("To join this challenge, create an account so your progress is saved and visible to other participants.")
+    : intent.kind === "account"
+      ? t("Create an account to sync progress and use social challenges.")
+      : t("To publish or share a challenge, create an account so participants and progress can sync.");
+  return `<div class="fullscreen"><div class="screen" style="min-height:100dvh;padding-top:max(18px,env(safe-area-inset-top));display:flex;flex-direction:column;gap:14px">
+    <button class="cam-btn" data-act="closeAuthGate" aria-label="${t("Close")}">${icon("xmark")}</button>
+    <div class="display" style="font-size:34px">${t("Account required")}</div>
+    <div class="form-footer" style="font-size:15px;line-height:1.45">${reason}</div>
+    <div class="card" style="padding:16px;display:flex;flex-direction:column;gap:12px">${authForm()}</div>
+    <button class="text-btn" data-act="closeAuthGate">${t("Maybe later")}</button>
+  </div></div>`;
+}
+function openAuthGate(kind, id) {
+  ui.authIntent = { kind, id: id || null, returnFull: ui.full };
+  ui.full = AuthGateFull;
+  render();
+}
+function closeAuthGate() {
+  const intent = ui.authIntent;
+  ui.full = intent && intent.returnFull ? intent.returnFull : null;
+  ui.authIntent = null;
+  render();
+}
+function resumeAuthIntent() {
+  const intent = ui.authIntent;
+  ui.authIntent = null;
+  if (!intent) { ui.full = null; render(); return; }
+  if (intent.kind === "join") { ui.full = null; render(); openJoin(intent.id); return; }
+  if (intent.kind === "publicCreate") { ui.form.isPublic = true; ui.full = intent.returnFull || CreateWizard; render(); return; }
+  if (intent.kind === "shareCreate") { ui.full = intent.returnFull || CreateWizard; render(); return; }
+  ui.full = null;
+  render();
 }
 
 // ==========================================================================
@@ -1544,14 +1677,14 @@ function Onboarding() {
       <div style="flex:1"><div class="display" style="font-size:20px">${esc(title)}</div>${subtitle ? `<div class="form-footer" style="margin-top:2px">${esc(subtitle)}</div>` : ""}</div>
       <span style="color:${selected ? "var(--accent)" : "var(--text-secondary)"};display:flex">${selected ? iconF("checkCircle") : icon("plusCircle").replace("M12 8v8M8 12h8", "")}</span>
     </button>`;
-  const question = (title, subtitle, content) => `<div style="padding-top:24px;display:flex;flex-direction:column;gap:8px;height:100%">
+  const question = (title, subtitle, content) => `<div class="create-question">
     <div class="display" style="font-size:30px">${esc(title)}</div>${subtitle ? `<div class="form-footer">${esc(subtitle)}</div>` : ""}
-    <div style="flex:1;display:flex;flex-direction:column;justify-content:center;gap:10px">${content}</div></div>`;
+    <div class="create-question-content">${content}</div></div>`;
   const wheel = (key, min, max, fmtFn) => {
     // Ручной ввод: тап по «123» открывает поле с клавиатурой.
     if (ui.wheelEdit === key) {
       return `<div class="wheel-wrap">
-        <input class="field wheel-input" id="wheel-input" type="number" inputmode="numeric" min="${min}" max="${max}" value="${store[key]}" data-wheelkey="${key}" data-min="${min}" data-max="${max}">
+        <input class="field wheel-input" id="wheel-input" type="number" inputmode="numeric" aria-label="${t("Max reps in one set")}" min="${min}" max="${max}" value="${store[key]}" data-wheelkey="${key}" data-min="${min}" data-max="${max}">
         <button class="action-btn" data-act="wheelDone" style="margin-top:14px">${t("Done")}</button>
       </div>`;
     }
@@ -1571,7 +1704,7 @@ function Onboarding() {
   // Вход — последний шаг, перед сохранением прогресса (только с Firebase).
   else if (step === STEP.auth) content = question(t("Create your account"), t("So your progress is saved and syncs across your devices."), authForm());
   else if (step === STEP.name) content = question(t("Your name"), t("Friends will see it in the leaderboard."),
-    `<input class="field" id="onb-name" value="${esc(store["profile.name"] || "")}" placeholder="${esc(t("Your name"))}" maxlength="20" autocomplete="name">`);
+    `<input class="field" id="onb-name" value="${esc(store["profile.name"] || "")}" placeholder="${esc(t("Your name"))}" aria-label="${esc(t("Your name"))}" maxlength="20" autocomplete="name">`);
   else if (step === STEP.startExercise) content = question(t("Which exercise do you want to start with?"), null, EX_ORDER.map((ex) => optionCard(Exercise.displayName(ex), null, startEx === ex, `onbSet:profile.startExercise:${ex}`)).join(""));
   else if (step === STEP.fitness) content = question(t("Your fitness level"), null, Level.all.map((l) => optionCard(Level.name(l), Level.subtitle(l), level === l, `onbSet:profile.level:${l}`)).join(""));
   else if (step === STEP.maxReps) content = question(t("How many %@ can you do in one set?", Exercise.displayName(startEx)), t("Honestly — the daily goal is built from this."), wheel("profile.maxReps", 1, 120, (v) => String(v)));
@@ -1596,13 +1729,13 @@ function Onboarding() {
   const authStep = Sync.enabled && step === STEP.auth;
   const footerLabel = step === 0 ? t("Get started") : step === LAST_STEP ? t("Let's go") : t("Continue");
   const footer = authStep
-    ? `<div style="padding:0 20px 8px;padding-bottom:calc(8px + env(safe-area-inset-bottom))"><button class="text-btn" data-act="skipAuth" style="width:100%">${t("Skip for now")}</button></div>`
-    : `<div style="padding:0 20px 8px;padding-bottom:calc(8px + env(safe-area-inset-bottom))"><button class="action-btn" data-act="onbNext">${footerLabel}</button></div>`;
+    ? `<div style="padding:0 20px 8px;padding-bottom:calc(8px + env(safe-area-inset-bottom));text-align:center"><div class="form-footer" style="margin-bottom:4px">${t("You’ll get 50 test coins. Guest progress stays only on this device.")}</div><button class="text-btn" data-act="skipAuth" style="width:100%">${t("Continue as guest")}</button></div>`
+    : `<div style="padding:0 20px 8px;padding-bottom:calc(8px + env(safe-area-inset-bottom));display:flex;flex-direction:column;gap:4px"><button class="action-btn" data-act="onbNext">${footerLabel}</button>${step === 0 ? `<button class="text-btn" data-act="demo">${t("Try a demo workout")}</button>` : ""}</div>`;
   return `<div style="min-height:100dvh;display:flex;flex-direction:column">
     <div class="row gap12" style="padding:max(10px,env(safe-area-inset-top)) 20px 0;align-items:center">
-      <button data-act="onbBack" style="width:32px;height:32px;display:flex;align-items:center;justify-content:center;color:#fff;opacity:${step > 0 ? 1 : 0}">${icon("chevronLeft")}</button>
+      ${step > 0 ? `<button data-act="onbBack" aria-label="${t("Back")}" style="width:32px;height:32px;display:flex;align-items:center;justify-content:center;color:#fff">${icon("chevronLeft")}</button>` : `<span style="width:32px;height:32px"></span>`}
       <div style="flex:1">${bar(step / LAST_STEP)}</div>
-      ${step > 0 ? `<span class="label secondary" style="font-size:12px;white-space:nowrap">${t("Step %lld of %lld", step, LAST_STEP)}</span>` : ""}
+      ${step > 0 ? `<span class="label secondary" style="font-size:12px;white-space:nowrap">${t("Step %lld of %lld", step, LAST_STEP)}</span>` : langToggle()}
     </div>
     <div style="flex:1;padding:0 24px;overflow-y:auto">${content}</div>
     ${footer}
@@ -1618,7 +1751,12 @@ function finishOnboarding() {
   track("onboarding_completed", { level: store["profile.level"], daily_goal: store.dailyGoal });
   ui.screen = "tabs";
   // Пришёл по ссылке-приглашению — сразу открываем вступление в общий челлендж.
-  if (JOIN_INTENT) { ui.tab = "challenges"; render(); openJoin("main"); return; }
+  if (JOIN_INTENT) {
+    ui.tab = "challenges";
+    render();
+    if (isGuest()) openAuthGate("join", "main"); else openJoin("main");
+    return;
+  }
   render();
 }
 
@@ -1631,16 +1769,17 @@ function sheetShell(title, body, leftIcon) {
     <div class="sheet-body">${body}</div></div></div>`;
 }
 function fieldStepper(label, key, min, max, by) {
-  return `<div class="settings-row"><span>${esc(label)}</span>
+  const labelId = `lbl-model-${key}`;
+  return `<div class="settings-row"><span id="${labelId}">${esc(label)}</span>
     <div class="stepper"><button data-act="dec" data-key="${key}" data-min="${min}" data-max="${max}" data-by="${by || 1}">−</button>
-      <input class="mono" type="number" data-model="${key}" value="${ui.form[key]}">
+      <input class="mono" type="number" data-model="${key}" value="${ui.form[key]}" aria-labelledby="${labelId}">
       <button data-act="inc" data-key="${key}" data-min="${min}" data-max="${max}" data-by="${by || 1}">+</button></div></div>`;
 }
 
-// Создание челленджа — мастер по принципу онбординга (полный экран, без анимации-выезда).
-// Шаги: 0 упражнения → 1 нормы → 2 условия → 3 ставка → 4 название → 5 итог (Сохранить/Поделиться).
+// Создание челленджа: короткий мастер из трёх шагов → карточки итогового ревью.
+// Из ревью каждый раздел открывается отдельно и после сохранения возвращает прямо в ревью.
 const CREATE_EX = ["pushups", "squats", "pullups", "dips"];
-const CREATE_LAST = 5;
+const CREATE_LAST = 3;
 function selectedExercises(f) { return CREATE_EX.filter((e) => f["sel_" + e]); }
 function defaultTitle(f) {
   const sel = selectedExercises(f);
@@ -1650,26 +1789,33 @@ function defaultTitle(f) {
 
 function createSummary(f) {
   const sel = selectedExercises(f);
-  const row = (k, v) => `<div class="between" style="gap:12px"><span class="label secondary" style="font-size:12px">${esc(k)}</span><span style="font-weight:600;font-size:15px;text-align:right">${esc(v)}</span></div>`;
   const buyIn = COIN_SYM + fmt(f.buyIn);
-  return `<div style="padding-top:20px;display:flex;flex-direction:column;gap:16px;height:100%;justify-content:center">
-    <div class="display" style="font-size:26px;text-align:center;text-wrap:balance">${esc(f.title.trim() || defaultTitle(f))}</div>
-    <div class="card" style="padding:16px;display:flex;flex-direction:column;gap:12px">
-      ${sel.map((e) => row(Exercise.displayName(e), t("%lld / day", f[e]))).join("")}
-    </div>
-    <div class="card" style="padding:16px;display:flex;flex-direction:column;gap:12px">
-      ${row(t("Duration"), t("%lld days", f.duration))}
-      ${row(t("Missed days"), MissPolicy.displayName(f.miss))}
-      ${f.progOn ? row(t("Progression"), `+${f.progStep} ${f.progPeriod === "day" ? t("per day") : t("per week")}`) : ""}
-      ${row(t("Public challenge"), f.isPublic ? t("Yes") : t("No"))}
-      ${row(t("Stake amount"), buyIn)}
+  const card = (step, iconName, title, value) => `<button class="card create-review-card" data-act="editCreate:${step}">
+    <span class="create-review-icon">${icon(iconName)}</span><span class="create-review-copy"><span class="create-review-label">${esc(title)}</span><span class="create-review-value">${esc(value)}</span></span><span class="secondary">${icon("chevronRight")}</span>
+  </button>`;
+  const exerciseValue = sel.map((e) => `${Exercise.displayName(e)} · ${t("%lld / day", f[e])}`).join(" + ");
+  const rules = [MissPolicy.displayName(f.miss), f.isPublic ? t("Public challenge") : t("Private challenge")];
+  if (f.progOn) rules.push(`+${f.progStep} ${f.progPeriod === "day" ? t("per day") : t("per week")}`);
+  return `<div class="create-review">
+    <div><div class="display create-review-title">${t("Review challenge")}</div><div class="form-footer">${t("Tap any card to make changes before creating.")}</div></div>
+    <div class="create-review-name">${esc(f.title.trim() || defaultTitle(f))}</div>
+    <div class="create-review-list">
+      ${card(0, "flame", t("Exercise & daily goal"), exerciseValue)}
+      ${card(1, "calendar", t("Duration"), t("%lld days", f.duration))}
+      ${card(2, "checkCircle", t("Rules"), rules.join(" · "))}
+      ${card(2, "dollar", t("Stake amount"), buyIn)}
     </div>
   </div>`;
 }
 
+function progressionEndText(f) {
+  const increments = f.progOn ? progIncrements({ step: f.progStep, period: f.progPeriod }, f.duration) : 0;
+  return selectedExercises(f).map((e) => `${Exercise.displayName(e)} ${f[e] + f.progStep * increments}`).join(" · ");
+}
+
 function CreateWizard() {
   const f = ui.form, step = f.step, sel = selectedExercises(f);
-  const seg = (opts, key, cur) => `<div class="segmented">${opts.map(([v, n]) => `<button data-act="seg" data-key="${key}" data-val="${v}" class="${cur === v ? "active" : ""}">${esc(n)}</button>`).join("")}</div>`;
+  const seg = (opts, key, cur) => `<div class="segmented">${opts.map(([v, n]) => `<button data-act="seg" data-key="${key}" data-val="${v}" class="${String(cur) === String(v) ? "active" : ""}">${esc(n)}</button>`).join("")}</div>`;
   const question = (title, subtitle, content) => `<div style="padding-top:24px;display:flex;flex-direction:column;gap:8px;height:100%">
     <div class="display" style="font-size:30px">${esc(title)}</div>${subtitle ? `<div class="form-footer">${esc(subtitle)}</div>` : ""}
     <div style="flex:1;display:flex;flex-direction:column;justify-content:center;gap:10px">${content}</div></div>`;
@@ -1684,27 +1830,28 @@ function CreateWizard() {
   };
 
   let content, label = t("Continue");
-  if (step === 0) content = question(t("Which exercises?"), t("Pick one or several — a combo counts them all."), CREATE_EX.map(checkCard).join(""));
-  else if (step === 1) content = question(t("How many per day?"), t("Daily goal for each exercise."),
-    (sel.length ? sel : ["pushups"]).map((e) => fieldStepper(Exercise.displayName(e), e, 5, 500, 5)).join(""));
-  else if (step === 2) content = question(t("Conditions"), null, `
-      ${fieldStepper(t("Duration (days)"), "duration", 1, 365, 1)}
-      <div class="settings-row"><span>${t("Missed days")}</span></div>
-      ${seg(MissPolicy.all.map((p) => [p, MissPolicy.displayName(p)]), "miss", f.miss)}
+  if (step === 0) content = question(t("Exercise & daily goal"), t("Pick exercises and set a goal for each."), `${CREATE_EX.map(checkCard).join("")}
+    <div class="create-goals">${sel.map((e) => fieldStepper(Exercise.displayName(e), e, 5, 500, 5)).join("")}</div>`);
+  else if (step === 1) content = question(t("How long?"), t("Choose how long the challenge will run."),
+    `<div class="duration-options">${[[14, t("2 weeks"), t("Good for a quick start")], [30, t("1 month"), t("Balanced challenge")], [60, t("2 months"), t("Long-term progress")]].map(([days, title, sub]) => `<button class="duration-option ${+f.duration === days ? "selected" : ""}" data-act="seg" data-key="duration" data-val="${days}"><span><strong>${esc(title)}</strong><small>${esc(sub)} · ${t("%lld days", days)}</small></span>${+f.duration === days ? iconF("checkCircle") : icon("chevronRight")}</button>`).join("")}</div>
+    <div class="custom-duration"><div class="form-label">${t("Custom duration")}</div>${fieldStepper(t("Duration (days)"), "duration", 1, 365, 1)}</div>`);
+  else if (step === 2) content = question(t("Rules & stake"), t("Set the final details before review."), `
+      <section class="create-rule-block"><div class="create-rule-heading"><div class="create-rule-title">${t("Missed days")}</div><div class="form-footer">${t("Missed days decide how many unfinished days you can have before you leave the challenge and lose your stake.")}</div></div>
+      <div class="miss-options">${[
+        ["never", t("No protection"), t("Miss one day and you're out.")],
+        ["oneTotal", t("One safety day"), t("You can miss once during the whole challenge.")],
+        ["onePerTwoWeeks", t("Recurring protection"), t("You can miss once in every 14 days.")],
+      ].map(([v, title, sub]) => `<button class="miss-option ${f.miss === v ? "selected" : ""}" data-act="seg" data-key="miss" data-val="${v}"><span><strong>${esc(title)}</strong><small>${esc(sub)}</small></span>${f.miss === v ? iconF("checkCircle") : icon("plusCircle")}</button>`).join("")}</div></section>
       <div class="settings-row"><span id="lbl-isPublic">${t("Public challenge")}</span><button data-act="toggle" data-key="isPublic" role="switch" aria-checked="${f.isPublic}" aria-labelledby="lbl-isPublic" class="toggle ${f.isPublic ? "on" : ""}"></button></div>
-      <div class="settings-row"><span id="lbl-progOn">${t("Progressive overload")}</span><button data-act="toggle" data-key="progOn" role="switch" aria-checked="${f.progOn}" aria-labelledby="lbl-progOn" class="toggle ${f.progOn ? "on" : ""}"></button></div>
-      ${f.progOn ? fieldStepper(t("Increase by"), "progStep", 1, 50, 1) + seg([["day", t("per day")], ["week", t("per week")]], "progPeriod", f.progPeriod) : ""}`);
-  else if (step === 3) content = question(t("Stake amount"), t("The buy-in is deducted from your balance right away. Test currency — no real money."), `
-      <div class="row gap8"><span class="secondary money" style="font-size:24px">${COIN_SYM}</span><input class="field money" type="number" inputmode="numeric" data-model="buyIn" value="${f.buyIn}" style="font-size:24px"></div>`);
-  else if (step === 4) { content = question(t("Name your challenge"), t("Friends will see it in the leaderboard."),
-      `<input class="field" data-model="title" value="${esc(f.title)}" placeholder="${esc(defaultTitle(f))}" maxlength="40">`); label = t("Done"); }
+      <section class="create-rule-block"><div class="settings-row create-rule-toggle"><span id="lbl-progOn"><strong>${t("Progressive overload")}</strong><small>${t("Increase your daily target gradually as you get stronger.")}</small></span><button data-act="toggle" data-key="progOn" role="switch" aria-checked="${f.progOn}" aria-labelledby="lbl-progOn" class="toggle ${f.progOn ? "on" : ""}"></button></div>
+      ${f.progOn ? fieldStepper(t("Increase by"), "progStep", 1, 50, 1) + seg([["day", t("per day")], ["week", t("per week")]], "progPeriod", f.progPeriod) + `<div class="progression-result"><span>${t("Final daily target")}</span><strong>${esc(progressionEndText(f))}</strong></div>` : `<div class="form-footer">${t("No increase — the daily target stays the same.")}</div>`}</section>
+      <div class="form-section"><div class="form-label">${t("Stake amount")}</div><div class="row gap8"><span class="secondary money" style="font-size:24px">${COIN_SYM}</span><input class="field money" type="number" inputmode="numeric" data-model="buyIn" value="${f.buyIn}" style="font-size:24px"></div></div>
+      <div class="form-section"><label class="form-label" for="create-title">${t("Challenge name")}</label><input id="create-title" class="field" data-model="title" value="${esc(f.title)}" placeholder="${esc(defaultTitle(f))}" maxlength="40"></div>`);
   else content = createSummary(f);
 
   const footer = step === CREATE_LAST
-    ? `<div style="padding:0 20px 8px;padding-bottom:calc(8px + env(safe-area-inset-bottom));display:flex;flex-direction:column;gap:8px">
-        <button class="action-btn money" data-act="saveShareChallenge">${iconF("share")}${t("Save & share")}</button>
-        <button class="action-btn" data-act="saveChallenge" style="background:var(--white-08);color:#fff">${t("Save")}</button></div>`
-    : `<div style="padding:0 20px 8px;padding-bottom:calc(8px + env(safe-area-inset-bottom))"><button class="action-btn" data-act="createNext">${label}</button></div>`;
+    ? `<div style="padding:0 20px 8px;padding-bottom:calc(8px + env(safe-area-inset-bottom))"><button class="action-btn" data-act="saveChallenge">${t("Create challenge")}</button></div>`
+    : `<div style="padding:0 20px 8px;padding-bottom:calc(8px + env(safe-area-inset-bottom))"><button class="action-btn" data-act="createNext">${f.editingFromReview ? t("Save changes") : label}</button></div>`;
 
   return `<div class="fullscreen"><div style="min-height:100dvh;display:flex;flex-direction:column">
     <div class="row gap12" style="padding:max(10px,env(safe-area-inset-top)) 20px 16px;align-items:center">
@@ -1848,6 +1995,26 @@ function ChallengeCompleteFull() {
   </div></div>`;
 }
 
+function DemoCompleteFull() {
+  const reps = (ui.form && ui.form.demoReps) || 5;
+  const onboarding = ui.screen === "onboarding";
+  return `<div class="fullscreen">${confetti()}<div class="celebrate">
+    <div class="c-money pop-in" style="font-size:84px;display:flex">${iconF("checkCircle")}</div>
+    <div class="display" style="font-size:38px">${t("Camera check complete")}</div>
+    <div class="money" style="font-size:64px">${reps}</div>
+    <div class="form-footer" style="max-width:340px;font-size:15px">${t("Your reps were recognized correctly. Join a challenge to start saving progress.")}</div>
+    <div class="spacer"></div>
+    <button class="action-btn" data-act="${onboarding ? "onbFromDemo" : "findChallengeDemo"}" style="max-width:340px">${icon(onboarding ? "flame" : "search")}${t(onboarding ? "Get started" : "Find a challenge")}</button>
+    <button class="text-btn" data-act="demoAgain">${t("Try again")}</button>
+  </div></div>`;
+}
+function openDemoComplete(reps) {
+  ui.form = { demoReps: reps };
+  ui.full = DemoCompleteFull;
+  pendingCelebrate = true;
+  render();
+}
+
 // ==========================================================================
 // Сессия с камерой (живёт вне цикла render, чтобы не рвать видеопоток)
 // ==========================================================================
@@ -1855,9 +2022,12 @@ const CAN_RECORD = typeof MediaRecorder !== "undefined" && !!HTMLCanvasElement.p
 let liveSession = null;
 
 async function openSession(challengeId, startExercise) {
-  const c = app.challenges.find((x) => x.id === challengeId);
-  if (!c || liveSession) return;
-  const goals = c.goals.map((g) => ({ exercise: g.exercise, target: C.norm(c, g), start: C.myToday(c, g.exercise) }));
+  const isDemo = challengeId === "demo";
+  const c = isDemo ? null : app.challenges.find((x) => x.id === challengeId);
+  if ((!isDemo && !c) || liveSession) return;
+  const goals = isDemo
+    ? [{ exercise: startExercise || "pushups", target: 5, start: 0 }]
+    : c.goals.map((g) => ({ exercise: g.exercise, target: C.norm(c, g), start: C.myToday(c, g.exercise) }));
 
   const overlay = document.createElement("div");
   overlay.className = "session";
@@ -1868,18 +2038,19 @@ async function openSession(challengeId, startExercise) {
       <div class="between" style="align-items:flex-start">
         <button class="cam-btn" data-sess="close" aria-label="${t("Close")}">${icon("xmark")}</button>
         <div class="cam-col">
-          <button class="cam-btn" data-sess="voice" aria-pressed="${store.voiceEnabled}" aria-label="${t("Voice guidance")}">${icon(store.voiceEnabled ? "speakerOn" : "speakerOff")}</button>
           ${CAN_RECORD ? `<button class="cam-btn" data-sess="record" aria-label="${t("Record video")}">${icon("record")}</button>` : ""}
         </div>
       </div>
       <div class="hint" id="sess-hint"></div>
     </div>
+    <div class="sess-countdown" id="sess-countdown" aria-live="assertive"></div>
     <div class="hud"><div id="sess-counters"></div><div id="sess-bottom" style="width:100%;display:flex;flex-direction:column;align-items:center;gap:10px"></div></div>`;
   document.body.appendChild(overlay);
 
   const video = overlay.querySelector("video");
   const canvas = overlay.querySelector(".skeleton");
   const hintEl = overlay.querySelector("#sess-hint");
+  const countdownEl = overlay.querySelector("#sess-countdown");
   const countersEl = overlay.querySelector("#sess-counters");
   const bottomEl = overlay.querySelector("#sess-bottom");
 
@@ -1889,19 +2060,26 @@ async function openSession(challengeId, startExercise) {
   let active = 0;
   if (startExercise) { const i = goals.findIndex((g) => g.exercise === startExercise); if (i >= 0) active = i; }
 
-  const sess = new window.PoseSession(goals.map((g) => g.exercise), { voice: store.voiceEnabled, lang: store.lang === "ru" ? "ru-RU" : "en-US" });
+  const sess = new window.PoseSession(goals.map((g) => g.exercise));
   sess.setActive(active);
   liveSession = { sess, overlay };
 
+  // Индикатор загрузки: перекрывает экран, пока открывается камера и грузится MediaPipe.
+  const loader = document.createElement("div");
+  loader.style.cssText = "position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;z-index:20;background:rgba(0,0,0,.55)";
+  loader.innerHTML = `<div class="spinner"></div><div style="color:#fff;font-weight:600">${t("Preparing workout…")}</div>`;
+  overlay.appendChild(loader);
+
   try {
     await sess.start(video, canvas);
+    loader.remove();
   } catch (err) {
-    overlay.querySelector(".hud").innerHTML = "";
-    hintEl.style.display = "none";
-    const pv = document.createElement("div");
-    pv.style.cssText = "position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;padding:32px;text-align:center";
-    pv.innerHTML = `<div style="width:44px;height:44px;color:rgba(255,255,255,.7)">${iconF("camera")}</div><div>${t("Camera access is needed to count your reps.")}</div>`;
-    overlay.appendChild(pv);
+    // Ошибка камеры/модели: завершаем сессию, чистим и предлагаем повтор — приложение не виснет.
+    sess.stop();
+    overlay.remove();
+    liveSession = null;
+    showCameraError(cameraError(err), challengeId, startExercise);
+    return;
   }
 
   const totalFor = (g, r) => g.start + (r ? r.repCount : 0);
@@ -1926,7 +2104,26 @@ async function openSession(challengeId, startExercise) {
     prevTotal = totalFor(g, resultFor(g.exercise)); // сброс, чтобы пульс не сработал при смене упражнения
   }
   renderCounter();
-  let prevGoalReached = false, prevBottomKey = "";
+  let prevGoalReached = false, prevBottomKey = "", prevTracked = false, lastWarnTs = 0;
+  let countingStarted = false, readySince = 0, countdownShown = 0, demoFinishing = false;
+
+  function resetReadyState() {
+    countingStarted = false;
+    readySince = 0;
+    countdownShown = 0;
+    countdownEl.textContent = "";
+    countdownEl.classList.remove("show");
+    sess.setCountingEnabled(false);
+  }
+
+  // Плашка-уведомление поверх камеры («Push-ups completed» и т.п.) — короткая, ~1.5 с.
+  function flashPlate(text) {
+    const p = document.createElement("div");
+    p.style.cssText = "position:absolute;left:50%;top:36%;transform:translate(-50%,-50%);background:rgba(0,0,0,.72);color:#fff;font-weight:800;font-size:22px;padding:16px 24px;border-radius:16px;z-index:30;pointer-events:none;text-align:center";
+    p.textContent = text;
+    overlay.appendChild(p);
+    setTimeout(() => p.remove(), 1500);
+  }
 
   function loop() {
     if (liveSession !== undefined && liveSession && liveSession.sess === sess) {
@@ -1935,7 +2132,6 @@ async function openSession(challengeId, startExercise) {
       const g = goals[active], ar = resultFor(g.exercise), total = totalFor(g, ar);
       const curReached = g.target != null && total >= g.target;
       const allReached = goals.every((x) => x.target != null && totalFor(x, resultFor(x.exercise)) >= x.target);
-      const hasNext = combo && active < goals.length - 1;
 
       // Счётчик активного упражнения
       const numEl = countersEl.querySelector("#sess-num");
@@ -1943,27 +2139,72 @@ async function openSession(challengeId, startExercise) {
         numEl.textContent = total;
         const cls = curReached ? "c-money" : (ar && ar.status === "down" ? "c-accent" : "c-white");
         numEl.className = numEl.className.replace(/c-(money|accent|white)/, cls);
-        // Пульс + вибро + звук на каждом новом засчитанном повторе. Каждый 10-й — юбилейный:
-        // яркий аккорд, сильная вибрация и увеличенный пульс числа.
+        // Новый засчитанный повтор: один звук по приоритету workout > exercise > milestone > rep.
+        // На повторе, закрывающем упражнение/тренировку, обычный rep/milestone не звучит.
         if (total > prevTotal && total > 0) {
           const milestone = total % 10 === 0;
-          if (milestone) { sfxMilestone(); haptic([0, 40, 40, 90]); }
-          else { sfx("rep"); haptic(12); }
+          const justReached = curReached && !prevGoalReached;
+          const event = justReached ? (allReached ? "workout" : "exercise") : (milestone ? "milestone" : "rep");
+          wsfxMain(event);
+          haptic(event === "rep" ? 12 : [0, 40, 40, 90]);
+          if (justReached) flashPlate(t("%@ completed", Exercise.displayName(g.exercise)));
+          if (isDemo && allReached && !demoFinishing) {
+            demoFinishing = true;
+            setTimeout(() => { if (liveSession && liveSession.sess === sess) endSession(true); }, 700);
+          }
+          const big = milestone || justReached;
           if (numEl.animate && !REDUCE_MOTION()) {
-            numEl.animate([{ transform: "scale(1)" }, { transform: `scale(${milestone ? 1.32 : 1.18})` }, { transform: "scale(1)" }],
-              { duration: milestone ? 620 : 500, easing: "cubic-bezier(0.34,1.28,0.7,1)" });
+            numEl.animate([{ transform: "scale(1)" }, { transform: `scale(${big ? 1.32 : 1.18})` }, { transform: "scale(1)" }],
+              { duration: big ? 620 : 500, easing: "cubic-bezier(0.34,1.28,0.7,1)" });
           }
         }
         prevTotal = total;
       }
 
-      // Подсказка по активному упражнению
+      // Сначала стабильно находим тело, затем даём человеку 3 секунды занять позицию.
+      const tracked = !!(ar && (ar.status === "up" || ar.status === "down"));
+      const now = performance.now();
+      if (!countingStarted) {
+        if (!tracked) {
+          readySince = 0;
+          countdownShown = 0;
+          countdownEl.textContent = "";
+          countdownEl.classList.remove("show");
+        } else {
+          if (!readySince) readySince = now;
+          const elapsed = now - readySince;
+          if (elapsed >= 500) {
+            const n = 3 - Math.floor((elapsed - 500) / 1000);
+            if (n > 0 && n !== countdownShown) {
+              countdownShown = n;
+              countdownEl.textContent = String(n);
+              countdownEl.classList.add("show");
+              sfx("tick");
+            } else if (n <= 0) {
+              countingStarted = true;
+              sess.setCountingEnabled(true);
+              countdownEl.textContent = t("Go!");
+              setTimeout(() => countdownEl.classList.remove("show"), 650);
+            }
+          }
+        }
+      }
+
+      // Плашка нужна только пока камера не готова. Во время нормального счёта
+      // она исчезает, чтобы текст не мелькал над человеком на каждом движении.
       let hint;
-      if (!ar || ar.status === "noBody") hint = t("Point the camera at yourself");
-      else if (ar.status === "up" || ar.status === "down") hint = null;
-      else hint = g.exercise === "squats" ? t("Both legs must be fully in frame") : t("Both arms must be fully in frame");
+      if (!ar || ar.status === "noBody") hint = t("Step into frame");
+      else if (!tracked) hint = g.exercise === "squats" ? t("Both legs must be fully in frame") : t("Both arms must be fully in frame");
+      else if (!countingStarted) hint = t("Body found — hold still");
+      else hint = null;
       hintEl.style.display = hint ? "" : "none";
-      if (hint) hintEl.textContent = hint;
+      hintEl.textContent = hint || "";
+      // Пользователь вышел из кадра (был в кадре → пропал): короткий warning, не чаще раза в 4 с.
+      if (prevTracked && !tracked && total > 0) {
+        const nowTs = performance.now();
+        if (nowTs - lastWarnTs > 4000) { wsfx("warning"); lastWarnTs = nowTs; }
+      }
+      prevTracked = tracked;
 
       // Нижняя панель: угол текущего упражнения + кнопка Завершить/Готово (переключение упражнений — в блоке счётчика)
       const angle = ar && ar.bendAngle != null ? Math.round(ar.bendAngle) : null;
@@ -1975,42 +2216,112 @@ async function openSession(challengeId, startExercise) {
         else if (sessionTotal > 0) b += `<button class="action-btn" data-sess="finish" style="max-width:340px">${icon("check")}${t("Done")}</button>`;
         bottomEl.innerHTML = b;
       }
-      // Голос: похвала при закрытии текущего упражнения (в комбо — зовём к следующему).
-      if (curReached && !prevGoalReached) { sess.say(hasNext ? t("Next exercise") : t("Goal reached!")); haptic([0, 40, 40, 80]); }
       prevGoalReached = curReached;
     }
     if (liveSession && liveSession.sess === sess) requestAnimationFrame(loop);
   }
   requestAnimationFrame(loop);
 
-  function finish() {
+  let finishing = false;
+  // Завершение сессии. save=true — засчитать повторы; в обоих случаях активная запись
+  // авто-сохраняется, чтобы видео не терялось. Двойное сохранение исключено флагом finishing.
+  async function endSession(save) {
+    if (finishing) return;
+    finishing = true;
     const counts = {};
     sess.snapshot.results.forEach((r) => (counts[r.exercise] = r.repCount));
-    sess.stop();
-    overlay.remove();
-    liveSession = null;
-    const closed = addReps(c, counts);
-    render();
-    if (closed) { C.isFinished(c) ? openChallengeComplete(c) : openDayComplete(c); }
+    if (sess.isRecording()) { try { await sess.toggleRecording(); } catch (e) { wsfx("recError"); } }
+    if (save) {
+      if (isDemo) {
+        sess.stop(); overlay.remove(); liveSession = null;
+        openDemoComplete(Object.values(counts).reduce((sum, n) => sum + n, 0));
+        return;
+      }
+      let closed;
+      try { closed = addReps(c, counts); }
+      catch (e) { finishing = false; toast(t("Couldn't save. Try again.")); return; } // разблокируем — можно повторить
+      sess.stop(); overlay.remove(); liveSession = null;
+      render();
+      if (closed) { C.isFinished(c) ? openChallengeComplete(c) : openDayComplete(c); }
+    } else {
+      sess.stop(); overlay.remove(); liveSession = null;
+    }
+  }
+
+  // Крестик: если есть засчитанные повторы — спрашиваем; иначе закрываем сразу.
+  function askExit() {
+    const done = sess.snapshot.results.reduce((s, r) => s + r.repCount, 0);
+    if (done <= 0) { endSession(false); return; }
+    if (overlay.querySelector(".sess-modal")) return;
+    const dlg = document.createElement("div");
+    dlg.className = "sess-modal";
+    dlg.style.cssText = "position:absolute;inset:0;z-index:40;display:flex;align-items:center;justify-content:center;padding:24px;background:rgba(0,0,0,.6)";
+    dlg.innerHTML = `<div role="dialog" aria-modal="true" style="background:var(--card,#1a1a1a);border-radius:20px;padding:22px;width:100%;max-width:340px;display:flex;flex-direction:column;gap:12px;text-align:center">
+      <div style="font-weight:800;font-size:20px">${t("Finish workout?")}</div>
+      <div style="color:var(--text-secondary);font-size:15px;margin-bottom:6px">${t("Save completed reps?")}</div>
+      <button class="action-btn money" data-sess="doSave">${t("Save workout")}</button>
+      <button class="action-btn" data-sess="doExit" style="background:var(--white-08);color:#fff">${t("Exit without saving")}</button>
+      <button class="text-btn" data-sess="doContinue">${t("Continue workout")}</button>
+    </div>`;
+    overlay.appendChild(dlg);
   }
 
   overlay.addEventListener("click", async (e) => {
     const b = e.target.closest("[data-sess]");
     if (!b) return;
     const a = b.dataset.sess;
-    if (a === "close" || a === "finish") finish();
+    if (a === "close") askExit();
+    else if (a === "finish") endSession(true);
+    else if (a === "doSave") { setBtnLoading(b, true, t("Save workout")); await endSession(true); if (document.body.contains(overlay)) setBtnLoading(b, false); }
+    else if (a === "doExit") endSession(false);
+    else if (a === "doContinue") { const m = overlay.querySelector(".sess-modal"); if (m) m.remove(); }
     else if (a === "next") {
-      if (active < goals.length - 1) { active++; sess.setActive(active); renderCounter(); prevBottomKey = ""; prevGoalReached = false; }
+      if (active < goals.length - 1) { active++; sess.setActive(active); resetReadyState(); wsfx("transition"); renderCounter(); prevBottomKey = ""; prevGoalReached = false; }
     }
     else if (a === "prev") {
-      if (active > 0) { active--; sess.setActive(active); renderCounter(); prevBottomKey = ""; prevGoalReached = false; }
+      if (active > 0) { active--; sess.setActive(active); resetReadyState(); renderCounter(); prevBottomKey = ""; prevGoalReached = false; }
     }
-    else if (a === "voice") { store.voiceEnabled = !store.voiceEnabled; sess.setVoice(store.voiceEnabled); b.innerHTML = icon(store.voiceEnabled ? "speakerOn" : "speakerOff"); b.style.color = store.voiceEnabled ? "var(--accent)" : "rgba(255,255,255,.6)"; }
     else if (a === "record") {
-      const on = await sess.toggleRecording();
+      let on;
+      try { on = await sess.toggleRecording(); }
+      catch (err) { wsfx("recError"); toast(t("Couldn't save. Try again.")); return; }
+      if (on) { wsfx("recStart"); toast(t("Recording started")); } else wsfx("recStop");
       b.innerHTML = icon(on ? "stop" : "record");
       b.style.color = on ? "var(--red)" : "rgba(255,255,255,.85)";
     }
+  });
+}
+
+// Понятное сообщение об ошибке камеры/модели по типу сбоя. denied → есть подсказка про настройки.
+function cameraError(err) {
+  const name = err && err.name;
+  if (name === "NotAllowedError" || name === "SecurityError" || name === "PermissionDeniedError")
+    return { msg: t("Camera permission denied"), hint: t("Allow camera access in your browser settings, then retry.") };
+  if (name === "NotFoundError" || name === "DevicesNotFoundError" || name === "OverconstrainedError")
+    return { msg: t("Camera not found") };
+  if (err && err.code === "offline") return { msg: t("Internet connection required") };
+  if (err && err.code === "poseLoad") return { msg: t("Couldn't load pose recognition") };
+  return { msg: t("Camera access is needed to count your reps.") };
+}
+
+// Экран ошибки камеры поверх приложения: сообщение + Retry (заново) / Cancel (назад).
+function showCameraError(info, challengeId, startExercise) {
+  const ov = document.createElement("div");
+  ov.className = "session";
+  ov.style.cssText = "display:flex;align-items:center;justify-content:center;padding:32px;background:#000";
+  ov.innerHTML = `<div style="display:flex;flex-direction:column;align-items:center;gap:16px;text-align:center;max-width:340px;color:#fff">
+    <div style="width:44px;height:44px;color:rgba(255,255,255,.75)">${iconF("camera")}</div>
+    <div style="font-weight:700;font-size:18px">${esc(info.msg)}</div>
+    ${info.hint ? `<div style="color:rgba(255,255,255,.65);font-size:14px;line-height:1.4">${esc(info.hint)}</div>` : ""}
+    <button class="action-btn money" data-err="retry" style="max-width:280px">${t("Retry")}</button>
+    <button class="text-btn" data-err="cancel">${t("Cancel")}</button>
+  </div>`;
+  document.body.appendChild(ov);
+  ov.addEventListener("click", (e) => {
+    const b = e.target.closest("[data-err]");
+    if (!b) return;
+    ov.remove();
+    if (b.dataset.err === "retry") openSession(challengeId, startExercise);
   });
 }
 
@@ -2332,13 +2643,14 @@ async function shareChallengePoster(data) {
 function newCreateForm(over) {
   return Object.assign({ step: 0, title: "", sel_pushups: false, sel_squats: false, sel_pullups: false, sel_dips: false,
     pushups: store.dailyGoal, squats: store.dailyGoal, pullups: 20, dips: 30,
-    duration: 30, buyIn: 50, isPublic: true, miss: "oneTotal", progOn: false, progStep: 5, progPeriod: "day" }, over || {});
+    duration: 30, buyIn: 50, isPublic: !isGuest(), miss: "oneTotal", progOn: false, progStep: 5, progPeriod: "day" }, over || {});
 }
 // Быстрые шаблоны перед мастером — сокращают путь создания. over — предзаполнение формы.
 const CREATE_TEMPLATES = [
-  { id: "pushup30", titleKey: "30-day Push-up Challenge", subKey: "50 push-ups a day for a month", over: { sel_pushups: true, pushups: 50, duration: 30 } },
-  { id: "squats100", titleKey: "100 Squats Daily", subKey: "30 days · 100 a day", over: { sel_squats: true, squats: 100, duration: 30 } },
-  { id: "pullupProg", titleKey: "Pull-up Progression", subKey: "Grows a bit every week", over: { sel_pullups: true, pullups: 10, duration: 30, progOn: true, progStep: 1, progPeriod: "week" } },
+  { id: "pushup30", exercise: "pushups", step: 50, titleKey: "30-day Push-up Challenge", subKey: "50 push-ups a day for a month", over: { sel_pushups: true, pushups: 50, duration: 30 } },
+  { id: "squats100", exercise: "squats", step: 50, titleKey: "100 Squats Daily", subKey: "30 days · 100 a day", over: { sel_squats: true, squats: 100, duration: 30 } },
+  { id: "pullupProg", exercise: "pullups", step: 5, titleKey: "Pull-up Progression", subKey: "Grows a bit every week", over: { sel_pullups: true, pullups: 10, duration: 30, progOn: true, progStep: 5, progPeriod: "week" } },
+  { id: "dips20", exercise: "dips", step: 5, titleKey: "20 Dips Daily", subKey: "30 days · 20 a day", over: { sel_dips: true, dips: 20, duration: 30 } },
 ];
 function TemplatesSheet() {
   const row = (id, title, sub) => `<button class="card" data-act="useTemplate:${id}" style="padding:16px 18px;width:100%;display:flex;align-items:center;gap:12px;text-align:left">
@@ -2347,6 +2659,41 @@ function TemplatesSheet() {
   const rows = CREATE_TEMPLATES.map((x) => row(x.id, t(x.titleKey), t(x.subKey))).join("");
   const scratch = `<button class="action-btn" data-act="useTemplate:scratch" style="background:var(--white-08);color:#fff">${t("Create from scratch")}</button>`;
   return sheetShell(t("New challenge"), `<div class="stack">${rows}${scratch}</div>`, true);
+}
+function PresetQuickSetup() {
+  const f = ui.form, ex = f.presetExercise;
+  const min = f.presetStep, max = ex === "pushups" || ex === "squats" ? 500 : 100;
+  const progression = ex === "pullups" ? `<div class="card card-soft preset-option">
+    <div><div class="preset-option-title">${t("Progressive overload")}</div><div class="form-footer">+${f.progStep} ${t("per week")}</div></div>
+    <button data-act="toggle" data-key="progOn" role="switch" aria-checked="${f.progOn}" class="toggle ${f.progOn ? "on" : ""}"></button>
+  </div>` : "";
+  return `<div class="fullscreen"><div class="preset-setup">
+    <div class="navbar"><button class="icon-btn" data-act="closeFull" aria-label="${t("Close")}">${icon("xmark")}</button><div class="title">${t("Customize preset")}</div><div style="width:40px"></div></div>
+    <div class="preset-body">
+      <div class="preset-exercise-icon">${exIcon(ex)}</div>
+      <div class="display preset-exercise-name">${esc(Exercise.displayName(ex))}</div>
+      <div class="card preset-goal-card">
+        ${lbl(t("Daily goal"), "tracking-1")}
+        <div class="preset-stepper">
+          <button data-act="dec" data-key="${ex}" data-min="${min}" data-max="${max}" data-by="${f.presetStep}" aria-label="−${f.presetStep}">−</button>
+          <span class="money">${f[ex]}</span>
+          <button data-act="inc" data-key="${ex}" data-min="${min}" data-max="${max}" data-by="${f.presetStep}" aria-label="+${f.presetStep}">+</button>
+        </div>
+        <div class="form-footer">${esc(Exercise.displayName(ex))} · ${t("per day")}</div>
+      </div>
+      <div class="form-section">
+        <div class="form-label">${t("Duration")}</div>
+        <div class="segmented preset-duration">
+          <button data-act="presetDuration:30" class="${f.duration === 30 ? "active" : ""}">${t("1 month")}</button>
+          <button data-act="presetDuration:60" class="${f.duration === 60 ? "active" : ""}">${t("2 months")}</button>
+        </div>
+      </div>
+      ${progression}
+      <div class="form-footer preset-local-note">${isGuest() ? t("Private on this device") : t("Public challenge")}</div>
+      <div class="spacer"></div>
+      <button class="action-btn" data-act="savePreset" style="background:var(--money)">${t("Create challenge")}</button>
+    </div>
+  </div></div>`;
 }
 function openCreate() { ui.sheet = TemplatesSheet; render(); }
 function openJoin(id) { ui.form = { challengeId: id, weight: store["profile.weightKg"], maxReps: store["profile.maxReps"], photo: null }; ui.sheet = JoinSheet; render(); }
@@ -2358,6 +2705,30 @@ function closeSheet() { ui.sheet = null; ui.form = null; render(); }
 function openDayComplete(c) { ui.fullId = c.id; ui.full = DayCompleteFull; pendingCelebrate = true; render(); }
 function openChallengeComplete(c) { ui.form = { challengeId: c.id, weight: store["profile.weightKg"], maxReps: store["profile.maxReps"], photo: null }; ui.full = ChallengeCompleteFull; pendingCelebrate = true; render(); }
 function closeFull() { ui.full = null; ui.form = null; render(); }
+
+function CameraPrepFull() {
+  const rows = [
+    ["camera", t("Set your phone down"), t("Keep the camera still so every rep can be verified.")],
+    ["person", t("Fit your whole body in frame"), t("Step back until your arms and legs are clearly visible.")],
+    ["flame", t("Use good lighting"), t("Face the light and avoid a bright window behind you.")],
+  ].map(([ic, title, text]) => `<div class="prep-row"><span class="prep-icon">${icon(ic)}</span><div><div class="prep-title">${esc(title)}</div><div class="form-footer">${esc(text)}</div></div></div>`).join("");
+  return `<div class="fullscreen camera-prep"><div class="prep-content">
+    <button class="cam-btn prep-close" data-act="closeFull" aria-label="${t("Close")}">${icon("xmark")}</button>
+    <div class="prep-hero">${iconF("camera")}</div>
+    <div class="display prep-heading">${t("Camera setup")}</div>
+    <div class="prep-list">${rows}</div>
+    <div class="prep-privacy">${icon("lock")}<span>${t("Your video stays on this device and is not uploaded.")}</span></div>
+    <div class="spacer"></div>
+    <button class="action-btn" data-act="startPrepared">${iconF("camera")}${t("Open camera")}</button>
+    <button class="text-btn" data-act="closeFull">${t("Not now")}</button>
+  </div></div>`;
+}
+function openCameraPrep(challengeId, startExercise) {
+  ui.form = { challengeId, startExercise: startExercise || null };
+  ui.full = CameraPrepFull;
+  render();
+  window.scrollTo(0, 0);
+}
 
 function pickImage(camera) {
   return new Promise((res) => {
@@ -2391,7 +2762,11 @@ const RANGES = { "profile.age": [14, 80], "profile.heightCm": [120, 220], "profi
 function storeHook(key) {
   if (key === "profile.maxReps" || key === "profile.level") store.dailyGoal = recommendedDailyReps(store["profile.level"], store["profile.maxReps"]);
 }
-function parseVal(v) { return v === "true" ? true : v === "false" ? false : v; }
+function parseVal(v) {
+  if (v === "true") return true;
+  if (v === "false") return false;
+  return /^-?\d+(?:\.\d+)?$/.test(v) ? Number(v) : v;
+}
 
 root.addEventListener("click", async (e) => {
   const el = e.target.closest("[data-act]");
@@ -2407,16 +2782,35 @@ root.addEventListener("click", async (e) => {
     case "tab": go(arg); return;
     case "open": openDetail(arg); return;
     case "back": back(); return;
-    case "play": { const startEx = act.split(":")[2]; if (ui.sheet) closeSheet(); openSession(arg, startEx); return; }
+    case "play": { const startEx = act.split(":")[2]; if (ui.sheet) { ui.sheet = null; ui.form = null; } openCameraPrep(arg, startEx); return; }
+    case "demo": openCameraPrep("demo", "pushups"); return;
+    case "demoAgain": ui.full = null; ui.form = null; render(); openCameraPrep("demo", "pushups"); return;
+    case "findChallengeDemo": ui.full = null; ui.form = null; go("challenges"); return;
+    case "onbFromDemo": ui.full = null; ui.form = null; ui.onbStep = STEP.name; render(); return;
+    case "startPrepared": {
+      const prep = ui.form;
+      ui.full = null; ui.form = null; render();
+      openSession(prep.challengeId, prep.startExercise);
+      return;
+    }
     case "startPick": openStartPicker(arg); return;
     case "findChallenge": go("challenges"); return;
     case "create": openCreate(); return;
+    case "openAccountGate": openAuthGate("account"); return;
+    case "closeAuthGate": closeAuthGate(); return;
     case "useTemplate": {
       const tpl = CREATE_TEMPLATES.find((x) => x.id === arg);
-      ui.form = arg === "scratch" ? newCreateForm({ sel_pushups: true }) : newCreateForm(Object.assign({ step: CREATE_LAST }, tpl.over));
-      ui.sheet = null; ui.full = CreateWizard; render(); window.scrollTo(0, 0); return;
+      if (arg === "scratch") {
+        ui.form = newCreateForm({ sel_pushups: true });
+        ui.sheet = null; ui.full = CreateWizard;
+      } else {
+        ui.form = newCreateForm(Object.assign({ presetId: tpl.id, presetExercise: tpl.exercise, presetStep: tpl.step }, tpl.over));
+        ui.sheet = null; ui.full = PresetQuickSetup;
+      }
+      render(); window.scrollTo(0, 0); return;
     }
-    case "join": openJoin(arg); return;
+    case "presetDuration": ui.form.duration = +arg; render(); return;
+    case "join": if (isGuest()) openAuthGate("join", arg); else openJoin(arg); return;
     case "addMeasure": openMeasure(); return;
     case "unlockPhotos": photosUnlocked = true; render(); return;
     case "openFriends": ui.sheet = FriendsSheet; render(); return;
@@ -2431,7 +2825,7 @@ root.addEventListener("click", async (e) => {
       Sync.registerUser(store["profile.name"]);
       render(); return;
     }
-    case "invite": shareInvite(); return;
+    case "invite": if (isGuest() && ui.detailId) openAuthGate("shareCreate"); else shareInvite(); return;
     case "participant": openParticipant(arg); return;
     case "dismissPwa": localStorage.setItem("fs.pwahint", "1"); render(); return;
     case "signOut": Sync.signOutUser().then(() => render()); return;
@@ -2453,7 +2847,12 @@ root.addEventListener("click", async (e) => {
     if (sk != null) { store[sk] = val; storeHook(sk); } else ui.form[key] = val;
     render(); return;
   }
-  if (cmd === "toggle") { ui.form[el.dataset.key] = !ui.form[el.dataset.key]; render(); return; }
+  if (cmd === "toggle") {
+    const key = el.dataset.key;
+    if (key === "isPublic" && !ui.form[key] && isGuest()) { openAuthGate("publicCreate"); return; }
+    ui.form[key] = !ui.form[key]; render(); return;
+  }
+  if (cmd === "toggleStore") { const k = el.dataset.key; store[k] = !store[k]; render(); return; }
   if (cmd === "inc" || cmd === "dec") {
     const dir = cmd === "inc" ? 1 : -1, by = +(el.dataset.by || 1), min = +el.dataset.min, max = +el.dataset.max;
     const key = el.dataset.key, sk = el.dataset.store;
@@ -2469,16 +2868,32 @@ root.addEventListener("click", async (e) => {
   if (cmd === "createNext") {
     const f = ui.form;
     if (f.step === 0 && !selectedExercises(f).length) { toast(t("Pick at least one exercise")); return; }
+    if (f.editingFromReview) { f.editingFromReview = false; f.step = CREATE_LAST; render(); return; }
     f.step++; render();
     return;
   }
+  if (cmd === "editCreate") {
+    ui.form.step = +arg;
+    ui.form.editingFromReview = true;
+    render(); window.scrollTo(0, 0); return;
+  }
   if (cmd === "createBack") {
     const f = ui.form;
-    if (f.step > 0) { f.step--; render(); } else { ui.full = null; ui.form = null; render(); }
+    if (f.editingFromReview) { f.editingFromReview = false; f.step = CREATE_LAST; render(); }
+    else if (f.step > 0) { f.step--; render(); } else { ui.full = null; ui.form = null; render(); }
     return;
   }
-  if (cmd === "saveChallenge") { if (saveChallengeForm()) { ui.full = null; ui.form = null; go("yours"); } return; }
+  if (cmd === "saveChallenge") {
+    if (ui.form.isPublic && isGuest()) { openAuthGate("publicCreate"); return; }
+    if (saveChallengeForm()) { ui.full = null; ui.form = null; go("yours"); }
+    return;
+  }
+  if (cmd === "savePreset") {
+    if (saveChallengeForm()) { ui.full = null; ui.form = null; go("yours"); }
+    return;
+  }
   if (cmd === "saveShareChallenge") {
+    if (isGuest()) { openAuthGate("shareCreate"); return; }
     const f = ui.form;
     if (!saveChallengeForm()) return;
     ui.full = null; ui.form = null; go("yours");
@@ -2487,6 +2902,7 @@ root.addEventListener("click", async (e) => {
   }
   if (cmd === "submitJoin") {
     const f = ui.form, c = app.challenges.find((x) => x.id === f.challengeId);
+    if (isGuest()) { ui.sheet = null; openAuthGate("join", c.id); return; }
     if (C.isJoined(c)) { closeSheet(); return; } // уже вступил (повторный заход по ссылке)
     const ok = joinChallenge(c, f.weight, f.maxReps, f.photo);
     if (ok) closeSheet(); else toast(t("Not enough coins"));
@@ -2500,14 +2916,15 @@ root.addEventListener("click", async (e) => {
     setBtnLoading(el, true, t("Signing in…"));
     const res = mode === "signup" ? await Sync.signUp(email, pass) : await Sync.signIn(email, pass);
     if (res.ok) {
+      store.skippedAuth = false;
       track("account_linked", { method: "email", mode });
       if (ui.screen === "onboarding") { finishOnboarding(); return; } // вход — последний шаг, завершаем онбординг
       if (store["profile.name"]) Sync.registerUser(store["profile.name"]);
       toast(t("Signed in"));
-      render();
+      if (ui.authIntent) resumeAuthIntent(); else render();
     } else {
       setBtnLoading(el, false);
-      const key = { "wrong-password": "Wrong password", "weak-password": "Password too short (min 6)", "invalid-email": "Invalid email", "email-taken": "Email already registered — log in", "no-account": "No account yet — sign up", "network": "Network error" }[res.error] || "Couldn't sign in";
+      const key = { "wrong-password": "Wrong password", "weak-password": "Password too short (min 6)", "invalid-email": "Invalid email", "email-taken": "Email already registered — log in", "no-account": "No account yet — sign up", "network": "Network error", "offline": "Authentication service is still loading — try again", "provider-disabled": "Email registration is temporarily unavailable. Try Google.", "unauthorized-domain": "Open the app at http://localhost:8000 to sign in" }[res.error] || res.error || "Couldn't sign in";
       toast(t(key));
     }
     return;
@@ -2516,11 +2933,12 @@ root.addEventListener("click", async (e) => {
     setBtnLoading(el, true, t("Signing in…"));
     const res = await Sync.signInGoogle();
     if (res.ok) {
+      store.skippedAuth = false;
       track("account_linked", { method: "google" });
       if (ui.screen === "onboarding") { finishOnboarding(); return; } // вход — последний шаг, завершаем онбординг
       if (store["profile.name"]) Sync.registerUser(store["profile.name"]);
       toast(t("Signed in"));
-      render();
+      if (ui.authIntent) resumeAuthIntent(); else render();
     } else {
       setBtnLoading(el, false);
       if (res.error === "cancelled") return; // сам закрыл окно — молчим
@@ -2531,6 +2949,7 @@ root.addEventListener("click", async (e) => {
         "auth/popup-blocked": "Allow popups and try again",
         "auth/operation-not-supported-in-this-environment": "Google sign-in unavailable here — use email",
         "auth/web-storage-unsupported": "Google sign-in unavailable here — use email",
+        "offline": "Authentication service is still loading — try again",
       }[res.error];
       toast(hint ? t(hint) : (res.error || t("Couldn't sign in")));
     }
@@ -2717,10 +3136,12 @@ const _render = render;
 render = function () {
   const sheetTop = document.querySelector(".sheet") && document.querySelector(".sheet").scrollTop;
   const detailTop = document.querySelector("#detail-scroll") && document.querySelector("#detail-scroll").scrollTop;
+  const fullTop = document.querySelector(".fullscreen") && document.querySelector(".fullscreen").scrollTop;
   const winTop = window.scrollY;
   _render();
   if (sheetTop != null) { const s = document.querySelector(".sheet"); if (s) s.scrollTop = sheetTop; }
   if (detailTop != null) { const d = document.querySelector("#detail-scroll"); if (d) d.scrollTop = detailTop; }
+  if (fullTop != null) { const f = document.querySelector(".fullscreen"); if (f) f.scrollTop = fullTop; }
   window.scrollTo(0, winTop);
   saveApp();
 };
@@ -2729,6 +3150,16 @@ render = function () {
 document.addEventListener("keydown", (e) => {
   if (e.target.id === "wheel-input" && e.key === "Enter") { commitWheelIfEditing(); render(); return; }
   if (e.key === "Escape" && ui.sheet) { closeSheet(); }
+  if (e.key === "Tab" && ui.sheet) {
+    const sheet = document.querySelector(".sheet");
+    if (!sheet) return;
+    const focusable = Array.from(sheet.querySelectorAll('button:not(:disabled), input:not(:disabled), select:not(:disabled), textarea:not(:disabled), [tabindex]:not([tabindex="-1"])'))
+      .filter((el) => !el.hidden && el.getClientRects().length);
+    if (!focusable.length) { e.preventDefault(); sheet.focus(); return; }
+    const first = focusable[0], last = focusable[focusable.length - 1];
+    if (e.shiftKey && (document.activeElement === first || document.activeElement === sheet)) { e.preventDefault(); last.focus(); }
+    else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
+  }
 });
 
 // iOS-переход между экранами: снимаем текущий экран в слой-«снимок»,
@@ -2813,6 +3244,3 @@ if (store.onboarded && store["profile.name"]) Sync.registerUser(store["profile.n
 // Сторожок смены дня: интервал + возврат PWA из фона.
 setInterval(() => { if (rolloverIfNeeded() && !ui.sheet && !ui.full && !liveSession) render(); }, 30000);
 document.addEventListener("visibilitychange", () => { if (!document.hidden && rolloverIfNeeded() && !ui.sheet && !ui.full && !liveSession) render(); });
-
-
-
