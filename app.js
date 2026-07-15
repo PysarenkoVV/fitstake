@@ -185,6 +185,12 @@ const RU = {
   "Network error": "Ошибка сети", "Couldn't sign in": "Не удалось войти",
   "Email already registered — log in": "Почта уже занята — войди", "No account yet — sign up": "Аккаунта нет — зарегистрируйся",
   "Create your account": "Создай аккаунт", "Step %lld of %lld": "Шаг %lld из %lld",
+  "Which exercise do you want to start with?": "С какого упражнения начнёшь?",
+  "%lld in FitStake": "%lld в FitStake", "Create from scratch": "Создать с нуля",
+  "30-day Push-up Challenge": "Отжимания: 30 дней", "50 push-ups a day for a month": "50 отжиманий в день месяц",
+  "100 Squats Daily": "100 приседаний в день", "30 days · 100 a day": "30 дней · 100 в день",
+  "Pull-up Progression": "Подтягивания: прогрессия", "Grows a bit every week": "Растёт каждую неделю",
+  "How many %@ can you do in one set?": "Сколько %@ ты делаешь за один подход?",
   "Easier": "Легче", "Recommended": "Рекомендовано", "Harder": "Интенсивнее",
   "Your max is %lld reps. %@ level → %lld working sets.": "Твой максимум — %lld повторений. Уровень %@ → %lld рабочих подхода.",
   "Enter manually": "Ввести вручную",
@@ -225,7 +231,7 @@ function t(key, ...args) {
 // ==========================================================================
 const DEFAULTS = {
   onboarded: false, "profile.name": "", "profile.gender": "male", "profile.age": 25, "profile.heightCm": 178,
-  "profile.weightKg": 75, "profile.level": "regular", "profile.maxReps": 15, dailyGoal: 50,
+  "profile.weightKg": 75, "profile.level": "regular", "profile.maxReps": 15, "profile.startExercise": "pushups", dailyGoal: 50,
   voiceEnabled: false, lang: (navigator.language || "en").startsWith("ru") ? "ru" : "en",
 };
 const store = new Proxy({}, {
@@ -973,16 +979,26 @@ function YoursTab() {
     ${mine.length ? mine.map((c) => ChallengeCard(c, true)).join("") : empty}
     ${mine.length ? statsCard : ""}
     <button class="action-btn" data-act="invite" style="background:var(--white-08);color:#fff">${icon("share")}${t("Invite friends")}</button>
-    ${friendsCard()}
+    ${friendsSummary()}
   </div>`;
 }
 
 // Список всех, кто прошёл онбординг (из Firebase), новые сверху.
-function friendsCard() {
-  const users = Sync.state.users;
-  if (!Sync.enabled || !users) return "";
-  const list = Object.entries(users).sort((a, b) => (b[1].joinedAt || 0) - (a[1].joinedAt || 0));
+function friendsList() {
+  const users = Sync.state && Sync.state.users;
+  if (!Sync.enabled || !users) return [];
+  return Object.entries(users).sort((a, b) => (b[1].joinedAt || 0) - (a[1].joinedAt || 0));
+}
+// Компактная сводка на главном — полный список открывается отдельным листом.
+function friendsSummary() {
+  const list = friendsList();
   if (!list.length) return "";
+  return `<button class="card card-soft" data-act="openFriends" style="padding:16px 18px;width:100%;display:flex;align-items:center;gap:12px;text-align:left">
+    <span style="flex:1;font-weight:600;font-size:15px">${t("%lld in FitStake", list.length)}</span>
+    <span class="secondary" style="display:flex">${icon("chevronRight")}</span></button>`;
+}
+function FriendsSheet() {
+  const list = friendsList();
   const relDate = (ts) => {
     if (!ts) return "";
     const diff = startOfDay(Date.now()) - startOfDay(ts);
@@ -990,7 +1006,7 @@ function friendsCard() {
     if (diff === DAY) return t("yesterday");
     return new Date(ts).toLocaleDateString(store.lang === "ru" ? "ru-RU" : "en-US", { day: "numeric", month: "short" });
   };
-  const rows = list.slice(0, 15).map(([id, u]) => {
+  const rows = list.map(([id, u]) => {
     const isNew = Date.now() - (u.joinedAt || 0) < 48 * 3600 * 1000;
     return `<div class="entry-row">
       <div class="avatar">${id === Sync.uid ? icon("person") : esc((u.name || "?").slice(0, 1))}</div>
@@ -999,8 +1015,7 @@ function friendsCard() {
       <span class="secondary" style="font-size:13px">${relDate(u.joinedAt)}</span>
     </div>`;
   }).join("");
-  return `<div class="card card-soft" style="padding:16px;display:flex;flex-direction:column;gap:10px">
-    ${lbl(t("In the app: %lld", list.length), "tracking-1")}${rows}</div>`;
+  return sheetShell(t("In the app: %lld", list.length), `<div style="display:flex;flex-direction:column;gap:6px">${rows}</div>`, true);
 }
 
 // ==========================================================================
@@ -1513,17 +1528,16 @@ function accountCard() {
 // ==========================================================================
 // Онбординг
 // ==========================================================================
-// С Firebase последний шаг — обязательный вход (9); без Firebase онбординг кончается итогом (8).
+// Короткий онбординг: имя → упражнение → уровень → тест-максимум → норма → вход.
+// Пол/возраст/рост/вес не влияют на норму и запрашиваются позже в Body & measurements.
 const SYNC_ON = !!(window.Sync && window.Sync.enabled);
-const LAST_STEP = SYNC_ON ? 9 : 8;
-// Порядок шагов онбординга. Вход (auth) — последний шаг, перед сохранением прогресса
-// (с Firebase). Без Firebase шага auth нет, онбординг завершается на итоге.
+const LAST_STEP = SYNC_ON ? 6 : 5;
 const STEP = {
-  name: 1, gender: 2, age: 3, height: 4, weight: 5, fitness: 6, maxReps: 7, goal: 8,
-  auth: SYNC_ON ? 9 : -1,
+  name: 1, startExercise: 2, fitness: 3, maxReps: 4, goal: 5,
+  auth: SYNC_ON ? 6 : -1,
 };
 function Onboarding() {
-  const step = ui.onbStep, gender = store["profile.gender"], level = store["profile.level"], maxReps = store["profile.maxReps"];
+  const step = ui.onbStep, level = store["profile.level"], maxReps = store["profile.maxReps"], startEx = store["profile.startExercise"];
 
   const optionCard = (title, subtitle, selected, act) =>
     `<button class="card ${selected ? "selected" : ""}" data-act="${act}" style="padding:16px;width:100%;display:flex;align-items:center;gap:10px;text-align:left">
@@ -1558,12 +1572,9 @@ function Onboarding() {
   else if (step === STEP.auth) content = question(t("Create your account"), t("So your progress is saved and syncs across your devices."), authForm());
   else if (step === STEP.name) content = question(t("Your name"), t("Friends will see it in the leaderboard."),
     `<input class="field" id="onb-name" value="${esc(store["profile.name"] || "")}" placeholder="${esc(t("Your name"))}" maxlength="20" autocomplete="name">`);
-  else if (step === STEP.gender) content = question(t("Your gender"), null, Gender.all.map((g) => optionCard(Gender.name(g), null, gender === g, `onbSet:profile.gender:${g}`)).join(""));
-  else if (step === STEP.age) content = question(t("Your age"), null, wheel("profile.age", 14, 80, (v) => t("%lld years", v)));
-  else if (step === STEP.height) content = question(t("Your height"), null, wheel("profile.heightCm", 120, 220, (v) => t("%lld cm", v)));
-  else if (step === STEP.weight) content = question(t("Your weight"), null, wheel("profile.weightKg", 35, 180, (v) => t("%lld kg", v)));
+  else if (step === STEP.startExercise) content = question(t("Which exercise do you want to start with?"), null, EX_ORDER.map((ex) => optionCard(Exercise.displayName(ex), null, startEx === ex, `onbSet:profile.startExercise:${ex}`)).join(""));
   else if (step === STEP.fitness) content = question(t("Your fitness level"), null, Level.all.map((l) => optionCard(Level.name(l), Level.subtitle(l), level === l, `onbSet:profile.level:${l}`)).join(""));
-  else if (step === STEP.maxReps) content = question(t("How many push-ups can you do in one set?"), t("Honestly — the daily goal is built from this."), wheel("profile.maxReps", 1, 120, (v) => String(v)));
+  else if (step === STEP.maxReps) content = question(t("How many %@ can you do in one set?", Exercise.displayName(startEx)), t("Honestly — the daily goal is built from this."), wheel("profile.maxReps", 1, 120, (v) => String(v)));
   // Итоговый шаг: дневная норма с объяснением и выбором нагрузки.
   else {
     const choice = store.goalChoice || "recommended";
@@ -1576,7 +1587,7 @@ function Onboarding() {
     <div class="segmented" style="margin-top:14px;width:100%">${segBtn("easier", t("Easier"))}${segBtn("recommended", t("Recommended"))}${segBtn("harder", t("Harder"))}</div>
     <div class="form-footer" style="margin-top:12px;text-align:center;max-width:320px">${t("Your max is %lld reps. %@ level → %lld working sets.", maxReps, Level.name(level), Level.sets(level))}</div>
     <div class="card" style="padding:16px;width:100%;display:flex;flex-direction:column;gap:10px;margin-top:16px">
-      ${[[t("Gender"), Gender.name(gender)], [t("Age"), t("%lld years", store["profile.age"])], [t("Height"), t("%lld cm", store["profile.heightCm"])], [t("Weight"), t("%lld kg", store["profile.weightKg"])], [t("Fitness level"), Level.name(level)]]
+      ${[[t("Exercise"), Exercise.displayName(startEx)], [t("Max reps in one set"), maxReps], [t("Fitness level"), Level.name(level)]]
         .map(([k, v]) => `<div class="between">${lbl(k)}<span style="font-weight:600;font-size:15px">${esc(v)}</span></div>`).join("")}
     </div></div>`;
   }
@@ -2318,12 +2329,26 @@ async function shareChallengePoster(data) {
 // ==========================================================================
 // Открытие/закрытие модалок и поздравлений
 // ==========================================================================
-function openCreate() {
-  ui.form = { step: 0, title: "", sel_pushups: true, sel_squats: false, sel_pullups: false, sel_dips: false,
+function newCreateForm(over) {
+  return Object.assign({ step: 0, title: "", sel_pushups: false, sel_squats: false, sel_pullups: false, sel_dips: false,
     pushups: store.dailyGoal, squats: store.dailyGoal, pullups: 20, dips: 30,
-    duration: 30, buyIn: 50, isPublic: true, miss: "oneTotal", progOn: false, progStep: 5, progPeriod: "day" };
-  ui.full = CreateWizard; render(); window.scrollTo(0, 0);
+    duration: 30, buyIn: 50, isPublic: true, miss: "oneTotal", progOn: false, progStep: 5, progPeriod: "day" }, over || {});
 }
+// Быстрые шаблоны перед мастером — сокращают путь создания. over — предзаполнение формы.
+const CREATE_TEMPLATES = [
+  { id: "pushup30", titleKey: "30-day Push-up Challenge", subKey: "50 push-ups a day for a month", over: { sel_pushups: true, pushups: 50, duration: 30 } },
+  { id: "squats100", titleKey: "100 Squats Daily", subKey: "30 days · 100 a day", over: { sel_squats: true, squats: 100, duration: 30 } },
+  { id: "pullupProg", titleKey: "Pull-up Progression", subKey: "Grows a bit every week", over: { sel_pullups: true, pullups: 10, duration: 30, progOn: true, progStep: 1, progPeriod: "week" } },
+];
+function TemplatesSheet() {
+  const row = (id, title, sub) => `<button class="card" data-act="useTemplate:${id}" style="padding:16px 18px;width:100%;display:flex;align-items:center;gap:12px;text-align:left">
+    <div style="flex:1"><div style="font-weight:700;font-size:16px">${esc(title)}</div><div class="form-footer" style="margin-top:2px">${esc(sub)}</div></div>
+    <span class="secondary" style="display:flex">${icon("chevronRight")}</span></button>`;
+  const rows = CREATE_TEMPLATES.map((x) => row(x.id, t(x.titleKey), t(x.subKey))).join("");
+  const scratch = `<button class="action-btn" data-act="useTemplate:scratch" style="background:var(--white-08);color:#fff">${t("Create from scratch")}</button>`;
+  return sheetShell(t("New challenge"), `<div class="stack">${rows}${scratch}</div>`, true);
+}
+function openCreate() { ui.sheet = TemplatesSheet; render(); }
 function openJoin(id) { ui.form = { challengeId: id, weight: store["profile.weightKg"], maxReps: store["profile.maxReps"], photo: null }; ui.sheet = JoinSheet; render(); }
 function openMeasure() { ui.form = { weight: store["profile.weightKg"], maxReps: store["profile.maxReps"] }; ui.sheet = MeasureSheet; render(); }
 function openStartPicker(id) { ui.form = { challengeId: id }; ui.sheet = StartPicker; render(); }
@@ -2386,9 +2411,15 @@ root.addEventListener("click", async (e) => {
     case "startPick": openStartPicker(arg); return;
     case "findChallenge": go("challenges"); return;
     case "create": openCreate(); return;
+    case "useTemplate": {
+      const tpl = CREATE_TEMPLATES.find((x) => x.id === arg);
+      ui.form = arg === "scratch" ? newCreateForm({ sel_pushups: true }) : newCreateForm(Object.assign({ step: CREATE_LAST }, tpl.over));
+      ui.sheet = null; ui.full = CreateWizard; render(); window.scrollTo(0, 0); return;
+    }
     case "join": openJoin(arg); return;
     case "addMeasure": openMeasure(); return;
     case "unlockPhotos": photosUnlocked = true; render(); return;
+    case "openFriends": ui.sheet = FriendsSheet; render(); return;
     case "profileSection": ui.profileSection = arg; render(); window.scrollTo(0, 0); return;
     case "profileHome": ui.profileSection = null; render(); window.scrollTo(0, 0); return;
     case "editProfile": profileEditing = true; profileNameDraft = null; render(); return;
