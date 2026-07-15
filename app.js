@@ -170,7 +170,10 @@ const RU = {
   "Password too short (min 6)": "Пароль слишком короткий (мин. 6)", "Invalid email": "Неверная почта",
   "Network error": "Ошибка сети", "Couldn't sign in": "Не удалось войти",
   "Email already registered — log in": "Почта уже занята — войди", "No account yet — sign up": "Аккаунта нет — зарегистрируйся",
-  "Create your account": "Создай аккаунт",
+  "Create your account": "Создай аккаунт", "Step %lld of %lld": "Шаг %lld из %lld",
+  "Easier": "Легче", "Recommended": "Рекомендовано", "Harder": "Интенсивнее",
+  "Your max is %lld reps. %@ level → %lld working sets.": "Твой максимум — %lld повторений. Уровень %@ → %lld рабочих подхода.",
+  "Enter manually": "Ввести вручную",
   "So your progress is saved and syncs across your devices": "Чтобы прогресс сохранялся и синхронизировался между устройствами",
   "Continue with Google": "Продолжить с Google", "or": "или",
   "Allow popups and try again": "Разреши всплывающие окна и попробуй снова",
@@ -648,11 +651,30 @@ function recommendedDailyReps(level, maxReps) {
   const rounded = Math.floor((maxReps * Level.sets(level) + 5) / 10) * 10;
   return Math.min(Math.max(rounded, 10), 300);
 }
+// Три варианта дневной нормы от базовой рекомендации: легче / рекомендовано / интенсивнее.
+function goalForChoice(level, maxReps, choice) {
+  const base = recommendedDailyReps(level, maxReps);
+  const f = choice === "easier" ? 0.7 : choice === "harder" ? 1.3 : 1;
+  return Math.min(Math.max(Math.round(base * f / 10) * 10, 10), 300);
+}
+// Зафиксировать введённое вручную число из колеса (если сейчас режим ввода) и выйти из него.
+function commitWheelIfEditing() {
+  if (ui.wheelEdit == null) return;
+  const el = document.getElementById("wheel-input");
+  if (el) {
+    const key = el.dataset.wheelkey, min = +el.dataset.min, max = +el.dataset.max;
+    let v = parseInt(el.value, 10);
+    if (isNaN(v)) v = store[key];
+    store[key] = Math.min(Math.max(v, min), max);
+    storeHook(key);
+  }
+  ui.wheelEdit = null;
+}
 
 // ==========================================================================
 // UI-состояние и рендер (см. app-ui.js — экраны ниже в этом же файле)
 // ==========================================================================
-const ui = { screen: "onboarding", tab: "yours", detailId: null, sheet: null, full: null, onbStep: 0, form: null };
+const ui = { screen: "onboarding", tab: "yours", detailId: null, sheet: null, full: null, onbStep: 0, form: null, wheelEdit: null };
 
 function esc(s) { return String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c])); }
 
@@ -1383,22 +1405,14 @@ function accountCard() {
 // С Firebase последний шаг — обязательный вход (9); без Firebase онбординг кончается итогом (8).
 const SYNC_ON = !!(window.Sync && window.Sync.enabled);
 const LAST_STEP = SYNC_ON ? 9 : 8;
-// Порядок шагов онбординга. С Firebase вход (auth) идёт первым — сразу после приветствия.
-// Без Firebase шага auth нет, остальные сдвинуты на 1.
+// Порядок шагов онбординга. Вход (auth) — последний шаг, перед сохранением прогресса
+// (с Firebase). Без Firebase шага auth нет, онбординг завершается на итоге.
 const STEP = {
-  auth: SYNC_ON ? 1 : -1,
-  name: SYNC_ON ? 2 : 1,
-  gender: SYNC_ON ? 3 : 2,
-  age: SYNC_ON ? 4 : 3,
-  height: SYNC_ON ? 5 : 4,
-  weight: SYNC_ON ? 6 : 5,
-  fitness: SYNC_ON ? 7 : 6,
-  maxReps: SYNC_ON ? 8 : 7,
-  goal: LAST_STEP,
+  name: 1, gender: 2, age: 3, height: 4, weight: 5, fitness: 6, maxReps: 7, goal: 8,
+  auth: SYNC_ON ? 9 : -1,
 };
 function Onboarding() {
   const step = ui.onbStep, gender = store["profile.gender"], level = store["profile.level"], maxReps = store["profile.maxReps"];
-  const goal = recommendedDailyReps(level, maxReps);
 
   const optionCard = (title, subtitle, selected, act) =>
     `<button class="card ${selected ? "selected" : ""}" data-act="${act}" style="padding:16px;width:100%;display:flex;align-items:center;gap:10px;text-align:left">
@@ -1409,9 +1423,19 @@ function Onboarding() {
     <div class="display" style="font-size:30px">${esc(title)}</div>${subtitle ? `<div class="form-footer">${esc(subtitle)}</div>` : ""}
     <div style="flex:1;display:flex;flex-direction:column;justify-content:center;gap:10px">${content}</div></div>`;
   const wheel = (key, min, max, fmtFn) => {
+    // Ручной ввод: тап по «123» открывает поле с клавиатурой.
+    if (ui.wheelEdit === key) {
+      return `<div class="wheel-wrap">
+        <input class="field wheel-input" id="wheel-input" type="number" inputmode="numeric" min="${min}" max="${max}" value="${store[key]}" data-wheelkey="${key}" data-min="${min}" data-max="${max}">
+        <button class="action-btn" data-act="wheelDone" style="margin-top:14px">${t("Done")}</button>
+      </div>`;
+    }
     let opts = "";
     for (let v = min; v <= max; v++) opts += `<div class="opt ${v === store[key] ? "active" : ""}" data-val="${v}">${esc(fmtFn(v))}</div>`;
-    return `<div class="wheel" data-wheel="${key}" data-min="${min}" data-max="${max}"><div class="pad"></div>${opts}<div class="pad"></div></div>`;
+    return `<div class="wheel-wrap">
+      <div class="wheel" data-wheel="${key}" data-min="${min}" data-max="${max}"><div class="pad"></div>${opts}<div class="pad"></div></div>
+      <button class="wheel-edit-btn" data-act="wheelEdit:${key}" aria-label="${t("Enter manually")}">123</button>
+    </div>`;
   };
 
   let content;
@@ -1419,7 +1443,7 @@ function Onboarding() {
     <div style="color:var(--accent);width:76px;height:76px;display:flex">${iconF("flame")}</div>
     <div class="display" style="font-size:46px">FitStake</div>
     <div class="form-footer" style="max-width:320px;font-weight:500">${t("Every rep is verified by the camera. Coins on the line. Miss too many days and you're out.")}</div></div>`;
-  // Вход — сразу после приветствия (только с Firebase).
+  // Вход — последний шаг, перед сохранением прогресса (только с Firebase).
   else if (step === STEP.auth) content = question(t("Create your account"), t("So your progress is saved and syncs across your devices."), authForm());
   else if (step === STEP.name) content = question(t("Your name"), t("Friends will see it in the leaderboard."),
     `<input class="field" id="onb-name" value="${esc(store["profile.name"] || "")}" placeholder="${esc(t("Your name"))}" maxlength="20" autocomplete="name">`);
@@ -1429,16 +1453,22 @@ function Onboarding() {
   else if (step === STEP.weight) content = question(t("Your weight"), null, wheel("profile.weightKg", 35, 180, (v) => t("%lld kg", v)));
   else if (step === STEP.fitness) content = question(t("Your fitness level"), null, Level.all.map((l) => optionCard(Level.name(l), Level.subtitle(l), level === l, `onbSet:profile.level:${l}`)).join(""));
   else if (step === STEP.maxReps) content = question(t("How many push-ups can you do in one set?"), t("Honestly — the daily goal is built from this."), wheel("profile.maxReps", 1, 120, (v) => String(v)));
-  // Итоговый шаг: дневная норма (кнопка «Погнали» завершает онбординг).
-  else content = `<div class="center" style="height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px">
+  // Итоговый шаг: дневная норма с объяснением и выбором нагрузки.
+  else {
+    const choice = store.goalChoice || "recommended";
+    const goalC = goalForChoice(level, maxReps, choice);
+    const segBtn = (val, label) => `<button data-act="goalChoice:${val}" class="${choice === val ? "active" : ""}">${esc(label)}</button>`;
+    content = `<div class="center" style="height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px">
     ${lbl(t("Your daily goal"), "tracking-15")}
-    <div class="money" style="font-size:72px">${goal}</div>
+    <div class="money" style="font-size:72px">${goalC}</div>
     ${lbl(t("reps per day"), "tracking-1")}
-    <div class="form-footer" style="margin-top:6px">${t("%lld in one set × %lld sets", maxReps, Level.sets(level))}</div>
-    <div class="card" style="padding:16px;width:100%;display:flex;flex-direction:column;gap:10px;margin-top:20px">
+    <div class="segmented" style="margin-top:14px;width:100%">${segBtn("easier", t("Easier"))}${segBtn("recommended", t("Recommended"))}${segBtn("harder", t("Harder"))}</div>
+    <div class="form-footer" style="margin-top:12px;text-align:center;max-width:320px">${t("Your max is %lld reps. %@ level → %lld working sets.", maxReps, Level.name(level), Level.sets(level))}</div>
+    <div class="card" style="padding:16px;width:100%;display:flex;flex-direction:column;gap:10px;margin-top:16px">
       ${[[t("Gender"), Gender.name(gender)], [t("Age"), t("%lld years", store["profile.age"])], [t("Height"), t("%lld cm", store["profile.heightCm"])], [t("Weight"), t("%lld kg", store["profile.weightKg"])], [t("Fitness level"), Level.name(level)]]
         .map(([k, v]) => `<div class="between">${lbl(k)}<span style="font-weight:600;font-size:15px">${esc(v)}</span></div>`).join("")}
     </div></div>`;
+  }
 
   // На шаге входа CTA — сами кнопки формы, отдельной кнопки «дальше» нет.
   const authStep = Sync.enabled && step === STEP.auth;
@@ -1450,6 +1480,7 @@ function Onboarding() {
     <div class="row gap12" style="padding:max(10px,env(safe-area-inset-top)) 20px 0;align-items:center">
       <button data-act="onbBack" style="width:32px;height:32px;display:flex;align-items:center;justify-content:center;color:#fff;opacity:${step > 0 ? 1 : 0}">${icon("chevronLeft")}</button>
       <div style="flex:1">${bar(step / LAST_STEP)}</div>
+      ${step > 0 ? `<span class="label secondary" style="font-size:12px;white-space:nowrap">${t("Step %lld of %lld", step, LAST_STEP)}</span>` : ""}
     </div>
     <div style="flex:1;padding:0 24px;overflow-y:auto">${content}</div>
     ${footer}
@@ -1458,7 +1489,7 @@ function Onboarding() {
 
 // Завершение онбординга: с Firebase вызывается после успешного входа, без — по кнопке на итоге.
 function finishOnboarding() {
-  store.dailyGoal = recommendedDailyReps(store["profile.level"], store["profile.maxReps"]);
+  store.dailyGoal = goalForChoice(store["profile.level"], store["profile.maxReps"], store.goalChoice || "recommended");
   store.onboarded = true;
   Sync.registerUser(store["profile.name"]);
   phIdentify();
@@ -2326,7 +2357,7 @@ root.addEventListener("click", async (e) => {
     const res = mode === "signup" ? await Sync.signUp(email, pass) : await Sync.signIn(email, pass);
     if (res.ok) {
       track("account_linked", { method: "email", mode });
-      if (ui.screen === "onboarding") { ui.onbStep++; render(); return; } // вход — первый шаг, идём дальше по анкете
+      if (ui.screen === "onboarding") { finishOnboarding(); return; } // вход — последний шаг, завершаем онбординг
       if (store["profile.name"]) Sync.registerUser(store["profile.name"]);
       toast(t("Signed in"));
       render();
@@ -2342,7 +2373,7 @@ root.addEventListener("click", async (e) => {
     const res = await Sync.signInGoogle();
     if (res.ok) {
       track("account_linked", { method: "google" });
-      if (ui.screen === "onboarding") { ui.onbStep++; render(); return; } // вход — первый шаг, идём дальше по анкете
+      if (ui.screen === "onboarding") { finishOnboarding(); return; } // вход — последний шаг, завершаем онбординг
       if (store["profile.name"]) Sync.registerUser(store["profile.name"]);
       toast(t("Signed in"));
       render();
@@ -2405,8 +2436,9 @@ root.addEventListener("click", async (e) => {
   }
 
   // Онбординг
-  if (cmd === "onbBack") { if (ui.onbStep > 0) { ui.onbStep--; render(); } return; }
+  if (cmd === "onbBack") { commitWheelIfEditing(); if (ui.onbStep > 0) { ui.onbStep--; render(); } return; }
   if (cmd === "onbNext") {
+    commitWheelIfEditing();
     if (ui.onbStep === STEP.name) {
       const inp = document.getElementById("onb-name");
       const name = inp ? inp.value.trim() : "";
@@ -2419,8 +2451,11 @@ root.addEventListener("click", async (e) => {
     return;
   }
   if (cmd === "onbSet") { store[arg] = act.split(":")[2]; render(); return; }
+  if (cmd === "goalChoice") { store.goalChoice = arg; render(); return; }
+  if (cmd === "wheelEdit") { ui.wheelEdit = arg; render(); return; }
+  if (cmd === "wheelDone") { commitWheelIfEditing(); render(); return; }
   // Пропустить создание аккаунта — временно входим без входа (флаг гасит обязательный возврат).
-  if (cmd === "skipAuth") { store.skippedAuth = true; ui.onbStep++; render(); return; }
+  if (cmd === "skipAuth") { store.skippedAuth = true; finishOnboarding(); return; }
 });
 
 // Звук при фокусе на поле ввода.
@@ -2527,6 +2562,10 @@ function afterRender() {
       timer = setTimeout(() => { store[key] = val; }, 120);
     }, { passive: true });
   });
+
+  // Ручной ввод в колесе — сразу фокус и выделение для замены.
+  const wi = document.getElementById("wheel-input");
+  if (wi) { wi.focus(); wi.select(); }
 }
 
 // Сохранение позиции скролла при перерисовках на месте (степперы/тоглы).
@@ -2544,6 +2583,7 @@ render = function () {
 
 // Escape закрывает открытый лист — тот же выход, что и тап по фону.
 document.addEventListener("keydown", (e) => {
+  if (e.target.id === "wheel-input" && e.key === "Enter") { commitWheelIfEditing(); render(); return; }
   if (e.key === "Escape" && ui.sheet) { closeSheet(); }
 });
 
