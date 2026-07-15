@@ -460,8 +460,22 @@ const app = {
   history: [],
   measurements: [],
   totalPushups: Sync.enabled ? 0 : 1760,
+  repsByExercise: {}, // сумма повторов за всё время по типам упражнений
   leftMain: false,
 };
+// Фиксированный порядок упражнений; новые типы появляются после существующих.
+const EX_ORDER = ["pushups", "squats", "pullups", "dips"];
+// Разбивка all-time повторов по упражнениям. Легаси/синхронизированные повторы, не
+// привязанные к типу, относим к отжиманиям — так сумма разбивки всегда равна totalPushups.
+function exerciseBreakdown() {
+  const by = {};
+  for (const ex of EX_ORDER) by[ex] = 0;
+  for (const [ex, n] of Object.entries(app.repsByExercise || {})) by[ex] = (by[ex] || 0) + n;
+  const known = Object.values(by).reduce((a, b) => a + b, 0);
+  const gap = (app.totalPushups || 0) - known;
+  if (gap > 0) by.pushups += gap;
+  return by;
+}
 app.history = Sync.enabled ? [] : mockHistory(app.challenges.filter(C.isJoined));
 
 // Применяет живые данные Firebase к общему челленджу: участники, мой прогресс, история.
@@ -495,7 +509,7 @@ function applySync() {
 const SAVE_KEY = "fs.state";
 function snapshotApp() {
   return { balance: app.balance, transactions: app.transactions, challenges: app.challenges,
-    history: app.history, measurements: app.measurements, totalPushups: app.totalPushups, dayKey: app.dayKey, leftMain: app.leftMain };
+    history: app.history, measurements: app.measurements, totalPushups: app.totalPushups, repsByExercise: app.repsByExercise, dayKey: app.dayKey, leftMain: app.leftMain };
 }
 let saveTimer = null;
 function saveApp() {
@@ -521,6 +535,7 @@ function saveApp() {
   app.history = saved.history || [];
   app.measurements = saved.measurements || [];
   app.totalPushups = saved.totalPushups || 0;
+  app.repsByExercise = saved.repsByExercise || {};
   app.dayKey = saved.dayKey || dateKey();
   app.leftMain = saved.leftMain || false;
   // Конфигурация общего челленджа всегда из кода — старое сохранение не должно блокировать обновления.
@@ -616,7 +631,10 @@ function addReps(ch, counts) {
   const wasDone = C.isTodayDone(ch);
   app.totalPushups += total;
   logEntry(ch.title, C.repsNorm(ch), total);
-  for (const [ex, reps] of Object.entries(counts)) if (reps > 0) ch.myTodayReps[ex] = (ch.myTodayReps[ex] || 0) + reps;
+  for (const [ex, reps] of Object.entries(counts)) if (reps > 0) {
+    ch.myTodayReps[ex] = (ch.myTodayReps[ex] || 0) + reps;
+    app.repsByExercise[ex] = (app.repsByExercise[ex] || 0) + reps;
+  }
   ch.myTotalReps += total;
   me.todayReps = C.myTodayTotal(ch);
   if (C.isTodayDone(ch)) me.doneToday = true;
@@ -900,7 +918,6 @@ function ChallengeCard(c, withPlay) {
 function YoursTab() {
   const mine = app.challenges.filter(C.isJoined);
   const active = mine.filter((c) => !challengeEnded(c));
-  const doneToday = mine.filter(C.isTodayDone).length;
   const nextUp = active.find((c) => !C.isTodayDone(c));
 
   // Блок «Сегодня» — главный вопрос пользователя: что сделать сейчас. Агрегат по активным.
@@ -929,12 +946,19 @@ function YoursTab() {
       : `<button class="action-btn" data-act="play:${nextUp.id}" style="margin-top:4px">${iconF("play")}${t("Continue workout")}</button>`}
   </div>` : "";
 
-  const statsCard = `<div class="card" style="padding:24px 16px;display:flex;flex-direction:column;align-items:center;gap:6px;text-align:center">
-    ${lbl(t("All-time reps"), "tracking-15")}
-    <div class="money" style="font-size:44px">${app.totalPushups}</div>
-    ${mine.length ? `<div class="row label" style="justify-content:center;gap:18px;font-size:11px">
-      <span class="secondary">${t("Active challenges: %lld", mine.length)}</span>
-      <span style="color:${doneToday === mine.length ? "var(--money)" : "#fff"}">${t("Done today: %lld/%lld", doneToday, mine.length)}</span></div>` : ""}
+  const by = exerciseBreakdown();
+  const exKeys = EX_ORDER.concat(Object.keys(by).filter((k) => !EX_ORDER.includes(k)));
+  const exRow = (ex) => `<div class="between" style="align-items:baseline">
+    <span style="font-size:15px">${esc(Exercise.displayName(ex))}</span>
+    <span class="money" style="font-size:15px;font-weight:700">${by[ex] || 0}</span></div>`;
+  const statsCard = `<div class="card" style="padding:24px 16px 18px;display:flex;flex-direction:column;gap:6px">
+    <div style="text-align:center;display:flex;flex-direction:column;gap:4px">
+      ${lbl(t("All-time"), "tracking-15")}
+      <div class="money" style="font-size:44px">${app.totalPushups}</div>
+      ${lbl(t("Total reps"))}
+    </div>
+    <hr class="hr">
+    <div style="display:flex;flex-direction:column;gap:12px">${exKeys.map(exRow).join("")}</div>
   </div>`;
   const empty = `<div class="card center" style="padding:24px;display:flex;flex-direction:column;align-items:center;gap:14px">
     ${icon("flame", "")}
