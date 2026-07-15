@@ -1720,7 +1720,7 @@ async function openSession(challengeId, startExercise) {
           haptic(12);
           if (numEl.animate && !REDUCE_MOTION()) {
             numEl.animate([{ transform: "scale(1)" }, { transform: "scale(1.18)" }, { transform: "scale(1)" }],
-              { duration: 320, easing: "cubic-bezier(0.34,1.28,0.7,1)" });
+              { duration: 440, easing: "cubic-bezier(0.34,1.28,0.7,1)" });
           }
         }
         prevTotal = total;
@@ -2389,7 +2389,7 @@ function afterRender() {
     const from = prev != null ? prev : (el.dataset.countFrom != null ? +el.dataset.countFrom : target);
     countMemo[key] = target;
     if (from === target || REDUCE_MOTION()) { el.textContent = sym + fmt(target); return; }
-    const t0 = performance.now(), DUR = 650;
+    const t0 = performance.now(), DUR = 1000;
     const tick = (now) => {
       const p = Math.min(1, (now - t0) / DUR);
       const v = Math.round(from + (target - from) * (1 - Math.pow(1 - p, 3))); // easeOutCubic
@@ -2409,7 +2409,7 @@ function afterRender() {
         if (i === 0) return; // трофей/печать — своя pop-in анимация, не дублируем
         if (el.animate) el.animate(
           [{ opacity: 0, transform: "translateY(16px) scale(0.98)" }, { opacity: 1, transform: "none" }],
-          { duration: 520, delay: Math.min(i * 90, 540), easing: "cubic-bezier(0.34,1.28,0.7,1)", fill: "backwards" });
+          { duration: 720, delay: Math.min(i * 130, 780), easing: "cubic-bezier(0.34,1.28,0.7,1)", fill: "backwards" });
       });
     }
   }
@@ -2427,7 +2427,7 @@ function afterRender() {
       items.forEach((el, i) => {
         if (el.animate) el.animate(
           [{ opacity: 0, transform: "translateY(14px)" }, { opacity: 1, transform: "none" }],
-          { duration: 380, delay: Math.min(i * 45, 320), easing: "cubic-bezier(0.32,0.72,0,1)", fill: "backwards" });
+          { duration: 560, delay: Math.min(i * 70, 490), easing: "cubic-bezier(0.32,0.72,0,1)", fill: "backwards" });
       });
     }
   }
@@ -2482,7 +2482,7 @@ function navRender(dir) {
   root._navBusy = true;
   root.classList.add("nav-layer");
 
-  const push = dir === "push", DUR = 420;
+  const push = dir === "push", DUR = 560;
   root.style.zIndex = push ? "71" : "70";
   snap.style.zIndex = push ? "70" : "71";
   root.style.transform = push ? "translateX(100%)" : "translateX(-30%)";
