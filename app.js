@@ -678,6 +678,7 @@ const SFX = {
   challenge: { wave: "triangle", f1: 660,  f2: 990,  dur: 0.11,  peak: 0.09 }, // челленджи
   coin:      { wave: "triangle", f1: 880,  f2: 1400, dur: 0.13,  peak: 0.09 }, // монеты/покупка
   start:     { wave: "sawtooth", f1: 440,  f2: 880,  dur: 0.14,  peak: 0.08 }, // старт тренировки
+  rep:       { wave: "sine",     f1: 950,  dur: 0.035, peak: 0.05 }, // обычный засчитанный повтор
 };
 function sfx(type) {
   const p = SFX[type] || SFX.tap;
@@ -694,6 +695,24 @@ function sfx(type) {
     g.gain.exponentialRampToValueAtTime(0.0001, now + p.dur);
     o.connect(g); g.connect(ctx.destination);
     o.start(now); o.stop(now + p.dur + 0.02);
+  } catch (e) {}
+}
+// Юбилейный аккорд на каждый 10-й повтор — мажорное «фанфарное» трезвучие.
+function sfxMilestone() {
+  try {
+    if (!_audioCtx) _audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    if (_audioCtx.state === "suspended") _audioCtx.resume();
+    const ctx = _audioCtx, t0 = ctx.currentTime;
+    [784, 988, 1319].forEach((f, i) => { // G5 · B5 · E6
+      const o = ctx.createOscillator(), g = ctx.createGain();
+      const s = t0 + i * 0.05, dur = 0.28;
+      o.type = "triangle"; o.frequency.value = f;
+      g.gain.setValueAtTime(0.0001, s);
+      g.gain.exponentialRampToValueAtTime(0.07, s + 0.01);
+      g.gain.exponentialRampToValueAtTime(0.0001, s + dur);
+      o.connect(g); g.connect(ctx.destination);
+      o.start(s); o.stop(s + dur + 0.02);
+    });
   } catch (e) {}
 }
 // Какой звук проиграть на команду.
@@ -1770,12 +1789,15 @@ async function openSession(challengeId, startExercise) {
         numEl.textContent = total;
         const cls = curReached ? "c-money" : (ar && ar.status === "down" ? "c-accent" : "c-white");
         numEl.className = numEl.className.replace(/c-(money|accent|white)/, cls);
-        // Пульс + вибро на каждом новом засчитанном повторе — тактильный отклик ядра приложения.
-        if (total > prevTotal) {
-          haptic(12);
+        // Пульс + вибро + звук на каждом новом засчитанном повторе. Каждый 10-й — юбилейный:
+        // яркий аккорд, сильная вибрация и увеличенный пульс числа.
+        if (total > prevTotal && total > 0) {
+          const milestone = total % 10 === 0;
+          if (milestone) { sfxMilestone(); haptic([0, 40, 40, 90]); }
+          else { sfx("rep"); haptic(12); }
           if (numEl.animate && !REDUCE_MOTION()) {
-            numEl.animate([{ transform: "scale(1)" }, { transform: "scale(1.18)" }, { transform: "scale(1)" }],
-              { duration: 500, easing: "cubic-bezier(0.34,1.28,0.7,1)" });
+            numEl.animate([{ transform: "scale(1)" }, { transform: `scale(${milestone ? 1.32 : 1.18})` }, { transform: "scale(1)" }],
+              { duration: milestone ? 620 : 500, easing: "cubic-bezier(0.34,1.28,0.7,1)" });
           }
         }
         prevTotal = total;
