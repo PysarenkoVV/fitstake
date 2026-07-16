@@ -68,6 +68,42 @@ test("day share editor offers a 9:16 story with photo and gradient backgrounds",
   await expect(page.getByRole("button", { name: "Photo library", exact: true })).toBeVisible();
   await expect(page.getByRole("button", { name: "Open camera", exact: true })).toBeVisible();
   await expect(page.getByRole("button", { name: "Share story", exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Minimal", exact: true })).toHaveClass(/active/);
+  await page.getByRole("button", { name: "Challenge", exact: true }).click();
+  await expect(page.getByRole("button", { name: "Challenge", exact: true })).toHaveClass(/active/);
   const preview = page.locator(".share-story-preview");
   await expect(preview).toHaveCSS("aspect-ratio", "9 / 16");
+
+  const chooserPromise = page.waitForEvent("filechooser");
+  await page.getByRole("button", { name: "Photo library", exact: true }).click();
+  const chooser = await chooserPromise;
+  await chooser.setFiles("icons/icon-512.png");
+  await expect(page.getByRole("slider", { name: "Photo scale" })).toBeVisible();
+  await page.getByRole("slider", { name: "Photo scale" }).fill("1.5");
+  await page.getByRole("slider", { name: "Background dimming" }).fill("60");
+  await expect(preview.locator("img")).toHaveCSS("transform", /matrix/);
+
+  await page.evaluate(() => {
+    const original = HTMLCanvasElement.prototype.toBlob;
+    HTMLCanvasElement.prototype.toBlob = function (callback, type, quality) {
+      window.__storyExport = { width: this.width, height: this.height, type };
+      return original.call(this, callback, type, quality);
+    };
+    Object.defineProperty(navigator, "canShare", { configurable: true, value: () => false });
+  });
+  const downloadPromise = page.waitForEvent("download");
+  await page.getByRole("button", { name: "Share story", exact: true }).click();
+  const download = await downloadPromise;
+  expect(download.suggestedFilename()).toBe("fitstake-story.jpg");
+  await expect.poll(() => page.evaluate(() => window.__storyExport)).toEqual({ width: 1080, height: 1920, type: "image/jpeg" });
+});
+
+test("completed day highlights the result before sharing", async ({ page }) => {
+  await page.evaluate(() => window.openDayComplete({ id: "main" }));
+  await expect(page.getByText("Day done!", { exact: true })).toBeVisible();
+  await expect(page.getByText("Above goal", { exact: true })).toBeVisible();
+  await expect(page.getByText("Best day", { exact: true })).toBeVisible();
+  await expect(page.getByText("Today's place", { exact: true })).toBeVisible();
+  await expect(page.getByText("Streak", { exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Share", exact: true })).toBeVisible();
 });

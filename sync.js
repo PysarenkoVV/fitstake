@@ -23,7 +23,7 @@ window.Sync = (() => {
   let accountEmail = null;     // email, если вошёл в аккаунт; null у анонима
   let isAnon = true;
 
-  const state = { users: null, participants: null, challenges: null, follows: null, activity: null, ready: false, error: null };
+  const state = { users: null, participants: null, challenges: null, follows: null, activity: null, reactions: null, ready: false, error: null };
   let db = null, F = null, A = null, authInstance = null, onChange = null;
   let resolveAuthReady;
   const authReady = new Promise((resolve) => { resolveAuthReady = resolve; });
@@ -73,6 +73,10 @@ window.Sync = (() => {
       });
       F.onValue(F.ref(db, "fitstake/activity"), (snap) => {
         state.activity = snap.val() || {};
+        if (onChange) onChange();
+      });
+      F.onValue(F.ref(db, "fitstake/reactions"), (snap) => {
+        state.reactions = snap.val() || {};
         if (onChange) onChange();
       });
       // Состояние авторизации. Нет пользователя — входим анонимно (приложение работает сразу).
@@ -270,6 +274,14 @@ window.Sync = (() => {
     });
   }
 
+  function setReaction(eventId, emoji, on) {
+    return new Promise((resolve) => ready(() => {
+      const ref = F.ref(db, "fitstake/reactions/" + eventId + "/" + uid);
+      const op = on ? F.set(ref, emoji) : F.remove(ref);
+      op.then(() => resolve(true)).catch(() => resolve(false));
+    }));
+  }
+
   // Отчёт о проблеме от тестера → общий узел bugReports (create-only по правилам БД).
   function reportBug(payload) {
     return new Promise((resolve) => {
@@ -282,7 +294,7 @@ window.Sync = (() => {
   }
 
   return {
-    enabled, state, init, registerUser, join, report, createChallenge, joinChallenge, leaveChallenge, reportChallenge, setFollowing, publishActivity, reportBug, signIn, signUp, signInGoogle, signOutUser,
+    enabled, state, init, registerUser, join, report, createChallenge, joinChallenge, leaveChallenge, reportChallenge, setFollowing, publishActivity, setReaction, reportBug, signIn, signUp, signInGoogle, signOutUser,
     get uid() { return uid; },
     get email() { return accountEmail; },
     get isAnonymous() { return isAnon; },

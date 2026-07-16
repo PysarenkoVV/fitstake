@@ -81,7 +81,10 @@ test("creator publishes and another account joins a real challenge", async ({ br
     });
   }, { id: challengeId, challengeTitle: title });
   await creator.getByRole("button", { name: "Notifications", exact: true }).click();
-  await expect(creator.getByText(new RegExp(`QA Joiner completed Push-ups in ${title}`))).toBeVisible({ timeout: 15_000 });
+  const activity = creator.locator(".activity-row").filter({ hasText: `QA Joiner completed Push-ups in ${title}` });
+  await expect(activity).toBeVisible({ timeout: 15_000 });
+  await activity.getByRole("button", { name: "🔥", exact: true }).click();
+  await expect(activity.getByRole("button", { name: "🔥 1", exact: true })).toHaveClass(/selected/, { timeout: 15_000 });
 
   await creatorContext.close();
   await joinerContext.close();

@@ -4,7 +4,7 @@
 "use strict";
 
 // Версия оболочки — держать в синхроне с CACHE в sw.js; уходит в баг-репорты.
-const APP_VERSION = "v59";
+const APP_VERSION = "v60";
 // Последняя JS-ошибка — прикладываем к баг-репорту, чтобы сразу видеть причину.
 let lastError = "";
 window.addEventListener("error", (e) => {
@@ -197,6 +197,11 @@ const RU = {
   "Share your day": "Поделиться днём", "Choose a background": "Выбери фон", "FitStake gradient": "Градиент FitStake",
   "Photo library": "Фото из галереи", "Open camera": "Открыть камеру", "Share story": "Поделиться сторис",
   "Share today's result": "Поделиться результатом",
+  "Template": "Шаблон", "Minimal": "Минимал", "Challenge": "Вызов", "Photo scale": "Масштаб фото",
+  "Background dimming": "Затемнение", "Drag the photo to position it": "Двигай фото пальцем",
+  "I did mine": "Я своё сделал", "Now it's your turn": "Теперь твоя очередь",
+  "Above goal": "Сверх нормы", "Best day": "Лучший день", "Today's place": "Место сегодня", "Streak": "Серия",
+  "%lld of %lld": "%lld из %lld",
   "reps": "повторов", "Exercises": "Упражнения", "Your turn": "Твой ход",
   "Body & measurements": "Тело и замеры", "Wallet": "Кошелёк", "Privacy & data": "Приватность и данные",
   "Video is processed on your device by the camera — not recorded and not sent to any server.": "Видео обрабатывается на твоём устройстве камерой — не записывается и не отправляется на сервер.",
@@ -1248,10 +1253,18 @@ function NotificationsSheet() {
     const message = e.type === "day"
       ? t("%@ completed today's challenge in %@", e.actorName || "?", e.challengeTitle || "?")
       : t("%@ completed %@ in %@", e.actorName || "?", Exercise.displayName(e.exercise), e.challengeTitle || "?");
-    return `<button class="entry-row" data-act="notification:${e.challengeId}" style="width:100%;text-align:left;align-items:flex-start">
-      <div class="avatar" style="background:rgba(77,194,128,.14);color:var(--money)">${icon(e.type === "day" ? "check" : "bolt")}</div>
-      <span style="flex:1"><span style="display:block;font-size:14px;line-height:1.35">${esc(message)}</span><span class="secondary" style="display:block;font-size:12px;margin-top:4px">${relativeActivityTime(e.ts)}</span></span>
-    </button>`;
+    const reactions = (Sync.state.reactions && Sync.state.reactions[e.id]) || {};
+    const reactionButtons = ["🔥", "💪", "👏"].map((emoji) => {
+      const count = Object.values(reactions).filter((x) => x === emoji).length;
+      const mine = reactions[Sync.uid] === emoji;
+      return `<button class="reaction-chip ${mine ? "selected" : ""}" data-act="react:${e.id}:${emoji}" aria-label="${emoji}${count ? ` ${count}` : ""}">${emoji}${count ? `<span>${count}</span>` : ""}</button>`;
+    }).join("");
+    return `<div class="activity-row">
+      <button class="entry-row activity-main" data-act="notification:${e.challengeId}">
+        <div class="avatar" style="background:rgba(77,194,128,.14);color:var(--money)">${icon(e.type === "day" ? "check" : "bolt")}</div>
+        <span style="flex:1"><span style="display:block;font-size:14px;line-height:1.35">${esc(message)}</span><span class="secondary" style="display:block;font-size:12px;margin-top:4px">${relativeActivityTime(e.ts)}</span></span>
+      </button><div class="reaction-row">${reactionButtons}</div>
+    </div>`;
   }).join("");
   return sheetShell(t("Notifications"), rows || `<div class="card card-soft center secondary" style="padding:24px">${t("No notifications yet")}</div>`, true);
 }
@@ -2142,11 +2155,21 @@ function confetti() {
 }
 function DayCompleteFull() {
   const c = app.challenges.find((x) => x.id === ui.fullId);
+  const today = C.myTodayTotal(c), extra = Math.max(0, today - C.repsNorm(c));
+  const days = app.history.flatMap((d) => d.entries.filter((e) => e.title === c.title).map((e) => e.reps));
+  const best = Math.max(today, ...days, 0);
+  const ranked = C.active(c).slice().sort((a, b) => b.todayReps - a.todayReps);
+  const rank = Math.max(1, ranked.findIndex((p) => p.isMe) + 1);
   return `<div class="fullscreen">${confetti()}<div class="celebrate">
     <div class="c-money pop-in" style="font-size:84px;display:flex">${iconF("seal")}</div>
     <div class="display" style="font-size:42px">${t("Day done!")}</div>
     <div class="form-footer" style="max-width:360px">${t("%lld reps today. Day %lld of %lld in the bag.", C.myTodayTotal(c), c.currentDay, c.durationDays)}</div>
-    <div style="flex:0"></div>
+    <div class="day-win-stats">
+      <div><span>${t("Above goal")}</span><strong>+${extra}</strong></div>
+      <div><span>${t("Best day")}</span><strong>${best}</strong></div>
+      <div><span>${t("Today's place")}</span><strong>${t("%lld of %lld", rank, ranked.length)}</strong></div>
+      <div><span>${t("Streak")}</span><strong>${myStreak(c)}</strong></div>
+    </div>
     <button class="action-btn" data-act="shareDay:${c.id}" style="max-width:320px">${iconF("share")}${t("Share")}</button>
     <button class="text-btn" data-act="closeFull">${t("Close")}</button>
   </div></div>`;
@@ -2158,24 +2181,39 @@ function ShareDayEditorFull() {
   const exercises = c.goals.map((g) => `${C.myToday(c, g.exercise)} ${Exercise.displayName(g.exercise).toLowerCase()}`).join(" · ");
   return `<div class="fullscreen share-editor"><div class="share-editor-shell">
     <div class="navbar"><button class="icon-btn" data-act="closeShareDay" aria-label="${t("Back")}">${icon("chevronLeft")}</button><div class="title">${t("Share your day")}</div><span style="width:40px"></span></div>
-    <div class="share-story-preview ${photo ? "has-photo" : "is-gradient"}">
-      ${photo ? `<img src="${photo}" alt="">` : `<div class="share-gradient"></div>`}
+    <div class="share-story-preview ${photo ? "has-photo" : "is-gradient"} template-${f.template}" style="--photo-scale:${f.photoZoom};--photo-x:${f.photoX}%;--photo-y:${f.photoY}%;--story-dim:${f.dim / 100}">
+      ${photo ? `<img src="${photo}" alt="" draggable="false">` : `<div class="share-gradient"></div>`}
       <div class="share-story-shade"></div>
       <div class="share-story-copy">
-        <div class="share-metric"><span>${t("Reps")}</span><strong>${C.myTodayTotal(c)}</strong></div>
-        <div class="share-metric"><span>${t("Exercises")}</span><strong class="share-exercises">${esc(exercises)}</strong></div>
-        <div class="share-metric"><span>${t("Progress")}</span><strong>${t("Day %lld of %lld", c.currentDay, c.durationDays)}</strong></div>
-        <div class="share-exercise-mark">${c.goals.map((g) => icon(EXERCISE_ICON[g.exercise] || "flame")).join(icon("chevronRight"))}</div>
-        <div class="share-brand">FIT<span>STAKE</span><small>${t("Your turn")}</small></div>
+        ${f.template === "challenge" ? `
+          <div class="share-dare"><span>${t("I did mine")}</span><strong>${C.myTodayTotal(c)}</strong><small>${t("reps")}</small></div>
+          <div class="share-dare-exercises">${esc(exercises)}</div>
+          <div class="share-exercise-mark">${c.goals.map((g) => icon(EXERCISE_ICON[g.exercise] || "flame")).join(icon("chevronRight"))}</div>
+          <div class="share-brand">FIT<span>STAKE</span><small>${t("Now it's your turn")}</small></div>` : `
+          <div class="share-metric"><span>${t("Reps")}</span><strong>${C.myTodayTotal(c)}</strong></div>
+          <div class="share-metric"><span>${t("Exercises")}</span><strong class="share-exercises">${esc(exercises)}</strong></div>
+          <div class="share-metric"><span>${t("Progress")}</span><strong>${t("Day %lld of %lld", c.currentDay, c.durationDays)}</strong></div>
+          <div class="share-exercise-mark">${c.goals.map((g) => icon(EXERCISE_ICON[g.exercise] || "flame")).join(icon("chevronRight"))}</div>
+          <div class="share-brand">FIT<span>STAKE</span><small>${t("Your turn")}</small></div>`}
       </div>
     </div>
     <div class="share-editor-controls">
+      <div class="form-label">${t("Template")}</div>
+      <div class="segmented share-template-picker">
+        <button data-act="shareTemplate:minimal" class="${f.template === "minimal" ? "active" : ""}">${t("Minimal")}</button>
+        <button data-act="shareTemplate:challenge" class="${f.template === "challenge" ? "active" : ""}">${t("Challenge")}</button>
+      </div>
       <div class="form-label">${t("Choose a background")}</div>
       <div class="share-bg-options">
         <button class="share-bg-option ${f.background === "gradient" ? "selected" : ""}" data-act="shareBg:gradient"><span class="share-bg-swatch gradient"></span><span>${t("FitStake gradient")}</span></button>
         <button class="share-bg-option ${photo ? "selected" : ""}" data-act="pickSharePhoto:library"><span class="share-bg-swatch">${iconF("photo")}</span><span>${t("Photo library")}</span></button>
         <button class="share-bg-option" data-act="pickSharePhoto:camera"><span class="share-bg-swatch">${iconF("camera")}</span><span>${t("Open camera")}</span></button>
       </div>
+      ${photo ? `<div class="share-photo-controls">
+        <label><span>${t("Photo scale")}</span><input type="range" min="1" max="2" step="0.05" value="${f.photoZoom}" data-model="photoZoom"></label>
+        <label><span>${t("Background dimming")}</span><input type="range" min="10" max="85" step="5" value="${f.dim}" data-model="dim"></label>
+        <div class="form-footer">${t("Drag the photo to position it")}</div>
+      </div>` : ""}
       <button class="action-btn" data-act="publishDay:${c.id}">${iconF("share")}${t("Share story")}</button>
     </div>
   </div></div>`;
@@ -2228,313 +2266,6 @@ function openDemoComplete(reps) {
   ui.form = { demoReps: reps };
   ui.full = DemoCompleteFull;
   render();
-}
-
-// ==========================================================================
-// Сессия с камерой (живёт вне цикла render, чтобы не рвать видеопоток)
-// ==========================================================================
-const CAN_RECORD = typeof MediaRecorder !== "undefined" && !!HTMLCanvasElement.prototype.captureStream;
-let liveSession = null;
-
-async function openSession(challengeId, startExercise) {
-  const isDemo = challengeId === "demo";
-  const c = isDemo ? null : app.challenges.find((x) => x.id === challengeId);
-  if ((!isDemo && !c) || liveSession) return;
-  const goals = isDemo
-    ? [{ exercise: startExercise || "pushups", target: 5, start: 0 }]
-    : c.goals.map((g) => ({ exercise: g.exercise, target: C.norm(c, g), start: C.myToday(c, g.exercise) }));
-
-  const overlay = document.createElement("div");
-  overlay.className = "session";
-  overlay.innerHTML = `
-    <video autoplay muted playsinline></video>
-    <canvas class="skeleton"></canvas>
-    <div class="topbar">
-      <div class="between" style="align-items:flex-start">
-        <button class="cam-btn" data-sess="close" aria-label="${t("Close")}">${icon("xmark")}</button>
-        <div class="cam-col">
-          ${CAN_RECORD ? `<button class="cam-btn" data-sess="record" aria-label="${t("Record video")}">${icon("record")}</button>` : ""}
-        </div>
-      </div>
-      <div class="hint" id="sess-hint"></div>
-    </div>
-    <div class="sess-countdown" id="sess-countdown" aria-live="assertive"></div>
-    <div class="hud"><div id="sess-counters"></div><div id="sess-bottom" style="width:100%;display:flex;flex-direction:column;align-items:center;gap:10px"></div></div>`;
-  document.body.appendChild(overlay);
-
-  const video = overlay.querySelector("video");
-  const canvas = overlay.querySelector(".skeleton");
-  const hintEl = overlay.querySelector("#sess-hint");
-  const countdownEl = overlay.querySelector("#sess-countdown");
-  const countersEl = overlay.querySelector("#sess-counters");
-  const bottomEl = overlay.querySelector("#sess-bottom");
-
-  // Комбо теперь последовательное: активно одно упражнение за раз, счётчик показываем один.
-  // startExercise — с какого упражнения начать (кнопка play у строки / выбор с большой кнопки).
-  const combo = goals.length > 1;
-  let active = 0;
-  if (startExercise) { const i = goals.findIndex((g) => g.exercise === startExercise); if (i >= 0) active = i; }
-
-  const sess = new window.PoseSession(goals.map((g) => g.exercise));
-  sess.setActive(active);
-  liveSession = { sess, overlay };
-
-  // Индикатор загрузки: перекрывает экран, пока открывается камера и грузится MediaPipe.
-  const loader = document.createElement("div");
-  loader.style.cssText = "position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;z-index:20;background:rgba(0,0,0,.55)";
-  loader.innerHTML = `<div class="spinner"></div><div style="color:#fff;font-weight:600">${t("Preparing workout…")}</div>`;
-  overlay.appendChild(loader);
-
-  try {
-    await sess.start(video, canvas);
-    loader.remove();
-  } catch (err) {
-    // Ошибка камеры/модели: завершаем сессию, чистим и предлагаем повтор — приложение не виснет.
-    sess.stop();
-    overlay.remove();
-    liveSession = null;
-    showCameraError(cameraError(err), challengeId, startExercise);
-    return;
-  }
-
-  const totalFor = (g, r) => g.start + (r ? r.repCount : 0);
-  const resultFor = (ex) => sess.snapshot.results.find((r) => r.exercise === ex);
-
-  // Один счётчик — активного упражнения. В комбо над ним подпись «Упражнение · N/всего».
-  let prevTotal = -1;
-  function renderCounter() {
-    const g = goals[active];
-    const hasPrev = combo && active > 0, hasNext = combo && active < goals.length - 1;
-    countersEl.className = "counter-col";
-    countersEl.innerHTML = `
-      <span class="cap">${esc(Exercise.displayName(g.exercise))}${combo ? ` • ${active + 1}/${goals.length}` : ""}</span>
-      <div class="count-line">
-        <span class="counter-big c-white" id="sess-num">${totalFor(g, resultFor(g.exercise))}</span>
-        ${g.target != null ? `<span class="count-target">/ ${g.target}</span>` : ""}
-      </div>
-      ${hasPrev || hasNext ? `<div class="sess-nav">
-        ${hasPrev ? `<button data-sess="prev">${icon("chevronLeft")}${esc(Exercise.displayName(goals[active - 1].exercise))}</button>` : ""}
-        ${hasNext ? `<button data-sess="next">${esc(Exercise.displayName(goals[active + 1].exercise))}${icon("chevronRight")}</button>` : ""}
-      </div>` : ""}`;
-    prevTotal = totalFor(g, resultFor(g.exercise)); // сброс, чтобы пульс не сработал при смене упражнения
-  }
-  renderCounter();
-  let prevGoalReached = false, prevBottomKey = "", prevTracked = false, lastWarnTs = 0;
-  let countingStarted = false, readySince = 0, countdownShown = 0, demoFinishing = false;
-
-  function resetReadyState() {
-    countingStarted = false;
-    readySince = 0;
-    countdownShown = 0;
-    countdownEl.textContent = "";
-    countdownEl.classList.remove("show");
-    sess.setCountingEnabled(false);
-  }
-
-  // Плашка-уведомление поверх камеры («Push-ups completed» и т.п.) — короткая, ~1.5 с.
-  function flashPlate(text) {
-    const p = document.createElement("div");
-    p.style.cssText = "position:absolute;left:50%;top:36%;transform:translate(-50%,-50%);background:rgba(0,0,0,.72);color:#fff;font-weight:800;font-size:22px;padding:16px 24px;border-radius:16px;z-index:30;pointer-events:none;text-align:center";
-    p.textContent = text;
-    overlay.appendChild(p);
-    setTimeout(() => p.remove(), 1500);
-  }
-
-  function loop() {
-    if (liveSession !== undefined && liveSession && liveSession.sess === sess) {
-      const results = sess.snapshot.results;
-      const sessionTotal = results.reduce((s, r) => s + r.repCount, 0);
-      const g = goals[active], ar = resultFor(g.exercise), total = totalFor(g, ar);
-      const curReached = g.target != null && total >= g.target;
-      const allReached = goals.every((x) => x.target != null && totalFor(x, resultFor(x.exercise)) >= x.target);
-
-      // Счётчик активного упражнения
-      const numEl = countersEl.querySelector("#sess-num");
-      if (numEl) {
-        numEl.textContent = total;
-        const cls = curReached ? "c-money" : (ar && ar.status === "down" ? "c-accent" : "c-white");
-        numEl.className = numEl.className.replace(/c-(money|accent|white)/, cls);
-        // Новый засчитанный повтор: один звук по приоритету workout > exercise > milestone > rep.
-        // На повторе, закрывающем упражнение/тренировку, обычный rep/milestone не звучит.
-        if (total > prevTotal && total > 0) {
-          const milestone = total % 10 === 0;
-          const justReached = curReached && !prevGoalReached;
-          const event = justReached ? (allReached ? "workout" : "exercise") : (milestone ? "milestone" : "rep");
-          wsfxMain(event);
-          haptic(event === "rep" ? 12 : [0, 40, 40, 90]);
-          if (justReached) flashPlate(t("%@ completed", Exercise.displayName(g.exercise)));
-          if (isDemo && allReached && !demoFinishing) {
-            demoFinishing = true;
-            setTimeout(() => { if (liveSession && liveSession.sess === sess) endSession(true); }, 700);
-          }
-        }
-        prevTotal = total;
-      }
-
-      // Сначала стабильно находим тело, затем даём человеку 3 секунды занять позицию.
-      const tracked = !!(ar && (ar.status === "up" || ar.status === "down"));
-      const now = performance.now();
-      if (!countingStarted) {
-        if (!tracked) {
-          readySince = 0;
-          countdownShown = 0;
-          countdownEl.textContent = "";
-          countdownEl.classList.remove("show", "word");
-        } else {
-          if (!readySince) readySince = now;
-          const elapsed = now - readySince;
-          if (elapsed >= 500) {
-            const n = 3 - Math.floor((elapsed - 500) / 1000);
-            if (n > 0 && n !== countdownShown) {
-              countdownShown = n;
-              countdownEl.textContent = String(n);
-              countdownEl.classList.remove("word");
-              countdownEl.classList.add("show");
-              sfx("tick");
-            } else if (n <= 0) {
-              countingStarted = true;
-              sess.setCountingEnabled(true);
-              countdownEl.textContent = t("Go!");
-              countdownEl.classList.toggle("word", t("Go!").length > 4);
-              setTimeout(() => countdownEl.classList.remove("show"), 650);
-            }
-          }
-        }
-      }
-
-      // Плашка нужна только пока камера не готова. Во время нормального счёта
-      // она исчезает, чтобы текст не мелькал над человеком на каждом движении.
-      let hint;
-      if (!ar || ar.status === "noBody") hint = t("Step into frame");
-      else if (!tracked) hint = g.exercise === "squats" ? t("Both legs must be fully in frame") : t("Both arms must be fully in frame");
-      else if (!countingStarted) hint = t("Body found — hold still");
-      else hint = null;
-      hintEl.style.display = hint ? "" : "none";
-      hintEl.textContent = hint || "";
-      // Пользователь вышел из кадра (был в кадре → пропал): короткий warning, не чаще раза в 4 с.
-      if (prevTracked && !tracked && total > 0) {
-        const nowTs = performance.now();
-        if (nowTs - lastWarnTs > 4000) { wsfx("warning"); lastWarnTs = nowTs; }
-      }
-      prevTracked = tracked;
-
-      // Нижняя панель: угол текущего упражнения + кнопка Завершить/Готово (переключение упражнений — в блоке счётчика)
-      const angle = ar && ar.bendAngle != null ? Math.round(ar.bendAngle) : null;
-      const key = `${curReached}|${allReached}|${sessionTotal > 0}|${angle}`;
-      if (key !== prevBottomKey) {
-        prevBottomKey = key;
-        let b = angle != null ? `<span class="angle">${angle}°</span>` : "";
-        if (allReached) b += `<button class="action-btn money" data-sess="finish" style="max-width:340px">${iconF("checkCircle")}${t("Finish")}</button>`;
-        else if (sessionTotal > 0) b += `<button class="action-btn" data-sess="finish" style="max-width:340px">${icon("check")}${t("Done")}</button>`;
-        bottomEl.innerHTML = b;
-      }
-      prevGoalReached = curReached;
-    }
-    if (liveSession && liveSession.sess === sess) requestAnimationFrame(loop);
-  }
-  requestAnimationFrame(loop);
-
-  let finishing = false;
-  // Завершение сессии. save=true — засчитать повторы; в обоих случаях активная запись
-  // авто-сохраняется, чтобы видео не терялось. Двойное сохранение исключено флагом finishing.
-  async function endSession(save) {
-    if (finishing) return;
-    finishing = true;
-    const counts = {};
-    sess.snapshot.results.forEach((r) => (counts[r.exercise] = r.repCount));
-    if (sess.isRecording()) { try { await sess.toggleRecording(); } catch (e) { wsfx("recError"); } }
-    if (save) {
-      if (isDemo) {
-        sess.stop(); overlay.remove(); liveSession = null;
-        openDemoComplete(Object.values(counts).reduce((sum, n) => sum + n, 0));
-        return;
-      }
-      let closed;
-      try { closed = addReps(c, counts); }
-      catch (e) { finishing = false; toast(t("Couldn't save. Try again.")); return; } // разблокируем — можно повторить
-      sess.stop(); overlay.remove(); liveSession = null;
-      render();
-      if (closed) { C.isFinished(c) ? openChallengeComplete(c) : openDayComplete(c); }
-    } else {
-      sess.stop(); overlay.remove(); liveSession = null;
-    }
-  }
-
-  // Крестик: если есть засчитанные повторы — спрашиваем; иначе закрываем сразу.
-  function askExit() {
-    const done = sess.snapshot.results.reduce((s, r) => s + r.repCount, 0);
-    if (done <= 0) { endSession(false); return; }
-    if (overlay.querySelector(".sess-modal")) return;
-    const dlg = document.createElement("div");
-    dlg.className = "sess-modal";
-    dlg.style.cssText = "position:absolute;inset:0;z-index:40;display:flex;align-items:center;justify-content:center;padding:24px;background:rgba(0,0,0,.6)";
-    dlg.innerHTML = `<div role="dialog" aria-modal="true" style="background:var(--card,#1a1a1a);border-radius:20px;padding:22px;width:100%;max-width:340px;display:flex;flex-direction:column;gap:12px;text-align:center">
-      <div style="font-weight:800;font-size:20px">${t("Finish workout?")}</div>
-      <div style="color:var(--text-secondary);font-size:15px;margin-bottom:6px">${t("Save completed reps?")}</div>
-      <button class="action-btn money" data-sess="doSave">${t("Save workout")}</button>
-      <button class="action-btn" data-sess="doExit" style="background:var(--white-08);color:#fff">${t("Exit without saving")}</button>
-      <button class="text-btn" data-sess="doContinue">${t("Continue workout")}</button>
-    </div>`;
-    overlay.appendChild(dlg);
-  }
-
-  overlay.addEventListener("click", async (e) => {
-    const b = e.target.closest("[data-sess]");
-    if (!b) return;
-    const a = b.dataset.sess;
-    if (a === "close") askExit();
-    else if (a === "finish") endSession(true);
-    else if (a === "doSave") { setBtnLoading(b, true, t("Save workout")); await endSession(true); if (document.body.contains(overlay)) setBtnLoading(b, false); }
-    else if (a === "doExit") endSession(false);
-    else if (a === "doContinue") { const m = overlay.querySelector(".sess-modal"); if (m) m.remove(); }
-    else if (a === "next") {
-      if (active < goals.length - 1) { active++; sess.setActive(active); resetReadyState(); wsfx("transition"); renderCounter(); prevBottomKey = ""; prevGoalReached = false; }
-    }
-    else if (a === "prev") {
-      if (active > 0) { active--; sess.setActive(active); resetReadyState(); renderCounter(); prevBottomKey = ""; prevGoalReached = false; }
-    }
-    else if (a === "record") {
-      let on;
-      try { on = await sess.toggleRecording(); }
-      catch (err) { wsfx("recError"); toast(t("Couldn't save. Try again.")); return; }
-      if (on) { wsfx("recStart"); toast(t("Recording started")); } else wsfx("recStop");
-      b.innerHTML = icon(on ? "stop" : "record");
-      b.style.color = on ? "var(--red)" : "rgba(255,255,255,.85)";
-    }
-  });
-}
-
-// Понятное сообщение об ошибке камеры/модели по типу сбоя. denied → есть подсказка про настройки.
-function cameraError(err) {
-  const name = err && err.name;
-  if (name === "NotAllowedError" || name === "SecurityError" || name === "PermissionDeniedError")
-    return { msg: t("Camera permission denied"), hint: t("Allow camera access in your browser settings, then retry.") };
-  if (name === "NotFoundError" || name === "DevicesNotFoundError" || name === "OverconstrainedError")
-    return { msg: t("Camera not found") };
-  if (err && err.code === "offline") return { msg: t("Internet connection required") };
-  if (err && err.code === "poseLoad") return { msg: t("Couldn't load pose recognition") };
-  return { msg: t("Camera access is needed to count your reps.") };
-}
-
-// Экран ошибки камеры поверх приложения: сообщение + Retry (заново) / Cancel (назад).
-function showCameraError(info, challengeId, startExercise) {
-  const ov = document.createElement("div");
-  ov.className = "session";
-  ov.style.cssText = "display:flex;align-items:center;justify-content:center;padding:32px;background:#000";
-  ov.innerHTML = `<div style="display:flex;flex-direction:column;align-items:center;gap:16px;text-align:center;max-width:340px;color:#fff">
-    <div style="width:44px;height:44px;color:rgba(255,255,255,.75)">${iconF("camera")}</div>
-    <div style="font-weight:700;font-size:18px">${esc(info.msg)}</div>
-    ${info.hint ? `<div style="color:rgba(255,255,255,.65);font-size:14px;line-height:1.4">${esc(info.hint)}</div>` : ""}
-    <button class="action-btn money" data-err="retry" style="max-width:280px">${t("Retry")}</button>
-    <button class="text-btn" data-err="cancel">${t("Cancel")}</button>
-  </div>`;
-  document.body.appendChild(ov);
-  ov.addEventListener("click", (e) => {
-    const b = e.target.closest("[data-err]");
-    if (!b) return;
-    ov.remove();
-    if (b.dataset.err === "retry") openSession(challengeId, startExercise);
-  });
 }
 
 // ==========================================================================
@@ -2640,14 +2371,18 @@ async function shareCard(data) {
   const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = "fitstake.png"; a.click();
 }
 
-async function shareDayStory(c, photo) {
+async function shareDayStory(c, options) {
+  const photo = options && options.photo;
   const W = 1080, H = 1920, pad = 92;
   const cv = document.createElement("canvas"); cv.width = W; cv.height = H;
   const g = cv.getContext("2d");
   const bg = await loadImg(photo);
   if (bg) {
-    const scale = Math.max(W / bg.width, H / bg.height);
-    g.drawImage(bg, (W - bg.width * scale) / 2, (H - bg.height * scale) / 2, bg.width * scale, bg.height * scale);
+    const scale = Math.max(W / bg.width, H / bg.height) * (options.photoZoom || 1);
+    const drawW = bg.width * scale, drawH = bg.height * scale;
+    const x = (W - drawW) / 2 + ((options.photoX || 0) / 100) * W * .42;
+    const y = (H - drawH) / 2 + ((options.photoY || 0) / 100) * H * .42;
+    g.drawImage(bg, x, y, drawW, drawH);
   } else {
     const base = g.createLinearGradient(0, 0, W, H);
     base.addColorStop(0, "#080808"); base.addColorStop(.52, "#17100c"); base.addColorStop(1, "#0a0a0a");
@@ -2657,25 +2392,34 @@ async function shareDayStory(c, photo) {
     glow = g.createRadialGradient(W * .08, H * .84, 0, W * .08, H * .84, 620);
     glow.addColorStop(0, "rgba(77,194,128,.34)"); glow.addColorStop(1, "rgba(77,194,128,0)"); g.fillStyle = glow; g.fillRect(0, 0, W, H);
   }
+  const dim = Math.max(.1, Math.min(.85, ((options && options.dim) || 45) / 100));
   const shade = g.createLinearGradient(0, 0, 0, H);
-  shade.addColorStop(0, "rgba(0,0,0,.82)"); shade.addColorStop(.46, "rgba(0,0,0,.12)"); shade.addColorStop(1, "rgba(0,0,0,.74)");
+  shade.addColorStop(0, `rgba(0,0,0,${Math.min(.94, dim + .32)})`); shade.addColorStop(.46, `rgba(0,0,0,${dim * .22})`); shade.addColorStop(1, `rgba(0,0,0,${Math.min(.92, dim + .25)})`);
   g.fillStyle = shade; g.fillRect(0, 0, W, H);
 
   const label = (text, y) => { g.fillStyle = "rgba(255,255,255,.82)"; g.font = "500 31px -apple-system,system-ui,sans-serif"; g.fillText(text, pad, y); };
   const value = (text, y, size = 66) => { g.fillStyle = "#fff"; g.font = `800 ${size}px -apple-system,system-ui,sans-serif`; g.fillText(text, pad, y); };
   g.textAlign = "left"; g.textBaseline = "alphabetic";
-  label(t("Reps"), 170); value(String(C.myTodayTotal(c)), 252, 82);
-  label(t("Exercises"), 352);
   const exercises = c.goals.map((goal) => `${C.myToday(c, goal.exercise)} ${Exercise.displayName(goal.exercise).toLowerCase()}`).join(" · ");
-  g.font = "800 47px -apple-system,system-ui,sans-serif";
-  const lines = wrapLines(g, exercises, W - pad * 2, 2);
-  lines.forEach((line, i) => value(line, 422 + i * 58, 47));
-  const progressY = 422 + lines.length * 58 + 46;
-  label(t("Progress"), progressY); value(t("Day %lld of %lld", c.currentDay, c.durationDays), progressY + 76, 58);
+  if (options.template === "challenge") {
+    value(t("I did mine").toUpperCase(), 190, 58);
+    value(String(C.myTodayTotal(c)), 340, 136);
+    label(t("reps").toUpperCase(), 402);
+    g.font = "800 45px -apple-system,system-ui,sans-serif";
+    wrapLines(g, exercises, W - pad * 2, 2).forEach((line, i) => value(line, 510 + i * 58, 45));
+  } else {
+    label(t("Reps"), 170); value(String(C.myTodayTotal(c)), 252, 82);
+    label(t("Exercises"), 352);
+    g.font = "800 47px -apple-system,system-ui,sans-serif";
+    const lines = wrapLines(g, exercises, W - pad * 2, 2);
+    lines.forEach((line, i) => value(line, 422 + i * 58, 47));
+    const progressY = 422 + lines.length * 58 + 46;
+    label(t("Progress"), progressY); value(t("Day %lld of %lld", c.currentDay, c.durationDays), progressY + 76, 58);
+  }
 
   g.fillStyle = "#fff"; g.font = "900 58px -apple-system,system-ui,sans-serif"; g.fillText("FIT", pad, H - 210);
   const fitW = g.measureText("FIT").width; g.fillStyle = "#ff5e1f"; g.fillText("STAKE", pad + fitW, H - 210);
-  g.fillStyle = "#ff5e1f"; g.font = "700 38px -apple-system,system-ui,sans-serif"; g.fillText(t("Your turn"), pad, H - 145);
+  g.fillStyle = "#ff5e1f"; g.font = "700 38px -apple-system,system-ui,sans-serif"; g.fillText(t(options.template === "challenge" ? "Now it's your turn" : "Your turn"), pad, H - 145);
 
   const blob = await new Promise((res) => cv.toBlob(res, "image/jpeg", .92));
   const file = new File([blob], "fitstake-story.jpg", { type: "image/jpeg" });
@@ -2965,7 +2709,7 @@ function openParticipant(id) {
 }
 function closeSheet() { ui.sheet = null; ui.form = null; render(); }
 function openDayComplete(c) { ui.fullId = c.id; ui.full = DayCompleteFull; render(); }
-function openShareDay(c) { ui.form = { challengeId: c.id, background: "gradient", photo: null }; ui.full = ShareDayEditorFull; render(); }
+function openShareDay(c) { ui.form = { challengeId: c.id, background: "gradient", photo: null, template: "minimal", photoZoom: 1, photoX: 0, photoY: 0, dim: 45 }; ui.full = ShareDayEditorFull; render(); }
 function openChallengeComplete(c) { ui.form = { challengeId: c.id, weight: store["profile.weightKg"], maxReps: store["profile.maxReps"], photo: null }; ui.full = ChallengeCompleteFull; render(); }
 function closeFull() { ui.full = null; ui.form = null; render(); }
 
@@ -3098,6 +2842,14 @@ root.addEventListener("click", async (e) => {
       if (!ok) toast(t("Couldn't update subscription"));
       render(); return;
     }
+    case "react": {
+      if (isGuest()) { openAuthGate("account"); return; }
+      const [, eventId, emoji] = act.split(":");
+      const current = Sync.state.reactions && Sync.state.reactions[eventId] && Sync.state.reactions[eventId][Sync.uid];
+      const ok = await Sync.setReaction(eventId, emoji, current !== emoji);
+      if (!ok) toast(t("Couldn't update subscription"));
+      render(); return;
+    }
     case "notification": ui.sheet = null; ui.form = null; openDetail(arg); return;
     case "dismissPwa": localStorage.setItem("fs.pwahint", "1"); render(); return;
     case "signOut": Sync.signOutUser().then(() => render()); return;
@@ -3113,6 +2865,7 @@ root.addEventListener("click", async (e) => {
     case "openBuyCoins": openBuyCoins(); return;
     case "buyCoins": buyCoins(+arg); return;
     case "shareBg": ui.form.background = arg; render(); return;
+    case "shareTemplate": ui.form.template = arg; render(); return;
     case "pickSharePhoto": {
       const img = await pickImage(arg === "camera");
       if (img) { ui.form.photo = img; ui.form.background = "photo"; render(); }
@@ -3286,7 +3039,7 @@ root.addEventListener("click", async (e) => {
   }
   if (cmd === "publishDay") {
     const c = app.challenges.find((x) => x.id === arg);
-    await shareDayStory(c, ui.form.background === "photo" ? ui.form.photo : null);
+    await shareDayStory(c, Object.assign({}, ui.form, { photo: ui.form.background === "photo" ? ui.form.photo : null }));
     return;
   }
   if (cmd === "shareResult") {
@@ -3331,7 +3084,8 @@ root.addEventListener("input", (e) => {
   if (el.id === "bug-note") { if (ui.bug) ui.bug.note = el.value; return; }
   if (el.dataset.model != null) {
     const k = el.dataset.model;
-    ui.form[k] = el.type === "number" ? (parseInt(el.value) || 0) : el.value;
+    ui.form[k] = el.type === "number" || el.type === "range" ? (+el.value || 0) : el.value;
+    if (k === "photoZoom" || k === "dim") updateSharePreviewStyle();
   }
 });
 root.addEventListener("change", (e) => {
@@ -3397,7 +3151,38 @@ function afterRender() {
   const wi = document.getElementById("wheel-input");
   if (wi) { wi.focus(); wi.select(); }
 
+  bindSharePhotoDrag();
   bindScrollFollow();
+}
+
+function updateSharePreviewStyle() {
+  const preview = document.querySelector(".share-story-preview");
+  if (!preview || !ui.form) return;
+  preview.style.setProperty("--photo-scale", ui.form.photoZoom || 1);
+  preview.style.setProperty("--photo-x", (ui.form.photoX || 0) + "%");
+  preview.style.setProperty("--photo-y", (ui.form.photoY || 0) + "%");
+  preview.style.setProperty("--story-dim", (ui.form.dim || 45) / 100);
+}
+
+function bindSharePhotoDrag() {
+  const preview = document.querySelector(".share-story-preview.has-photo");
+  const img = preview && preview.querySelector("img");
+  if (!preview || !img || !ui.form) return;
+  let pointerId = null, startX = 0, startY = 0, baseX = 0, baseY = 0;
+  preview.onpointerdown = (e) => {
+    pointerId = e.pointerId; startX = e.clientX; startY = e.clientY;
+    baseX = ui.form.photoX || 0; baseY = ui.form.photoY || 0;
+    preview.setPointerCapture(pointerId);
+  };
+  preview.onpointermove = (e) => {
+    if (e.pointerId !== pointerId) return;
+    const rect = preview.getBoundingClientRect();
+    ui.form.photoX = Math.max(-40, Math.min(40, baseX + (e.clientX - startX) / rect.width * 100));
+    ui.form.photoY = Math.max(-40, Math.min(40, baseY + (e.clientY - startY) / rect.height * 100));
+    updateSharePreviewStyle();
+  };
+  const done = (e) => { if (e.pointerId === pointerId) pointerId = null; };
+  preview.onpointerup = done; preview.onpointercancel = done;
 }
 
 let clearScrollFollow = null;
