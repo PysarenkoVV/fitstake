@@ -4,7 +4,7 @@
 "use strict";
 
 // Версия оболочки — держать в синхроне с CACHE в sw.js; уходит в баг-репорты.
-const APP_VERSION = "v49";
+const APP_VERSION = "v50";
 // Последняя JS-ошибка — прикладываем к баг-репорту, чтобы сразу видеть причину.
 let lastError = "";
 window.addEventListener("error", (e) => {
@@ -2219,7 +2219,7 @@ async function openSession(challengeId, startExercise) {
           readySince = 0;
           countdownShown = 0;
           countdownEl.textContent = "";
-          countdownEl.classList.remove("show");
+          countdownEl.classList.remove("show", "word");
         } else {
           if (!readySince) readySince = now;
           const elapsed = now - readySince;
@@ -2228,12 +2228,14 @@ async function openSession(challengeId, startExercise) {
             if (n > 0 && n !== countdownShown) {
               countdownShown = n;
               countdownEl.textContent = String(n);
+              countdownEl.classList.remove("word");
               countdownEl.classList.add("show");
               sfx("tick");
             } else if (n <= 0) {
               countingStarted = true;
               sess.setCountingEnabled(true);
               countdownEl.textContent = t("Go!");
+              countdownEl.classList.toggle("word", t("Go!").length > 4);
               setTimeout(() => countdownEl.classList.remove("show"), 650);
             }
           }

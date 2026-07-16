@@ -411,6 +411,14 @@ button:active:not(:disabled) { transform: scale(0.975); }
   opacity: 1;
   transform: scale(1);
 }
+.sess-countdown.word {
+  width: calc(100vw - 32px);
+  margin: 0 auto;
+  font-size: clamp(54px, 18vw, 88px);
+  line-height: .95;
+  text-align: center;
+  overflow-wrap: anywhere;
+}
 .session .hud {
   position: absolute; left: 0; right: 0; bottom: 0;
   padding: 110px 20px calc(8px + env(safe-area-inset-bottom));

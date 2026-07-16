@@ -366,7 +366,12 @@ class PoseSession {
 
   // --- Запись ролика: кадр камеры + скелет + счётчик (для шеринга) ---
   _pickMime() {
-    const list = ["video/webm;codecs=vp9", "video/webm;codecs=vp8", "video/webm", "video/mp4"];
+    // Все браузеры на iPhone работают через WebKit: отдаём им MP4/H.264,
+    // который открывается в Photos и стандартном плеере без конвертации.
+    const apple = /iPhone|iPad|iPod|Macintosh/i.test(navigator.userAgent || "");
+    const mp4 = ["video/mp4;codecs=avc1.42E01E", "video/mp4;codecs=avc1", "video/mp4"];
+    const webm = ["video/webm;codecs=vp9", "video/webm;codecs=vp8", "video/webm"];
+    const list = apple ? [...mp4, ...webm] : [...webm, ...mp4];
     return list.find((m) => window.MediaRecorder && MediaRecorder.isTypeSupported(m)) || "";
   }
   async toggleRecording() {
