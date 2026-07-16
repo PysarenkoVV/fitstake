@@ -621,7 +621,15 @@ button:active:not(:disabled) { transform: scale(0.975); }
   gap: 14px;
 }
 .prep-close { align-self: flex-end; width: 44px; height: 44px; }
-.prep-hero { width: 64px; height: 64px; color: var(--accent); display: flex; margin: 2px auto 0; }
+.prep-hero {
+  width: 72px; height: 72px;
+  margin: 2px auto 0;
+  border-radius: 22px;
+  display: flex; align-items: center; justify-content: center;
+  color: var(--accent);
+  background: rgba(255, 94, 31, 0.12);
+}
+.prep-hero svg { width: 36px; height: 36px; }
 .prep-heading { font-size: 32px; text-align: center; }
 .prep-list { display: flex; flex-direction: column; gap: 10px; margin-top: 4px; }
 .prep-row { display: flex; align-items: center; gap: 14px; padding: 14px; border-radius: 14px; background: var(--card); border: 1px solid var(--border); }
