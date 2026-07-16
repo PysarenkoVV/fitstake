@@ -4,7 +4,7 @@
 "use strict";
 
 // Версия оболочки — держать в синхроне с CACHE в sw.js; уходит в баг-репорты.
-const APP_VERSION = "v48";
+const APP_VERSION = "v49";
 // Последняя JS-ошибка — прикладываем к баг-репорту, чтобы сразу видеть причину.
 let lastError = "";
 window.addEventListener("error", (e) => {
@@ -908,6 +908,13 @@ function render() {
   afterRender();
 }
 
+// Навигация получает один короткий, непрерывный переход. Анимируем только новый
+// контент: без копий старого экрана, задержек и конкурирующих CSS-анимаций.
+let pendingViewMotion = null;
+function moveView(direction) {
+  pendingViewMotion = direction;
+}
+
 // Подсказка «на экран Домой» — только iOS Safari вне standalone; закрывается навсегда.
 function pwaHint() {
   if (localStorage.getItem("fs.pwahint")) return "";
@@ -922,9 +929,9 @@ function pwaHint() {
   </div>`;
 }
 
-function go(tab) { ui.tab = tab; ui.detailId = null; ui.profileSection = null; render(); window.scrollTo(0, 0); }
-function openDetail(id) { ui.detailId = id; render(); window.scrollTo(0, 0); }
-function back() { ui.detailId = null; render(); window.scrollTo(0, 0); }
+function go(tab) { moveView("tab"); ui.tab = tab; ui.detailId = null; ui.profileSection = null; render(); window.scrollTo(0, 0); }
+function openDetail(id) { moveView("forward"); ui.detailId = id; render(); window.scrollTo(0, 0); }
+function back() { moveView("back"); ui.detailId = null; render(); window.scrollTo(0, 0); }
 function toast(msg) {
   const el = document.createElement("div");
   el.textContent = msg;
@@ -2911,17 +2918,20 @@ root.addEventListener("click", async (e) => {
   if (cmd === "createNext") {
     const f = ui.form;
     if (f.step === 0 && !selectedExercises(f).length) { toast(t("Pick at least one exercise")); return; }
+    moveView("forward");
     if (f.editingFromReview) { f.editingFromReview = false; f.step = CREATE_LAST; render(); return; }
     f.step++; render();
     return;
   }
   if (cmd === "editCreate") {
+    moveView("back");
     ui.form.step = +arg;
     ui.form.editingFromReview = true;
     render(); window.scrollTo(0, 0); return;
   }
   if (cmd === "createBack") {
     const f = ui.form;
+    moveView("back");
     if (f.editingFromReview) { f.editingFromReview = false; f.step = CREATE_LAST; render(); }
     else if (f.step > 0) { f.step--; render(); } else { ui.full = null; ui.form = null; render(); }
     return;
@@ -3107,12 +3117,28 @@ function afterRender() {
     _sheet.focus(); // первое открытие — фокус + выезд снизу
   } else if (_sheet) {
     // Лист уже был открыт (перерисовка при выборе чипа и т.п.) — глушим повторный выезд,
-    // синхронно до отрисовки кадра, поэтому slideup/backdrop-in не проигрываются заново.
+    // синхронно до отрисовки кадра, поэтому sheet-in/backdrop-in не проигрываются заново.
     _sheet.classList.add("no-enter");
     const _bd = document.querySelector(".sheet-backdrop");
     if (_bd) _bd.classList.add("no-enter");
   }
   afterRender._sheetOpen = !!_sheet;
+
+  if (pendingViewMotion && !REDUCE_MOTION()) {
+    const direction = pendingViewMotion;
+    pendingViewMotion = null;
+    const view = document.querySelector(".create-question, .create-review, #detail-scroll > .screen, #scroller");
+    if (view && view.animate) {
+      const x = direction === "forward" ? 10 : direction === "back" ? -10 : 0;
+      const y = direction === "tab" ? 5 : 0;
+      view.animate([
+        { opacity: 0.72, transform: `translate3d(${x}px, ${y}px, 0)` },
+        { opacity: 1, transform: "translate3d(0, 0, 0)" }
+      ], { duration: 220, easing: "cubic-bezier(0.16, 1, 0.3, 1)" });
+    }
+  } else {
+    pendingViewMotion = null;
+  }
 
   document.querySelectorAll(".wheel").forEach((w) => {
     const key = w.dataset.wheel, min = +w.dataset.min, max = +w.dataset.max;

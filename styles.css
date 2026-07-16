@@ -20,11 +20,12 @@
 
   --tabbar-h: calc(56px + env(safe-area-inset-bottom));
 
-  /* iOS-моушн: стандартная кривая листов/навигации + пружина с лёгким overshoot. */
-  --ease-ios: cubic-bezier(0.32, 0.72, 0, 1);
-  --ease-spring: cubic-bezier(0.34, 1.28, 0.7, 1);
-  --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
-  --ease-in-out: cubic-bezier(0.77, 0, 0.175, 1);
+  /* Одна система движения: быстрый старт, мягкая остановка, без задержек и overshoot. */
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-standard: cubic-bezier(0.2, 0, 0, 1);
+  --motion-press: 150ms;
+  --motion-control: 180ms;
+  --motion-sheet: 260ms;
 }
 
 * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
@@ -137,24 +138,24 @@ img { max-width: 100%; }
   font-weight: 900;
   font-stretch: 75%;
   font-size: 18px;
-  transition: transform 90ms var(--ease-out);
+  transition: transform var(--motion-press) var(--ease-out);
 }
-.action-btn:active { transform: scale(0.98); }
+.action-btn:active { transform: scale(0.975); }
 .action-btn.money { background: var(--money); }
 
-/* Единый iOS-отклик на тап: лёгкое сжатие + возврат с пружиной.
+/* Единый отклик на тап: лёгкое сжатие и мягкий возврат.
    Круглые/мелкие контролы жмём чуть сильнее. */
 /* Фолбэк для всех кнопок без своего правила (текстовые, карточки-опции, назад и т.д.). */
-button { transition: transform 90ms var(--ease-out); }
-button:active:not(:disabled) { transform: scale(0.98); }
+button { transition: transform var(--motion-press) var(--ease-out); }
+button:active:not(:disabled) { transform: scale(0.975); }
 .card, .entry-row, .picker-row, .bug-chip, .segmented button,
 .stepper button, .sess-nav button, .day-chip, .streak-pill {
-  transition: transform 90ms var(--ease-out);
+  transition: transform var(--motion-press) var(--ease-out);
 }
 .entry-row:active, .picker-row:active, .bug-chip:active,
 .segmented button:active, .day-chip:active { transform: scale(0.97); }
 .cam-btn, .stepper button, .sess-nav button, .tabbar button svg, .navbar .icon-btn {
-  transition: transform 90ms var(--ease-out);
+  transition: transform var(--motion-press) var(--ease-out);
 }
 .cam-btn:active, .stepper button:active, .sess-nav button:active,
 .navbar .icon-btn:active { transform: scale(0.9); }
@@ -305,7 +306,7 @@ button:active:not(:disabled) { transform: scale(0.98); }
   width: 51px; height: 31px;
   border-radius: 999px;
   background: rgba(255, 255, 255, 0.24);
-  transition: background-color 120ms ease;
+  transition: background-color var(--motion-control) var(--ease-standard);
   flex: none;
 }
 .toggle.on { background: var(--money); }
@@ -316,7 +317,7 @@ button:active:not(:disabled) { transform: scale(0.98); }
   width: 27px; height: 27px;
   border-radius: 50%;
   background: #fff;
-  transition: transform 120ms var(--ease-out);
+  transition: transform var(--motion-control) var(--ease-out);
 }
 .toggle.on::after { transform: translateX(20px); }
 
@@ -457,19 +458,23 @@ button:active:not(:disabled) { transform: scale(0.98); }
   background: rgba(0, 0, 0, 0.5);
   z-index: 90;
   display: flex; align-items: flex-end;
-  animation: backdrop-in 160ms var(--ease-out) both;
+  animation: backdrop-in 200ms var(--ease-standard) both;
 }
-@keyframes backdrop-in { from { background: rgba(0, 0, 0, 0); } to { background: rgba(0, 0, 0, 0.5); } }
+@keyframes backdrop-in { from { opacity: 0; } to { opacity: 1; } }
 .sheet {
   width: 100%;
   max-height: 94dvh;
   background: var(--bg);
   border-radius: 20px 20px 0 0;
   overflow-y: auto;
-  animation: slideup 160ms var(--ease-out);
+  animation: sheet-in var(--motion-sheet) var(--ease-out) both;
+  will-change: transform;
   padding-bottom: env(safe-area-inset-bottom);
 }
-@keyframes slideup { from { transform: translateY(100%); } to { transform: translateY(0); } }
+@keyframes sheet-in {
+  from { opacity: 0.86; transform: translate3d(0, 28px, 0); }
+  to { opacity: 1; transform: translate3d(0, 0, 0); }
+}
 /* На перерисовках открытого листа (выбор чипа и т.п.) выезд/затемнение не повторяем. */
 .sheet.no-enter, .sheet-backdrop.no-enter { animation: none; }
 /* Лист — снизу экрана, под «островом» его нет: safe-area сверху не нужен,
