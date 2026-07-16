@@ -4,7 +4,7 @@
 "use strict";
 
 // Версия оболочки — держать в синхроне с CACHE в sw.js; уходит в баг-репорты.
-const APP_VERSION = "v55";
+const APP_VERSION = "v58";
 // Последняя JS-ошибка — прикладываем к баг-репорту, чтобы сразу видеть причину.
 let lastError = "";
 window.addEventListener("error", (e) => {
@@ -194,6 +194,9 @@ const RU = {
   "The photo stays hidden until the finish — then it appears next to your AFTER photo.": "Фото скрыто до финиша — там оно встанет рядом с фото ПОСЛЕ.",
   "Title": "Название", "Today": "Сегодня", "Total reps": "Всего повторов", "Total reps over the last 4 weeks.": "Сумма повторов за последние 4 недели.",
   "Show photos": "Показать фото", "Upload from library": "Загрузить из галереи", "Week %lld": "Неделя %lld",
+  "Share your day": "Поделиться днём", "Choose a background": "Выбери фон", "FitStake gradient": "Градиент FitStake",
+  "Photo library": "Фото из галереи", "Open camera": "Открыть камеру", "Share story": "Поделиться сторис",
+  "reps": "повторов", "Exercises": "Упражнения", "Your turn": "Твой ход",
   "Body & measurements": "Тело и замеры", "Wallet": "Кошелёк", "Privacy & data": "Приватность и данные",
   "Video is processed on your device by the camera — not recorded and not sent to any server.": "Видео обрабатывается на твоём устройстве камерой — не записывается и не отправляется на сервер.",
   "Before / After photos are stored on your device — the app doesn't upload them to our servers.": "Фото до/после хранятся на твоём устройстве — приложение не загружает их на наши серверы.",
@@ -2146,6 +2149,35 @@ function DayCompleteFull() {
     <button class="text-btn" data-act="closeFull">${t("Close")}</button>
   </div></div>`;
 }
+function ShareDayEditorFull() {
+  const f = ui.form, c = app.challenges.find((x) => x.id === f.challengeId);
+  if (!c) return "";
+  const photo = f.background === "photo" && f.photo;
+  const exercises = c.goals.map((g) => `${C.myToday(c, g.exercise)} ${Exercise.displayName(g.exercise).toLowerCase()}`).join(" · ");
+  return `<div class="fullscreen share-editor"><div class="share-editor-shell">
+    <div class="navbar"><button class="icon-btn" data-act="closeShareDay" aria-label="${t("Back")}">${icon("chevronLeft")}</button><div class="title">${t("Share your day")}</div><span style="width:40px"></span></div>
+    <div class="share-story-preview ${photo ? "has-photo" : "is-gradient"}">
+      ${photo ? `<img src="${photo}" alt="">` : `<div class="share-gradient"></div>`}
+      <div class="share-story-shade"></div>
+      <div class="share-story-copy">
+        <div class="share-metric"><span>${t("Reps")}</span><strong>${C.myTodayTotal(c)}</strong></div>
+        <div class="share-metric"><span>${t("Exercises")}</span><strong class="share-exercises">${esc(exercises)}</strong></div>
+        <div class="share-metric"><span>${t("Progress")}</span><strong>${t("Day %lld of %lld", c.currentDay, c.durationDays)}</strong></div>
+        <div class="share-exercise-mark">${c.goals.map((g) => icon(EXERCISE_ICON[g.exercise] || "flame")).join(icon("chevronRight"))}</div>
+        <div class="share-brand">FIT<span>STAKE</span><small>${t("Your turn")}</small></div>
+      </div>
+    </div>
+    <div class="share-editor-controls">
+      <div class="form-label">${t("Choose a background")}</div>
+      <div class="share-bg-options">
+        <button class="share-bg-option ${f.background === "gradient" ? "selected" : ""}" data-act="shareBg:gradient"><span class="share-bg-swatch gradient"></span><span>${t("FitStake gradient")}</span></button>
+        <button class="share-bg-option ${photo ? "selected" : ""}" data-act="pickSharePhoto:library"><span class="share-bg-swatch">${iconF("photo")}</span><span>${t("Photo library")}</span></button>
+        <button class="share-bg-option" data-act="pickSharePhoto:camera"><span class="share-bg-swatch">${iconF("camera")}</span><span>${t("Open camera")}</span></button>
+      </div>
+      <button class="action-btn" data-act="publishDay:${c.id}">${iconF("share")}${t("Share story")}</button>
+    </div>
+  </div></div>`;
+}
 function ChallengeCompleteFull() {
   const f = ui.form, c = app.challenges.find((x) => x.id === f.challengeId);
   const weightChange = c.startWeight != null ? `${c.startWeight} → ${f.weight} ${t("kg")} (${f.weight - c.startWeight > 0 ? "+" : ""}${f.weight - c.startWeight})` : t("%lld kg", f.weight);
@@ -2606,6 +2638,51 @@ async function shareCard(data) {
   const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = "fitstake.png"; a.click();
 }
 
+async function shareDayStory(c, photo) {
+  const W = 1080, H = 1920, pad = 92;
+  const cv = document.createElement("canvas"); cv.width = W; cv.height = H;
+  const g = cv.getContext("2d");
+  const bg = await loadImg(photo);
+  if (bg) {
+    const scale = Math.max(W / bg.width, H / bg.height);
+    g.drawImage(bg, (W - bg.width * scale) / 2, (H - bg.height * scale) / 2, bg.width * scale, bg.height * scale);
+  } else {
+    const base = g.createLinearGradient(0, 0, W, H);
+    base.addColorStop(0, "#080808"); base.addColorStop(.52, "#17100c"); base.addColorStop(1, "#0a0a0a");
+    g.fillStyle = base; g.fillRect(0, 0, W, H);
+    let glow = g.createRadialGradient(W * .9, H * .18, 0, W * .9, H * .18, 760);
+    glow.addColorStop(0, "rgba(255,94,31,.72)"); glow.addColorStop(1, "rgba(255,94,31,0)"); g.fillStyle = glow; g.fillRect(0, 0, W, H);
+    glow = g.createRadialGradient(W * .08, H * .84, 0, W * .08, H * .84, 620);
+    glow.addColorStop(0, "rgba(77,194,128,.34)"); glow.addColorStop(1, "rgba(77,194,128,0)"); g.fillStyle = glow; g.fillRect(0, 0, W, H);
+  }
+  const shade = g.createLinearGradient(0, 0, 0, H);
+  shade.addColorStop(0, "rgba(0,0,0,.82)"); shade.addColorStop(.46, "rgba(0,0,0,.12)"); shade.addColorStop(1, "rgba(0,0,0,.74)");
+  g.fillStyle = shade; g.fillRect(0, 0, W, H);
+
+  const label = (text, y) => { g.fillStyle = "rgba(255,255,255,.82)"; g.font = "500 31px -apple-system,system-ui,sans-serif"; g.fillText(text, pad, y); };
+  const value = (text, y, size = 66) => { g.fillStyle = "#fff"; g.font = `800 ${size}px -apple-system,system-ui,sans-serif`; g.fillText(text, pad, y); };
+  g.textAlign = "left"; g.textBaseline = "alphabetic";
+  label(t("Reps"), 170); value(String(C.myTodayTotal(c)), 252, 82);
+  label(t("Exercises"), 352);
+  const exercises = c.goals.map((goal) => `${C.myToday(c, goal.exercise)} ${Exercise.displayName(goal.exercise).toLowerCase()}`).join(" · ");
+  g.font = "800 47px -apple-system,system-ui,sans-serif";
+  const lines = wrapLines(g, exercises, W - pad * 2, 2);
+  lines.forEach((line, i) => value(line, 422 + i * 58, 47));
+  const progressY = 422 + lines.length * 58 + 46;
+  label(t("Progress"), progressY); value(t("Day %lld of %lld", c.currentDay, c.durationDays), progressY + 76, 58);
+
+  g.fillStyle = "#fff"; g.font = "900 58px -apple-system,system-ui,sans-serif"; g.fillText("FIT", pad, H - 210);
+  const fitW = g.measureText("FIT").width; g.fillStyle = "#ff5e1f"; g.fillText("STAKE", pad + fitW, H - 210);
+  g.fillStyle = "#ff5e1f"; g.font = "700 38px -apple-system,system-ui,sans-serif"; g.fillText(t("Your turn"), pad, H - 145);
+
+  const blob = await new Promise((res) => cv.toBlob(res, "image/jpeg", .92));
+  const file = new File([blob], "fitstake-story.jpg", { type: "image/jpeg" });
+  if (navigator.canShare && navigator.canShare({ files: [file] })) {
+    try { await navigator.share({ files: [file], title: "FitStake" }); return; } catch {}
+  }
+  const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = "fitstake-story.jpg"; a.click();
+}
+
 // SVG-иконку → data-URI, чтобы нарисовать её на canvas через drawImage с нужным цветом.
 function posterIconURI(markup, { stroke = "#ff5e1f", fill = "none", sw = 2 } = {}) {
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="${fill}" stroke="${stroke}" stroke-width="${sw}" stroke-linecap="round" stroke-linejoin="round">${markup}</svg>`;
@@ -2886,6 +2963,7 @@ function openParticipant(id) {
 }
 function closeSheet() { ui.sheet = null; ui.form = null; render(); }
 function openDayComplete(c) { ui.fullId = c.id; ui.full = DayCompleteFull; render(); }
+function openShareDay(c) { ui.form = { challengeId: c.id, background: "gradient", photo: null }; ui.full = ShareDayEditorFull; render(); }
 function openChallengeComplete(c) { ui.form = { challengeId: c.id, weight: store["profile.weightKg"], maxReps: store["profile.maxReps"], photo: null }; ui.full = ChallengeCompleteFull; render(); }
 function closeFull() { ui.full = null; ui.form = null; render(); }
 
@@ -3024,6 +3102,7 @@ root.addEventListener("click", async (e) => {
     case "toggleLang": store.lang = store.lang === "ru" ? "en" : "ru"; render(); return;
     case "closeSheet": closeSheet(); return;
     case "closeFull": closeFull(); return;
+    case "closeShareDay": ui.form = null; ui.full = DayCompleteFull; render(); return;
     case "showResult": openChallengeComplete(app.challenges.find((c) => c.id === arg)); return;
     case "askLeave": openLeave(arg); return;
     case "confirmLeave": leaveChallenge(arg); ui.sheet = null; ui.form = null; ui.detailId = null; render(); return;
@@ -3031,6 +3110,12 @@ root.addEventListener("click", async (e) => {
     case "bugPick": if (ui.bug) { ui.bug.pick = arg; render(); } return;
     case "openBuyCoins": openBuyCoins(); return;
     case "buyCoins": buyCoins(+arg); return;
+    case "shareBg": ui.form.background = arg; render(); return;
+    case "pickSharePhoto": {
+      const img = await pickImage(arg === "camera");
+      if (img) { ui.form.photo = img; ui.form.background = "photo"; render(); }
+      return;
+    }
   }
 
   // Форм-контролы
@@ -3194,7 +3279,12 @@ root.addEventListener("click", async (e) => {
   }
   if (cmd === "shareDay") {
     const c = app.challenges.find((x) => x.id === arg);
-    shareCard({ title: c.title, headline: t("Day %lld of %lld", c.currentDay, c.durationDays), metrics: [[t("Today"), C.myTodayTotal(c)], [t("Challenge total"), c.myTotalReps]] });
+    openShareDay(c);
+    return;
+  }
+  if (cmd === "publishDay") {
+    const c = app.challenges.find((x) => x.id === arg);
+    await shareDayStory(c, ui.form.background === "photo" ? ui.form.photo : null);
     return;
   }
   if (cmd === "shareResult") {

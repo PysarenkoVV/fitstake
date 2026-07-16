@@ -60,3 +60,14 @@ test("invite link opens the requested challenge", async ({ page }) => {
   await expect(page.getByText("150 Push-ups + 50 Squats", { exact: true }).first()).toBeVisible();
   await expect(page).not.toHaveURL(/\?join=/);
 });
+
+test("day share editor offers a 9:16 story with photo and gradient backgrounds", async ({ page }) => {
+  await page.evaluate(() => window.openShareDay({ id: "main" }));
+  await expect(page.getByText("Share your day", { exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "FitStake gradient", exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Photo library", exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Open camera", exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Share story", exact: true })).toBeVisible();
+  const preview = page.locator(".share-story-preview");
+  await expect(preview).toHaveCSS("aspect-ratio", "9 / 16");
+});

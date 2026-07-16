@@ -620,6 +620,32 @@ button:active:not(:disabled) { transform: scale(0.975); }
   -webkit-overflow-scrolling: touch;
 }
 .celebrate { min-height: 100dvh; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; padding: 24px 20px calc(24px + env(safe-area-inset-bottom)); gap: 18px; }
+.share-editor { overflow-y: auto; }
+.share-editor-shell { min-height: 100dvh; max-width: 560px; margin: 0 auto; padding: 0 16px calc(18px + env(safe-area-inset-bottom)); display: flex; flex-direction: column; gap: 14px; }
+.share-story-preview { position: relative; width: min(100%, 310px); aspect-ratio: 9 / 16; margin: 0 auto; overflow: hidden; border-radius: 18px; background: #0a0a0a; box-shadow: 0 0 0 1px var(--border); }
+.share-story-preview > img, .share-gradient, .share-story-shade { position: absolute; inset: 0; width: 100%; height: 100%; }
+.share-story-preview > img { object-fit: cover; }
+.share-gradient { background: radial-gradient(circle at 94% 16%, rgba(255,94,31,.88), transparent 42%), radial-gradient(circle at 4% 88%, rgba(77,194,128,.46), transparent 38%), linear-gradient(145deg, #070707 12%, #21120c 54%, #090909 88%); }
+.share-story-shade { background: linear-gradient(180deg, rgba(0,0,0,.74), rgba(0,0,0,.08) 47%, rgba(0,0,0,.72)); }
+.share-story-copy { position: absolute; inset: 0; padding: 30px 24px 24px; display: flex; flex-direction: column; color: #fff; }
+.share-metric { display: flex; flex-direction: column; gap: 1px; margin-bottom: 16px; text-shadow: 0 2px 12px rgba(0,0,0,.72); }
+.share-metric span { font-size: 10px; font-weight: 600; color: rgba(255,255,255,.82); }
+.share-metric strong { font-size: 25px; line-height: 1.08; font-weight: 800; letter-spacing: -.5px; }
+.share-metric .share-exercises { font-size: 16px; line-height: 1.2; }
+.share-exercise-mark { margin-top: 3px; display: flex; align-items: center; gap: 8px; color: var(--accent); }
+.share-exercise-mark svg { width: 28px; height: 28px; filter: drop-shadow(0 2px 8px rgba(0,0,0,.55)); }
+.share-exercise-mark svg:nth-child(even) { width: 15px; height: 15px; }
+.share-brand { margin-top: auto; font-size: 22px; font-weight: 900; letter-spacing: -.5px; text-shadow: 0 2px 12px rgba(0,0,0,.8); }
+.share-brand > span { color: var(--accent); }
+.share-brand small { display: block; margin-top: 3px; color: var(--accent); font-size: 12px; font-weight: 700; letter-spacing: 0; }
+.share-editor-controls { display: flex; flex-direction: column; gap: 12px; }
+.share-bg-options { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.share-bg-option { min-width: 0; padding: 8px 5px; border-radius: 13px; display: flex; flex-direction: column; align-items: center; gap: 7px; color: var(--text-secondary); font-size: 10px; font-weight: 650; text-align: center; }
+.share-bg-option.selected { background: rgba(255,94,31,.1); color: #fff; box-shadow: inset 0 0 0 1px rgba(255,94,31,.75); }
+.share-bg-swatch { width: 48px; height: 48px; border-radius: 11px; display: flex; align-items: center; justify-content: center; background: var(--white-08); color: #fff; }
+.share-bg-swatch.gradient { background: radial-gradient(circle at 85% 15%, #ff5e1f, transparent 52%), radial-gradient(circle at 10% 90%, rgba(77,194,128,.8), transparent 48%), #0a0a0a; }
+.share-bg-swatch svg { width: 22px; height: 22px; }
+@media (max-height: 760px) { .share-story-preview { width: min(100%, 250px); } }
 .pop-in { opacity: 1; }
 
 /* Подготовка перед камерой: один чеклист для демо и настоящих челленджей. */
