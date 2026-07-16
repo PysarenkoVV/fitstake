@@ -623,15 +623,21 @@ function snapshotApp() {
     history: app.history, measurements: app.measurements, totalReps: app.totalReps, repsByExercise: app.repsByExercise, dayKey: app.dayKey, leftMain: app.leftMain };
 }
 let saveTimer = null;
+let lastSavedState = null;
+try { lastSavedState = localStorage.getItem(SAVE_KEY); } catch {}
 function saveApp() {
   clearTimeout(saveTimer);
   saveTimer = setTimeout(() => {
-    try { localStorage.setItem(SAVE_KEY, JSON.stringify(snapshotApp())); }
+    const serialized = JSON.stringify(snapshotApp());
+    if (serialized === lastSavedState) return;
+    try { localStorage.setItem(SAVE_KEY, serialized); lastSavedState = serialized; }
     catch {
       // квота переполнена — сохраняем без фото
       const slim = snapshotApp();
       slim.challenges = slim.challenges.map((c) => Object.assign({}, c, { beforePhoto: null, afterPhoto: null }));
-      try { localStorage.setItem(SAVE_KEY, JSON.stringify(slim)); } catch {}
+      const slimSerialized = JSON.stringify(slim);
+      if (slimSerialized === lastSavedState) return;
+      try { localStorage.setItem(SAVE_KEY, slimSerialized); lastSavedState = slimSerialized; } catch {}
     }
   }, 250);
 }
@@ -767,12 +773,14 @@ function addReps(ch, counts) {
   const closed = !wasDone && C.isTodayDone(ch);
   if (Sync.enabled && ch.participants.length > 1) {
     const base = { actorName: store["profile.name"] || "Player", challengeId: ch.id, challengeTitle: ch.title, dateKey: dateKey() };
-    for (const g of ch.goals) {
-      if (!completedBefore.has(g.exercise) && (ch.myTodayReps[g.exercise] || 0) >= C.norm(ch, g)) {
-        Sync.publishActivity(Object.assign({}, base, { type: "exercise", exercise: g.exercise }));
+    if (closed) Sync.publishActivity(Object.assign({}, base, { type: "day" }));
+    else {
+      for (const g of ch.goals) {
+        if (!completedBefore.has(g.exercise) && (ch.myTodayReps[g.exercise] || 0) >= C.norm(ch, g)) {
+          Sync.publishActivity(Object.assign({}, base, { type: "exercise", exercise: g.exercise }));
+        }
       }
     }
-    if (closed) Sync.publishActivity(Object.assign({}, base, { type: "day" }));
   }
   track("reps_added", { challenge_id: ch.id, total, exercises: Object.keys(counts).filter((k) => counts[k] > 0).join(",") });
   if (closed) track("workout_completed", { challenge_id: ch.id, day: ch.currentDay });
@@ -3393,13 +3401,20 @@ if (store.onboarded && JOIN_INTENT) { ui.tab = "challenges"; ui.detailId = JOIN_
 render();
 
 // Живой общий прогресс: подписка на Firebase (если конфиг вставлен).
+// Несколько Firebase-узлов могут обновиться подряд — достаточно одного render за кадр.
+let syncRenderFrame = 0;
 Sync.init(() => {
   applySync();
   phIdentify(); // uid из auth готов — связываем аналитику с игроком
   // Без инкогнито: онбордился, но остался анонимом (или вышел) — на обязательный вход.
   if (Sync.enabled && Sync.isAnonymous && store.onboarded && !store.skippedAuth && ui.screen === "tabs") { ui.screen = "onboarding"; ui.onbStep = STEP.auth; }
   // Не дёргаем перерисовку поверх открытых форм и камеры.
-  if (!ui.sheet && !ui.full && !liveSession) render();
+  if (!ui.sheet && !ui.full && !liveSession && !syncRenderFrame) {
+    syncRenderFrame = requestAnimationFrame(() => {
+      syncRenderFrame = 0;
+      if (!ui.sheet && !ui.full && !liveSession) render();
+    });
+  }
 });
 if (store.onboarded && store["profile.name"]) Sync.registerUser(store["profile.name"]);
 
