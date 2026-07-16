@@ -4,7 +4,7 @@
 "use strict";
 
 // Версия оболочки — держать в синхроне с CACHE в sw.js; уходит в баг-репорты.
-const APP_VERSION = "v47";
+const APP_VERSION = "v48";
 // Последняя JS-ошибка — прикладываем к баг-репорту, чтобы сразу видеть причину.
 let lastError = "";
 window.addEventListener("error", (e) => {
@@ -322,10 +322,8 @@ const COIN_SYM = "🔥";
 function coin(value) {
   return `<span class="money">${COIN_SYM}${fmt(value)}</span>`;
 }
-// Как coin(), но число плавно «досчитывается» при изменении (см. count-up в afterRender).
-// fromZero — считать от нуля при первом появлении (для экрана победы).
 function coinCountUp(value, key, fromZero) {
-  return `<span class="money count-up" data-count="${value}" data-count-key="${esc(key)}" data-count-sym="${COIN_SYM}"${fromZero ? ' data-count-from="0"' : ""}>${COIN_SYM}${fmt(value)}</span>`;
+  return `<span class="money">${COIN_SYM}${fmt(value)}</span>`;
 }
 
 // ==========================================================================
@@ -813,9 +811,6 @@ function esc(s) { return String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "
 
 const root = document.getElementById("app");
 let scrollMemo = {};
-let pendingStagger = false; // проиграть каскадное появление карточек на ближайшем рендере (смена вкладки/старт)
-let pendingCelebrate = false; // проиграть последовательность появления на экране победы + вибро
-let pendingWizardMotion = 0; // 1 — вперёд, -1 — назад/редактирование
 // Системная настройка «уменьшить движение» — гасим необязательный моушн.
 const REDUCE_MOTION = () => window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 // Тактильный отклик. Работает на Android/поддерживающих браузерах; на iOS Safari вибро
@@ -897,9 +892,6 @@ function sfxFor(cmd, arg) {
   if (NAV_CMDS.includes(cmd)) return "soft";
   return "tap";
 }
-// Плавный «счёт вверх» чисел между перерисовками: помним последнее показанное значение по ключу.
-const countMemo = {};
-
 function render() {
   rolloverIfNeeded();
   if (ui.screen === "onboarding") { root.innerHTML = Onboarding() + (ui.full ? ui.full() : ""); afterRender(); return; }
@@ -930,9 +922,9 @@ function pwaHint() {
   </div>`;
 }
 
-function go(tab) { ui.tab = tab; ui.detailId = null; ui.profileSection = null; pendingStagger = true; render(); window.scrollTo(0, 0); }
-function openDetail(id) { ui.detailId = id; navRender("push"); }
-function back() { ui.detailId = null; navRender("pop"); }
+function go(tab) { ui.tab = tab; ui.detailId = null; ui.profileSection = null; render(); window.scrollTo(0, 0); }
+function openDetail(id) { ui.detailId = id; render(); window.scrollTo(0, 0); }
+function back() { ui.detailId = null; render(); window.scrollTo(0, 0); }
 function toast(msg) {
   const el = document.createElement("div");
   el.textContent = msg;
@@ -2068,7 +2060,6 @@ function DemoCompleteFull() {
 function openDemoComplete(reps) {
   ui.form = { demoReps: reps };
   ui.full = DemoCompleteFull;
-  pendingCelebrate = true;
   render();
 }
 
@@ -2208,11 +2199,6 @@ async function openSession(challengeId, startExercise) {
           if (isDemo && allReached && !demoFinishing) {
             demoFinishing = true;
             setTimeout(() => { if (liveSession && liveSession.sess === sess) endSession(true); }, 700);
-          }
-          const big = milestone || justReached;
-          if (numEl.animate && !REDUCE_MOTION()) {
-            numEl.animate([{ transform: "scale(1)" }, { transform: `scale(${big ? 1.32 : 1.18})` }, { transform: "scale(1)" }],
-              { duration: big ? 620 : 500, easing: "cubic-bezier(0.34,1.28,0.7,1)" });
           }
         }
         prevTotal = total;
@@ -2759,8 +2745,8 @@ function openStartPicker(id) { ui.form = { challengeId: id }; ui.sheet = StartPi
 function openLeave(id) { ui.form = { challengeId: id }; ui.sheet = LeaveSheet; render(); }
 function openParticipant(id) { ui.form = { participantId: id }; ui.sheet = ParticipantSheet; render(); }
 function closeSheet() { ui.sheet = null; ui.form = null; render(); }
-function openDayComplete(c) { ui.fullId = c.id; ui.full = DayCompleteFull; pendingCelebrate = true; render(); }
-function openChallengeComplete(c) { ui.form = { challengeId: c.id, weight: store["profile.weightKg"], maxReps: store["profile.maxReps"], photo: null }; ui.full = ChallengeCompleteFull; pendingCelebrate = true; render(); }
+function openDayComplete(c) { ui.fullId = c.id; ui.full = DayCompleteFull; render(); }
+function openChallengeComplete(c) { ui.form = { challengeId: c.id, weight: store["profile.weightKg"], maxReps: store["profile.maxReps"], photo: null }; ui.full = ChallengeCompleteFull; render(); }
 function closeFull() { ui.full = null; ui.form = null; render(); }
 
 function CameraPrepFull() {
@@ -2925,19 +2911,19 @@ root.addEventListener("click", async (e) => {
   if (cmd === "createNext") {
     const f = ui.form;
     if (f.step === 0 && !selectedExercises(f).length) { toast(t("Pick at least one exercise")); return; }
-    if (f.editingFromReview) { f.editingFromReview = false; f.step = CREATE_LAST; pendingWizardMotion = 1; render(); return; }
-    f.step++; pendingWizardMotion = 1; render();
+    if (f.editingFromReview) { f.editingFromReview = false; f.step = CREATE_LAST; render(); return; }
+    f.step++; render();
     return;
   }
   if (cmd === "editCreate") {
     ui.form.step = +arg;
     ui.form.editingFromReview = true;
-    pendingWizardMotion = -1; render(); window.scrollTo(0, 0); return;
+    render(); window.scrollTo(0, 0); return;
   }
   if (cmd === "createBack") {
     const f = ui.form;
-    if (f.editingFromReview) { f.editingFromReview = false; f.step = CREATE_LAST; pendingWizardMotion = 1; render(); }
-    else if (f.step > 0) { f.step--; pendingWizardMotion = -1; render(); } else { ui.full = null; ui.form = null; render(); }
+    if (f.editingFromReview) { f.editingFromReview = false; f.step = CREATE_LAST; render(); }
+    else if (f.step > 0) { f.step--; render(); } else { ui.full = null; ui.form = null; render(); }
     return;
   }
   if (cmd === "saveChallenge") {
@@ -3128,67 +3114,6 @@ function afterRender() {
   }
   afterRender._sheetOpen = !!_sheet;
 
-  // Шаги мастера двигаются в направлении навигации, но только на несколько пикселей:
-  // достаточно для пространственной связи, без медленного «слайда страницы».
-  if (pendingWizardMotion) {
-    const dir = pendingWizardMotion;
-    pendingWizardMotion = 0;
-    const view = document.querySelector(".create-question, .create-review");
-    if (view && !REDUCE_MOTION()) view.animate(
-      [{ opacity: 0, transform: `translateX(${dir * 14}px)` }, { opacity: 1, transform: "translateX(0)" }],
-      { duration: 240, easing: "cubic-bezier(0.23,1,0.32,1)", fill: "backwards" });
-  }
-
-  // Плавный «счёт вверх» помеченных чисел (баланс, выигрыш) при изменении значения.
-  document.querySelectorAll(".count-up").forEach((el) => {
-    const key = el.dataset.countKey, target = +el.dataset.count, sym = el.dataset.countSym || "";
-    const prev = countMemo[key];
-    const from = prev != null ? prev : (el.dataset.countFrom != null ? +el.dataset.countFrom : target);
-    countMemo[key] = target;
-    if (from === target || REDUCE_MOTION()) { el.textContent = sym + fmt(target); return; }
-    const t0 = performance.now(), DUR = 1150;
-    const tick = (now) => {
-      const p = Math.min(1, (now - t0) / DUR);
-      const v = Math.round(from + (target - from) * (1 - Math.pow(1 - p, 3))); // easeOutCubic
-      el.textContent = sym + fmt(v);
-      if (p < 1 && el.isConnected) requestAnimationFrame(tick);
-    };
-    requestAnimationFrame(tick);
-  });
-
-  // Экран победы: победный вибро-паттерн + последовательное появление элементов.
-  if (pendingCelebrate) {
-    pendingCelebrate = false;
-    haptic([0, 60, 40, 60, 40, 120]);
-    if (!REDUCE_MOTION()) {
-      const cel = document.querySelector(".fullscreen .celebrate, .fullscreen .screen");
-      if (cel) Array.from(cel.children).forEach((el, i) => {
-        if (i === 0) return; // трофей/печать — своя pop-in анимация, не дублируем
-        if (el.animate) el.animate(
-          [{ opacity: 0, transform: "translateY(16px) scale(0.98)" }, { opacity: 1, transform: "none" }],
-          { duration: 420, delay: Math.min(i * 65, 390), easing: "cubic-bezier(0.23,1,0.32,1)", fill: "backwards" });
-      });
-    }
-  }
-
-  // Каскадное появление карточек при входе на вкладку (fade + подъём, одна за другой).
-  if (pendingStagger) {
-    pendingStagger = false;
-    const scope = document.getElementById("scroller");
-    if (scope && !REDUCE_MOTION()) {
-      const items = [];
-      Array.from(scope.children).forEach((ch) => {
-        if (ch.classList.contains("stack")) items.push(...ch.children);
-        else items.push(ch);
-      });
-      items.forEach((el, i) => {
-        if (el.animate) el.animate(
-          [{ opacity: 0, transform: "translateY(14px)" }, { opacity: 1, transform: "none" }],
-          { duration: 280, delay: Math.min(i * 45, 270), easing: "cubic-bezier(0.23,1,0.32,1)", fill: "backwards" });
-      });
-    }
-  }
-
   document.querySelectorAll(".wheel").forEach((w) => {
     const key = w.dataset.wheel, min = +w.dataset.min, max = +w.dataset.max;
     w.scrollTop = (store[key] - min) * 44;
@@ -3238,48 +3163,6 @@ document.addEventListener("keydown", (e) => {
   }
 });
 
-// iOS-переход между экранами: снимаем текущий экран в слой-«снимок»,
-// рендерим новый и разъезжаем их по горизонтали (push вправо-налево, pop наоборот).
-// При «уменьшить движение» или во время уже идущей анимации — просто перерисовка.
-function navRender(dir) {
-  const reduce = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-  if (reduce || root._navBusy) { render(); window.scrollTo(0, 0); return; }
-
-  const snap = document.createElement("div");
-  snap.className = "nav-snapshot";
-  snap.setAttribute("aria-hidden", "true");
-  snap.innerHTML = root.innerHTML;
-
-  render();
-  window.scrollTo(0, 0);
-
-  document.body.appendChild(snap);
-  root._navBusy = true;
-  root.classList.add("nav-layer");
-
-  const push = dir === "push", DUR = 280;
-  root.style.zIndex = push ? "71" : "70";
-  snap.style.zIndex = push ? "70" : "71";
-  root.style.transform = push ? "translateX(18%)" : "translateX(-8%)";
-  if (!push) snap.style.boxShadow = "-8px 0 24px rgba(0,0,0,0.4)";
-
-  requestAnimationFrame(() => requestAnimationFrame(() => {
-    const ease = "cubic-bezier(0.32,0.72,0,1)";
-    root.style.transition = `transform ${DUR}ms ${ease}`;
-    snap.style.transition = `transform ${DUR}ms ${ease}, opacity ${DUR}ms ${ease}`;
-    root.style.transform = "translateX(0)";
-    if (push) { snap.style.transform = "translateX(-8%)"; snap.style.opacity = "0.72"; }
-    else { snap.style.transform = "translateX(18%)"; }
-  }));
-
-  setTimeout(() => {
-    snap.remove();
-    root.classList.remove("nav-layer");
-    root.style.transition = root.style.transform = root.style.zIndex = "";
-    root._navBusy = false;
-  }, DUR + 40);
-}
-
 // ==========================================================================
 // Приглашение друзей
 // ==========================================================================
@@ -3306,7 +3189,6 @@ if (JOIN_INTENT && history.replaceState) history.replaceState(null, "", location
 ui.screen = store.onboarded ? "tabs" : "onboarding";
 // Уже онбордился — открываем общий челлендж (там кнопка вступления, если ещё не внутри).
 if (store.onboarded && JOIN_INTENT) { ui.tab = "challenges"; ui.detailId = JOIN_ID; }
-pendingStagger = !ui.detailId; // каскад карточек на первом экране (если это не сразу деталь)
 render();
 
 // Живой общий прогресс: подписка на Firebase (если конфиг вставлен).

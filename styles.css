@@ -120,7 +120,6 @@ img { max-width: 100%; }
   height: 100%;
   border-radius: 999px;
   background: var(--accent);
-  transition: width 0.24s var(--ease-out);
 }
 .progress.money > span { background: var(--money); }
 
@@ -138,24 +137,24 @@ img { max-width: 100%; }
   font-weight: 900;
   font-stretch: 75%;
   font-size: 18px;
-  transition: transform 0.14s var(--ease-out), opacity 0.14s ease;
+  transition: transform 90ms var(--ease-out);
 }
-.action-btn:active { opacity: 0.75; transform: scale(0.96); }
+.action-btn:active { transform: scale(0.98); }
 .action-btn.money { background: var(--money); }
 
 /* Единый iOS-отклик на тап: лёгкое сжатие + возврат с пружиной.
    Круглые/мелкие контролы жмём чуть сильнее. */
 /* Фолбэк для всех кнопок без своего правила (текстовые, карточки-опции, назад и т.д.). */
-button { transition: transform 0.14s var(--ease-out), background-color 0.16s ease, border-color 0.16s ease, color 0.16s ease; }
-button:active:not(:disabled) { transform: scale(0.97); }
+button { transition: transform 90ms var(--ease-out); }
+button:active:not(:disabled) { transform: scale(0.98); }
 .card, .entry-row, .picker-row, .bug-chip, .segmented button,
 .stepper button, .sess-nav button, .day-chip, .streak-pill {
-  transition: transform 0.14s var(--ease-out), background-color 0.16s ease, border-color 0.16s ease;
+  transition: transform 90ms var(--ease-out);
 }
 .entry-row:active, .picker-row:active, .bug-chip:active,
 .segmented button:active, .day-chip:active { transform: scale(0.97); }
 .cam-btn, .stepper button, .sess-nav button, .tabbar button svg, .navbar .icon-btn {
-  transition: transform 0.12s var(--ease-out);
+  transition: transform 90ms var(--ease-out);
 }
 .cam-btn:active, .stepper button:active, .sess-nav button:active,
 .navbar .icon-btn:active { transform: scale(0.9); }
@@ -275,7 +274,6 @@ button:active:not(:disabled) { transform: scale(0.97); }
   color: var(--text-secondary);
   font-size: 14px;
   font-weight: 600;
-  transition: background 0.15s;
 }
 .segmented button.active { background: rgba(120, 120, 128, 0.5); color: #fff; }
 
@@ -307,7 +305,7 @@ button:active:not(:disabled) { transform: scale(0.97); }
   width: 51px; height: 31px;
   border-radius: 999px;
   background: rgba(255, 255, 255, 0.24);
-  transition: background 0.2s;
+  transition: background-color 120ms ease;
   flex: none;
 }
 .toggle.on { background: var(--money); }
@@ -318,10 +316,9 @@ button:active:not(:disabled) { transform: scale(0.97); }
   width: 27px; height: 27px;
   border-radius: 50%;
   background: #fff;
-  transition: transform 0.2s;
+  transition: transform 120ms var(--ease-out);
 }
 .toggle.on::after { transform: translateX(20px); }
-.toggle::after { transition: transform 0.54s var(--ease-spring); }
 
 .form-section { display: flex; flex-direction: column; gap: 12px; }
 .form-label { font-family: var(--mono); font-weight: 700; font-size: 11px; text-transform: uppercase; letter-spacing: 1px; color: var(--text-secondary); }
@@ -349,7 +346,6 @@ button:active:not(:disabled) { transform: scale(0.97); }
   display: flex; align-items: center; justify-content: center;
   font-family: var(--mono); font-weight: 800; font-size: 22px;
   color: rgba(255, 255, 255, 0.35);
-  transition: color 0.15s, transform 0.15s;
 }
 .wheel .opt.active { color: #fff; transform: scale(1.15); }
 /* Ручной ввод числа в колесе */
@@ -413,7 +409,6 @@ button:active:not(:disabled) { transform: scale(0.97); }
 .sess-countdown.show {
   opacity: 1;
   transform: scale(1);
-  transition: opacity .14s ease, transform .26s var(--ease-out);
 }
 .session .hud {
   position: absolute; left: 0; right: 0; bottom: 0;
@@ -462,7 +457,7 @@ button:active:not(:disabled) { transform: scale(0.97); }
   background: rgba(0, 0, 0, 0.5);
   z-index: 90;
   display: flex; align-items: flex-end;
-  animation: backdrop-in 0.22s var(--ease-out) both;
+  animation: backdrop-in 160ms var(--ease-out) both;
 }
 @keyframes backdrop-in { from { background: rgba(0, 0, 0, 0); } to { background: rgba(0, 0, 0, 0.5); } }
 .sheet {
@@ -471,7 +466,7 @@ button:active:not(:disabled) { transform: scale(0.97); }
   background: var(--bg);
   border-radius: 20px 20px 0 0;
   overflow-y: auto;
-  animation: slideup 0.28s var(--ease-ios);
+  animation: slideup 160ms var(--ease-out);
   padding-bottom: env(safe-area-inset-bottom);
 }
 @keyframes slideup { from { transform: translateY(100%); } to { transform: translateY(0); } }
@@ -555,9 +550,8 @@ button:active:not(:disabled) { transform: scale(0.97); }
   background: var(--white-08); border: 1px solid transparent;
   color: #fff; font-size: 14px; font-weight: 600; line-height: 1;
 }
-.bug-chip.sel { background: rgba(255, 94, 31, 0.16); border-color: var(--accent); color: var(--accent); animation: chip-pop 0.22s var(--ease-out); }
+.bug-chip.sel { background: rgba(255, 94, 31, 0.16); border-color: var(--accent); color: var(--accent); }
 .bug-chip:active { transform: scale(0.92); }
-@keyframes chip-pop { from { transform: scale(0.96); } to { transform: scale(1); } }
 .bug-note {
   width: 100%; min-height: 76px; resize: vertical;
   padding: 13px 14px; border-radius: 12px;
@@ -571,8 +565,7 @@ button:active:not(:disabled) { transform: scale(0.97); }
 /* полноэкранное поздравление */
 .fullscreen { position: fixed; inset: 0; background: var(--bg); z-index: 95; overflow-y: auto; }
 .celebrate { min-height: 100dvh; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; padding: 24px 20px calc(24px + env(safe-area-inset-bottom)); gap: 18px; }
-.pop-in { animation: popin 0.38s var(--ease-out); }
-@keyframes popin { from { transform: scale(0.94); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+.pop-in { opacity: 1; }
 
 /* Подготовка перед камерой: один чеклист для демо и настоящих челленджей. */
 .camera-prep { z-index: 98; }
@@ -605,14 +598,10 @@ button:active:not(:disabled) { transform: scale(0.97); }
 @keyframes spin { to { transform: rotate(360deg); } }
 
 /* конфетти */
-.confetti { position: fixed; inset: 0; pointer-events: none; overflow: hidden; z-index: 96; }
+.confetti { display: none; }
 .confetti i {
   position: absolute; top: -20px;
   width: 6px; height: 12px; border-radius: 2px;
-  animation: fall linear infinite;
-}
-@keyframes fall {
-  to { transform: translateY(105vh) rotate(720deg); }
 }
 
 /* фото-слоты */
@@ -713,15 +702,6 @@ button:active:not(:disabled) { transform: scale(0.97); }
 .mono { font-family: var(--mono); font-variant-numeric: tabular-nums; }
 .wrap { display: flex; flex-wrap: wrap; gap: 6px 12px; }
 .gap6 { gap: 6px; } .gap8 { gap: 8px; } .gap10 { gap: 10px; } .gap12 { gap: 12px; }
-
-/* Переходы между экранами (push/pop как в iOS-навигации).
-   На время анимации #app и снимок старого экрана — два полноэкранных слоя. */
-.nav-layer, .nav-snapshot {
-  position: fixed; inset: 0;
-  background: var(--bg);
-  overflow: hidden;
-  will-change: transform;
-}
 
 /* Уважаем системную настройку «уменьшить движение»:
    гасим декоративные/крупные анимации, оставляем интерфейс работоспособным. */
