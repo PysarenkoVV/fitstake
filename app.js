@@ -4,7 +4,7 @@
 "use strict";
 
 // Версия оболочки — держать в синхроне с CACHE в sw.js; уходит в баг-репорты.
-const APP_VERSION = "v61";
+const APP_VERSION = "v62";
 // Последняя JS-ошибка — прикладываем к баг-репорту, чтобы сразу видеть причину.
 let lastError = "";
 window.addEventListener("error", (e) => {
@@ -427,7 +427,7 @@ function mockParticipants(total, eliminated, othersDoneToday, includeMe, repsPer
 function newChallenge(o) {
   return Object.assign({
     id: uid(), missPolicy: "oneTotal", progression: { step: 0, period: "day" },
-    myTodayReps: {}, myTotalReps: 0, startWeight: null, startMaxReps: null,
+    myTodayReps: {}, myTotalReps: 0, myTotalByExercise: {}, startWeight: null, startMaxReps: null,
     beforePhoto: null, afterPhoto: null, isCompleted: false,
   }, o);
 }
@@ -592,6 +592,7 @@ function applySync() {
     if (me) {
     ch.myTodayReps = Object.assign({}, me._days[today] || {});
     ch.myTotalReps = me._total;
+    ch.myTotalByExercise = totalsByExercise(me._days);
     app.totalReps = me._total;
     app.history = Object.entries(me._days).sort(([a], [b]) => (a < b ? -1 : 1)).map(([date, per]) => ({
       id: date, date: new Date(date + "T00:00:00").getTime(),
@@ -622,9 +623,14 @@ function applyPublicChallenges(today) {
         doneToday: c.goals.every((g) => (day[g.exercise] || 0) >= C.norm(c, g)), todayReps: Object.values(day).reduce((a, b) => a + b, 0), _days: days, _total: p.total || 0, _streak: streakOf(c, days) };
     });
     const me = C.me(c);
-    if (me) { c.myTodayReps = Object.assign({}, me._days[today] || {}); c.myTotalReps = me._total; }
+    if (me) { c.myTodayReps = Object.assign({}, me._days[today] || {}); c.myTotalReps = me._total; c.myTotalByExercise = totalsByExercise(me._days); }
   }
   if (JOIN_ID && app.challenges.some((c) => c.id === JOIN_ID) && !ui.full && !ui.sheet) { ui.tab = "challenges"; ui.detailId = JOIN_ID; }
+}
+function totalsByExercise(days) {
+  const totals = {};
+  for (const per of Object.values(days || {})) for (const [exercise, reps] of Object.entries(per || {})) totals[exercise] = (totals[exercise] || 0) + (+reps || 0);
+  return totals;
 }
 // ---- Персистентность: баланс, челленджи, история и замеры живут в localStorage ----
 const SAVE_KEY = "fs.state";
@@ -659,6 +665,7 @@ function saveApp() {
   app.balance = saved.balance != null ? saved.balance : app.balance;
   app.transactions = saved.transactions || app.transactions;
   app.challenges = saved.challenges;
+  app.challenges.forEach((c) => { if (!c.myTotalByExercise) c.myTotalByExercise = {}; });
   app.history = saved.history || [];
   app.measurements = saved.measurements || [];
   app.totalReps = saved.totalReps != null ? saved.totalReps : (saved.totalPushups || 0); // миграция старого ключа
@@ -773,6 +780,8 @@ function addReps(ch, counts) {
   logEntry(ch.title, C.repsNorm(ch), total);
   for (const [ex, reps] of Object.entries(counts)) if (reps > 0) {
     ch.myTodayReps[ex] = (ch.myTodayReps[ex] || 0) + reps;
+    ch.myTotalByExercise = ch.myTotalByExercise || {};
+    ch.myTotalByExercise[ex] = (ch.myTotalByExercise[ex] || 0) + reps;
     app.repsByExercise[ex] = (app.repsByExercise[ex] || 0) + reps;
   }
   ch.myTotalReps += total;
@@ -2020,15 +2029,15 @@ function CreateWizard() {
   else content = createSummary(f);
 
   const footer = step === CREATE_LAST
-    ? `<div style="padding:0 20px 8px;padding-bottom:calc(8px + env(safe-area-inset-bottom))"><button class="action-btn" data-act="saveChallenge">${t("Create challenge")}</button></div>`
-    : `<div style="padding:0 20px 8px;padding-bottom:calc(8px + env(safe-area-inset-bottom))"><button class="action-btn" data-act="createNext">${f.editingFromReview ? t("Save changes") : label}</button></div>`;
+    ? `<div class="create-wizard-footer"><button class="action-btn" data-act="saveChallenge">${t("Create challenge")}</button></div>`
+    : `<div class="create-wizard-footer"><button class="action-btn" data-act="createNext">${f.editingFromReview ? t("Save changes") : label}</button></div>`;
 
-  return `<div class="fullscreen"><div style="min-height:100dvh;display:flex;flex-direction:column">
-    <div class="row gap12" style="padding:max(10px,env(safe-area-inset-top)) 20px 16px;align-items:center">
+  return `<div class="fullscreen"><div class="create-wizard">
+    <div class="row gap12 create-wizard-topbar">
       <button data-act="createBack" style="width:32px;height:32px;display:flex;align-items:center;justify-content:center;color:#fff">${icon(step > 0 ? "chevronLeft" : "xmark")}</button>
       <div style="flex:1">${bar(step / CREATE_LAST)}</div>
     </div>
-    <div style="flex:1;padding:0 24px;overflow-y:auto">${content}</div>
+    <div class="create-wizard-body">${content}</div>
     ${footer}
   </div></div>`;
 }
@@ -2307,79 +2316,81 @@ function roundRectPath(g, x, y, w, h, r) {
 }
 
 async function shareCard(data) {
-  const scale = 3, W = 380, pad = 28;
+  const W = 1080, H = 1920, pad = 88;
   const before = await loadImg(data.beforePhoto), after = await loadImg(data.afterPhoto);
-  const hasPhotos = !!(before || after);
   const cv = document.createElement("canvas");
+  cv.width = W; cv.height = H;
   const g = cv.getContext("2d");
-  // Заголовок переносим до 2 строк — считаем ДО установки размеров (они сбросят контекст).
-  g.font = "900 26px -apple-system,system-ui,sans-serif";
-  const titleLines = wrapLines(g, String(data.title).toUpperCase(), W - pad * 2, 2);
+  if (after) {
+    const scale = Math.max(W / after.width, H / after.height);
+    const drawW = after.width * scale, drawH = after.height * scale;
+    g.drawImage(after, (W - drawW) / 2, (H - drawH) / 2, drawW, drawH);
+  } else {
+    const base = g.createLinearGradient(0, 0, W, H);
+    base.addColorStop(0, "#080808"); base.addColorStop(.55, "#1d100b"); base.addColorStop(1, "#070907");
+    g.fillStyle = base; g.fillRect(0, 0, W, H);
+    const glow = g.createRadialGradient(W * .9, H * .14, 0, W * .9, H * .14, 760);
+    glow.addColorStop(0, "rgba(255,94,31,.72)"); glow.addColorStop(1, "rgba(255,94,31,0)"); g.fillStyle = glow; g.fillRect(0, 0, W, H);
+  }
+  const shade = g.createLinearGradient(0, 0, 0, H);
+  shade.addColorStop(0, "rgba(0,0,0,.82)"); shade.addColorStop(.42, "rgba(0,0,0,.36)"); shade.addColorStop(1, "rgba(0,0,0,.94)");
+  g.fillStyle = shade; g.fillRect(0, 0, W, H);
 
-  const H = (pad + 6) + 34 + titleLines.length * 30 + 2 + 22
-    + (hasPhotos ? 166 : 0) + data.metrics.length * 38 + (data.payout != null ? 52 : 0) + 34;
-  cv.width = W * scale; cv.height = H * scale;
-  g.scale(scale, scale);
+  const sans = '-apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", sans-serif';
+  const label = (text, y) => { g.fillStyle = "rgba(255,255,255,.68)"; g.font = `650 30px ${sans}`; g.fillText(String(text).toUpperCase(), pad, y); };
+  const value = (text, y, size = 56, color = "#fff") => { g.fillStyle = color; g.font = `850 ${size}px ${sans}`; g.fillText(String(text), pad, y); };
+  g.textAlign = "left"; g.textBaseline = "alphabetic";
 
-  g.fillStyle = "#141414"; g.fillRect(0, 0, W, H);
-  roundRectPath(g, 1, 1, W - 2, H - 2, 22);
-  g.strokeStyle = "rgba(255,94,31,.55)"; g.lineWidth = 1.5; g.stroke();
+  g.font = `900 54px ${sans}`; g.fillStyle = "#fff"; g.fillText("FIT", pad, 116);
+  const fitWidth = g.measureText("FIT").width; g.fillStyle = "#ff5e1f"; g.fillText("STAKE", pad + fitWidth, 116);
+  g.fillStyle = "#4dc280"; g.font = `750 30px ${sans}`; g.fillText(t("Challenge complete!").toUpperCase(), pad, 184);
 
+  g.font = `850 66px ${sans}`;
+  const titleLines = wrapLines(g, data.title, W - pad * 2, 2);
+  titleLines.forEach((line, index) => value(line, 290 + index * 76, 66));
+  const heroY = 290 + titleLines.length * 76 + 58;
+  label(t("Total reps"), heroY);
+  value(fmt(data.totalReps), heroY + 160, 172);
+
+  let y = heroY + 250;
+  if (data.exerciseSummary) {
+    label(t("Exercises"), y);
+    g.font = `800 44px ${sans}`;
+    const exerciseLines = wrapLines(g, data.exerciseSummary, W - pad * 2, 3);
+    exerciseLines.forEach((line, index) => value(line, y + 62 + index * 54, 44));
+    y += 86 + exerciseLines.length * 54;
+  }
+
+  g.strokeStyle = "rgba(255,255,255,.16)"; g.lineWidth = 2; g.beginPath(); g.moveTo(pad, y); g.lineTo(W - pad, y); g.stroke();
+  y += 72;
+  const metrics = [[t("Duration"), t("%lld days", data.duration)], [t("Weight"), data.weight], [t("Max reps"), data.maxReps]];
+  metrics.forEach(([name, metric]) => {
+    g.textAlign = "left"; g.fillStyle = "rgba(255,255,255,.64)"; g.font = `650 27px ${sans}`; g.fillText(String(name).toUpperCase(), pad, y);
+    g.textAlign = "right"; g.fillStyle = "#fff"; g.font = `800 42px ${sans}`; g.fillText(String(metric), W - pad, y + 6);
+    y += 94;
+  });
   g.textAlign = "left";
-  let y = pad + 6;
-  g.fillStyle = "#ff5e1f"; g.font = "800 14px -apple-system,system-ui,sans-serif";
-  g.fillText("🔥 FITSTAKE", pad, y + 4);
-  y += 34;
-  g.fillStyle = "#fff"; g.font = "900 26px -apple-system,system-ui,sans-serif";
-  for (const line of titleLines) { g.fillText(line, pad, y); y += 30; }
-  y += 2;
-  g.fillStyle = "#ff5e1f"; g.font = "700 11px monospace";
-  g.fillText(String(data.headline).toUpperCase(), pad, y + 8);
-  y += 22;
 
-  if (hasPhotos) {
-    const ph = 150, pw = (W - pad * 2 - 10) / 2;
-    const drawP = (im, x, cap) => {
-      g.save(); roundRectPath(g, x, y, pw, ph, 12); g.clip();
-      if (im) { const s = Math.max(pw / im.width, ph / im.height); g.drawImage(im, x + (pw - im.width * s) / 2, y + (ph - im.height * s) / 2, im.width * s, im.height * s); }
-      else { g.fillStyle = "#0a0a0a"; g.fillRect(x, y, pw, ph); }
-      g.restore();
-      g.fillStyle = "rgba(0,0,0,.6)"; g.fillRect(x + 8, y + ph - 22, 52, 16);
-      g.fillStyle = "#fff"; g.font = "700 9px monospace"; g.textAlign = "left"; g.fillText(cap, x + 12, y + ph - 10);
-    };
-    drawP(before, pad, "BEFORE"); drawP(after, pad + pw + 10, "AFTER");
-    y += 166;
+  if (before) {
+    const pw = 250, ph = 320, px = W - pad - pw, py = H - 610;
+    g.save(); roundRectPath(g, px, py, pw, ph, 28); g.clip();
+    const scale = Math.max(pw / before.width, ph / before.height), dw = before.width * scale, dh = before.height * scale;
+    g.drawImage(before, px + (pw - dw) / 2, py + (ph - dh) / 2, dw, dh); g.restore();
+    g.fillStyle = "rgba(0,0,0,.65)"; g.fillRect(px + 16, py + ph - 54, 118, 38);
+    g.fillStyle = "#fff"; g.font = `750 22px ${sans}`; g.fillText(t("Before").toUpperCase(), px + 28, py + ph - 27);
   }
 
-  for (let i = 0; i < data.metrics.length; i++) {
-    const [k, v] = data.metrics[i];
-    g.fillStyle = "rgba(255,255,255,.62)"; g.font = "700 10px monospace"; g.textAlign = "left";
-    g.fillText(String(k).toUpperCase(), pad, y + 14);
-    g.fillStyle = "#fff"; g.font = "800 19px monospace"; g.textAlign = "right";
-    g.fillText(String(v), W - pad, y + 16); g.textAlign = "left";
-    if (i < data.metrics.length - 1) { g.strokeStyle = "rgba(255,255,255,.08)"; g.lineWidth = 1; g.beginPath(); g.moveTo(pad, y + 30); g.lineTo(W - pad, y + 30); g.stroke(); }
-    y += 38;
-  }
+  const rewardY = H - 390;
+  label(t("You take home"), rewardY);
+  value(COIN_SYM + fmt(data.payout), rewardY + 102, 92, "#4dc280");
+  g.fillStyle = "#ff5e1f"; g.font = `750 36px ${sans}`; g.fillText(t("Now it's your turn"), pad, H - 126);
 
-  if (data.payout != null) {
-    g.strokeStyle = "rgba(255,255,255,.12)"; g.lineWidth = 1; g.beginPath(); g.moveTo(pad, y + 4); g.lineTo(W - pad, y + 4); g.stroke();
-    y += 22;
-    g.fillStyle = "rgba(255,255,255,.62)"; g.font = "700 10px monospace"; g.textAlign = "left";
-    g.fillText(store.lang === "ru" ? "ЗАБИРАЕШЬ" : "YOU TAKE HOME", pad, y + 8);
-    g.fillStyle = "#4dc280"; g.font = "800 23px monospace"; g.textAlign = "right";
-    g.fillText(COIN_SYM + fmt(data.payout), W - pad, y + 12); g.textAlign = "left";
-    y += 30;
-  }
-
-  g.fillStyle = "rgba(255,255,255,.4)"; g.font = "600 11px monospace"; g.textAlign = "left";
-  g.fillText(store.lang === "ru" ? "Прими вызов на FitStake" : "Take the challenge on FitStake", pad, H - pad + 4);
-
-  const blob = await new Promise((res) => cv.toBlob(res, "image/png"));
-  const file = new File([blob], "fitstake.png", { type: "image/png" });
+  const blob = await new Promise((res) => cv.toBlob(res, "image/jpeg", .92));
+  const file = new File([blob], "fitstake-challenge.jpg", { type: "image/jpeg" });
   if (navigator.canShare && navigator.canShare({ files: [file] })) {
     try { await navigator.share({ files: [file], title: "FitStake" }); return; } catch {}
   }
-  const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = "fitstake.png"; a.click();
+  const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = "fitstake-challenge.jpg"; a.click();
 }
 
 async function shareDayStory(c, options) {
@@ -3072,7 +3083,11 @@ root.addEventListener("click", async (e) => {
     const f = ui.form, c = app.challenges.find((x) => x.id === arg);
     const wc = c.startWeight != null ? `${c.startWeight} → ${f.weight} ${t("kg")}` : t("%lld kg", f.weight);
     const mc = c.startMaxReps != null ? `${c.startMaxReps} → ${f.maxReps}` : String(f.maxReps);
-    shareCard({ title: c.title, headline: t("%lld days — finished", c.durationDays), metrics: [[t("Total reps"), c.myTotalReps], [t("Weight"), wc], [t("Max reps"), mc]], payout: C.payout(c), beforePhoto: c.beforePhoto, afterPhoto: f.photo });
+    const exerciseSummary = c.goals.map((g) => {
+      const total = (c.myTotalByExercise && c.myTotalByExercise[g.exercise]) || c.myTodayReps[g.exercise] || 0;
+      return `${fmt(total)} ${Exercise.displayName(g.exercise).toLowerCase()}`;
+    }).join(" · ");
+    shareCard({ title: c.title, duration: c.durationDays, totalReps: c.myTotalReps, exerciseSummary, weight: wc, maxReps: mc, payout: C.payout(c), beforePhoto: c.beforePhoto, afterPhoto: f.photo });
     return;
   }
 

@@ -46,6 +46,12 @@ async function openSession(challengeId, startExercise) {
   if (startExercise) { const i = goals.findIndex((g) => g.exercise === startExercise); if (i >= 0) active = i; }
 
   const sess = new window.PoseSession(goals.map((g) => g.exercise));
+  sess.setRecordingContext({
+    title: isDemo ? t("Practice") : c.title,
+    goals,
+    day: isDemo ? null : c.currentDay,
+    duration: isDemo ? null : c.durationDays,
+  });
   sess.setActive(active);
   liveSession = { sess, overlay };
 

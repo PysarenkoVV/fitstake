@@ -37,6 +37,12 @@ const EX = {
     angleJoints: (s) => ({ a: s + "Shoulder", vertex: s + "Elbow", b: s + "Wrist" }),
     bodyJoints: ["leftShoulder", "rightShoulder"],
     wristAbove: true,
+    downThreshold: 120,
+    upThreshold: 135,
+    minBodyTravel: 0.12,
+    maxAnchorDrift: 1.0,
+    relativeBodyTravel: true,
+    requireBothSides: true,
   },
   // Брусья/кольца: локоть, кисти в упоре — НИЖЕ плеч. Пороги анти-чита мягче:
   // при съёмке снизу вертикальный ход корпуса сжимается, а кольца/кисти дрейфуют —
@@ -45,8 +51,12 @@ const EX = {
     angleJoints: (s) => ({ a: s + "Shoulder", vertex: s + "Elbow", b: s + "Wrist" }),
     bodyJoints: ["leftShoulder", "rightShoulder"],
     wristAbove: false,
-    minBodyTravel: 0.1,
+    downThreshold: 125,
+    upThreshold: 150,
+    minBodyTravel: 0.18,
     maxAnchorDrift: 1.4,
+    relativeBodyTravel: true,
+    requireBothSides: true,
   },
 };
 
@@ -72,21 +82,30 @@ class RepCounter {
     this.leftAnchorAtDown = null;
     this.rightAnchorAtDown = null;
     this.feetAtDown = null;
+    this.armed = false;
+    this.downFrames = 0;
+    this.upFrames = 0;
+    this.lastCountAt = -Infinity;
 
-    this.downThreshold = 110;
-    this.upThreshold = 140;
+    const cfg = EX[exercise] || {};
+    this.downThreshold = cfg.downThreshold != null ? cfg.downThreshold : 110;
+    this.upThreshold = cfg.upThreshold != null ? cfg.upThreshold : 140;
     this.minConfidence = 0.2;
     this.smoothing = 0.5;
     this.graceFrames = 15;
+    this.stableFrames = 3;
+    this.minRepMs = 600;
     // Пороги анти-чита можно ослаблять по упражнению (см. EX).
-    const cfg = EX[exercise] || {};
     this.minBodyTravel = cfg.minBodyTravel != null ? cfg.minBodyTravel : 0.3;
     this.maxAnchorDrift = cfg.maxAnchorDrift != null ? cfg.maxAnchorDrift : 0.7;
+    this.relativeBodyTravel = !!cfg.relativeBodyTravel;
+    this.requireBothSides = !!cfg.requireBothSides;
   }
 
-  process(points, size, countingEnabled = true) {
+  process(points, size, countingEnabled = true, now = performance.now()) {
     const sides = ["left", "right"].filter((s) => this._limbVisible(s, points));
-    if (!(sides.length === 2 || (this.tracking && sides.length > 0))) {
+    const enoughSides = sides.length === 2 || (!this.requireBothSides && this.tracking && sides.length > 0);
+    if (!enoughSides) {
       if (this.tracking && this.lostFrames < this.graceFrames) {
         this.lostFrames++;
         return { status: this.wasDown ? "down" : "up", bendAngle: this.smoothedAngle };
@@ -94,6 +113,8 @@ class RepCounter {
       this.tracking = false;
       this.smoothedAngle = null;
       this.wasDown = false;
+      this.armed = false;
+      this.downFrames = this.upFrames = 0;
       this.bodyAtDown = this.leftAnchorAtDown = this.rightAnchorAtDown = this.feetAtDown = null;
       const anything = Object.values(points).some((p) => p && p.confidence > this.minConfidence);
       return { status: anything ? "partialBody" : "noBody", bendAngle: null };
@@ -106,18 +127,31 @@ class RepCounter {
     this.smoothedAngle = angle;
 
     if (angle < this.downThreshold) {
+      this.downFrames++;
+      this.upFrames = 0;
       // Ворота позы: у подтягиваний кисти выше плеч, у брусьев ниже —
       // не даём чужому движению (отжимания от пола и т.п.) войти в повтор.
-      if (!this.wasDown && this._gateOK(points)) {
+      if (!this.wasDown && this.armed && this.downFrames >= this.stableFrames && this._gateOK(points)) {
         this.wasDown = true;
+        this.armed = false;
         this.bodyAtDown = this._bodyMid(points, size);
         this.leftAnchorAtDown = this._anchor("left", points, size);
         this.rightAnchorAtDown = this._anchor("right", points, size);
         this.feetAtDown = this._feetMid(points, size);
       }
-    } else if (angle > this.upThreshold && this.wasDown) {
-      this.wasDown = false;
-      if (countingEnabled && this._isRealRep(points, size)) this.count++;
+    } else if (angle > this.upThreshold) {
+      this.upFrames++;
+      this.downFrames = 0;
+      if (this.wasDown && this.upFrames >= this.stableFrames) {
+        this.wasDown = false;
+        if (countingEnabled && now - this.lastCountAt >= this.minRepMs && this._isRealRep(points, size)) {
+          this.count++;
+          this.lastCountAt = now;
+        }
+        this.armed = true;
+      } else if (!this.wasDown && this.upFrames >= this.stableFrames) this.armed = true;
+    } else {
+      this.downFrames = this.upFrames = 0;
     }
     return { status: this.wasDown ? "down" : "up", bendAngle: angle };
   }
@@ -149,6 +183,16 @@ class RepCounter {
     if (this.leftAnchorAtDown) { const n = this._anchor("left", points, size); if (n) drifts.push(dist(n, this.leftAnchorAtDown)); }
     if (this.rightAnchorAtDown) { const n = this._anchor("right", points, size); if (n) drifts.push(dist(n, this.rightAnchorAtDown)); }
     const bodyTravel = dist(bodyNow, this.bodyAtDown);
+    let measuredTravel = bodyTravel;
+    if (this.relativeBodyTravel) {
+      const downAnchors = [this.leftAnchorAtDown, this.rightAnchorAtDown].filter(Boolean);
+      const nowAnchors = [this._anchor("left", points, size), this._anchor("right", points, size)].filter(Boolean);
+      if (downAnchors.length && nowAnchors.length) {
+        const avg = (list) => ({ x: list.reduce((s, p) => s + p.x, 0) / list.length, y: list.reduce((s, p) => s + p.y, 0) / list.length });
+        const anchorDown = avg(downAnchors), anchorNow = avg(nowAnchors);
+        measuredTravel = Math.abs((this.bodyAtDown.y - anchorDown.y) - (bodyNow.y - anchorNow.y));
+      }
+    }
     // Анти-чит подтягиваний: в реальном висе стопы поднимаются/опускаются ВМЕСТЕ с корпусом.
     // Если корпус ходит, а стопы стоят на месте — это присед со стойкой на полу, держась за
     // кольца/турник (стопы на земле), а не вис. Не засчитываем. Стопы не видны — не мешаем.
@@ -156,7 +200,7 @@ class RepCounter {
       const feetNow = this._feetMid(points, size);
       if (feetNow && dist(feetNow, this.feetAtDown) < 0.35 * bodyTravel) return false;
     }
-    return bodyTravel >= this.minBodyTravel * scale && (drifts.length ? Math.max(...drifts) : 0) <= this.maxAnchorDrift * scale;
+    return measuredTravel >= this.minBodyTravel * scale && (drifts.length ? Math.max(...drifts) : 0) <= this.maxAnchorDrift * scale;
   }
 
   _feetMid(points, size) {
@@ -271,10 +315,14 @@ class PoseSession {
       const c = this.counters[this.active];
       if (c) {
         c.wasDown = false;
+        c.downFrames = c.upFrames = 0;
+        c.armed = c.smoothedAngle != null && c.smoothedAngle > c.upThreshold;
         c.bodyAtDown = c.leftAnchorAtDown = c.rightAnchorAtDown = c.feetAtDown = null;
       }
     }
   }
+
+  setRecordingContext(context) { this.recordingContext = context || null; }
 
   async start(video, canvas) {
     this._video = video;
@@ -402,14 +450,66 @@ class PoseSession {
     g.drawImage(this._video, 0, 0, size.width, size.height);
     g.drawImage(this._canvas, 0, 0, size.width, size.height);
     g.restore();
-    const total = this.snapshot.results.reduce((s, r) => s + r.repCount, 0);
-    const fs = Math.round(size.height * 0.18);
-    g.font = `900 ${fs}px -apple-system, sans-serif`;
-    g.textAlign = "center";
-    g.fillStyle = "rgba(0,0,0,.5)";
-    g.fillText(String(total), size.width / 2 + 3, size.height - fs * 0.6 + 3);
-    g.fillStyle = "#fff";
-    g.fillText(String(total), size.width / 2, size.height - fs * 0.6);
+    const ctx = this.recordingContext || {};
+    const goal = ctx.goals && ctx.goals[this.active];
+    const result = this.snapshot.results[this.active];
+    const current = (goal && goal.start || 0) + (result ? result.repCount : 0);
+    const target = goal && goal.target != null ? goal.target : null;
+    const margin = Math.round(size.width * 0.065);
+    const sans = '-apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", sans-serif';
+    const fitText = (text, maxWidth, startSize, weight = 700) => {
+      let fontSize = startSize;
+      do { g.font = `${weight} ${fontSize}px ${sans}`; fontSize -= 2; } while (fontSize > 18 && g.measureText(text).width > maxWidth);
+      return g.font;
+    };
+
+    const topShade = g.createLinearGradient(0, 0, 0, size.height * .2);
+    topShade.addColorStop(0, "rgba(0,0,0,.68)"); topShade.addColorStop(1, "rgba(0,0,0,0)");
+    g.fillStyle = topShade; g.fillRect(0, 0, size.width, size.height * .22);
+    const bottomShade = g.createLinearGradient(0, size.height * .58, 0, size.height);
+    bottomShade.addColorStop(0, "rgba(0,0,0,0)"); bottomShade.addColorStop(.38, "rgba(0,0,0,.58)"); bottomShade.addColorStop(1, "rgba(0,0,0,.94)");
+    g.fillStyle = bottomShade; g.fillRect(0, size.height * .56, size.width, size.height * .44);
+
+    g.textAlign = "left"; g.textBaseline = "alphabetic";
+    const brandSize = Math.round(size.width * .042);
+    g.font = `900 ${brandSize}px ${sans}`; g.fillStyle = "#fff"; g.fillText("FIT", margin, margin * 1.2);
+    const fitWidth = g.measureText("FIT").width; g.fillStyle = "#ff5e1f"; g.fillText("STAKE", margin + fitWidth, margin * 1.2);
+    if (ctx.title) {
+      const title = String(ctx.title);
+      fitText(title, size.width - margin * 2, Math.round(size.width * .038), 650);
+      g.fillStyle = "rgba(255,255,255,.78)"; g.fillText(title, margin, margin * 2.15);
+    }
+
+    const exercise = this.exercises[this.active];
+    const exerciseName = typeof Exercise !== "undefined" ? Exercise.displayName(exercise) : exercise;
+    const combo = this.exercises.length > 1 ? `  ·  ${this.active + 1}/${this.exercises.length}` : "";
+    const baseY = size.height - Math.round(size.width * .25);
+    g.font = `750 ${Math.round(size.width * .035)}px ${sans}`;
+    g.fillStyle = "rgba(255,255,255,.72)";
+    g.fillText(String(exerciseName).toUpperCase() + combo, margin, baseY - Math.round(size.width * .29));
+
+    const countSize = Math.round(size.width * .17);
+    g.font = `900 ${countSize}px ${sans}`; g.fillStyle = "#fff";
+    g.fillText(String(current), margin, baseY - Math.round(size.width * .10));
+    const currentWidth = g.measureText(String(current)).width;
+    if (target != null) {
+      g.font = `750 ${Math.round(size.width * .075)}px ${sans}`;
+      g.fillStyle = "rgba(255,255,255,.56)";
+      g.fillText(`/ ${target}`, margin + currentWidth + Math.round(size.width * .025), baseY - Math.round(size.width * .10));
+      const barY = baseY - Math.round(size.width * .045), barW = size.width - margin * 2, barH = Math.max(6, Math.round(size.width * .012));
+      g.fillStyle = "rgba(255,255,255,.2)"; g.fillRect(margin, barY, barW, barH);
+      g.fillStyle = current >= target ? "#4dc280" : "#ff5e1f"; g.fillRect(margin, barY, barW * Math.max(0, Math.min(1, target ? current / target : 0)), barH);
+    }
+
+    const metaY = size.height - margin * .8;
+    g.font = `650 ${Math.round(size.width * .031)}px ${sans}`;
+    g.fillStyle = "rgba(255,255,255,.72)";
+    if (ctx.day && ctx.duration) g.fillText(t("Day %lld of %lld", ctx.day, ctx.duration), margin, metaY);
+    if (target != null) {
+      const left = Math.max(0, target - current);
+      const status = left ? t("%lld left", left) : t("Goal reached!");
+      g.textAlign = "right"; g.fillStyle = left ? "#fff" : "#4dc280"; g.fillText(status, size.width - margin, metaY);
+    }
     g.textAlign = "left";
   }
 
@@ -440,3 +540,4 @@ async function shareVideo(blob) {
 }
 
 window.PoseSession = PoseSession;
+window.RepCounter = RepCounter;

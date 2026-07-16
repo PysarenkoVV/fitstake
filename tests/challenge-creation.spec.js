@@ -45,6 +45,11 @@ test("review has one clear primary action", async ({ page }) => {
   await expect(page.getByText("Review challenge", { exact: true })).toBeVisible();
   await expect(page.getByRole("button", { name: "Create challenge", exact: true })).toHaveCount(1);
   await expect(page.getByRole("button", { name: /Save & share/ })).toHaveCount(0);
+  const layout = await page.locator(".create-review").evaluate((review) => {
+    const cards = Array.from(review.querySelectorAll(".create-review-card")).map((card) => card.getBoundingClientRect());
+    return { overflow: review.scrollWidth > review.clientWidth, overlap: cards.some((card, index) => index > 0 && card.top < cards[index - 1].bottom) };
+  });
+  expect(layout).toEqual({ overflow: false, overlap: false });
 });
 
 test("account screen exposes email and Google entry points", async ({ page }) => {
@@ -120,4 +125,23 @@ test("completed day highlights the result before sharing", async ({ page }) => {
   await expect(page.getByText("Share your day", { exact: true })).toBeVisible();
   await page.getByRole("button", { name: "Back", exact: true }).click();
   await expect(page.getByText("Day done!", { exact: true })).toBeVisible();
+});
+
+test("completed challenge exports an informative 9:16 story", async ({ page }) => {
+  await page.evaluate(() => {
+    const original = HTMLCanvasElement.prototype.toBlob;
+    HTMLCanvasElement.prototype.toBlob = function (callback, type, quality) {
+      window.__challengeExport = { width: this.width, height: this.height, type };
+      return original.call(this, callback, type, quality);
+    };
+    Object.defineProperty(navigator, "canShare", { configurable: true, value: () => false });
+  });
+  const downloadPromise = page.waitForEvent("download");
+  await page.evaluate(() => window.shareCard({
+    title: "50 Pull-ups + 50 Dips", duration: 30, totalReps: 3000,
+    exerciseSummary: "1500 pull-ups · 1500 dips", weight: "75 → 78 kg", maxReps: "15 → 35", payout: 700,
+  }));
+  const download = await downloadPromise;
+  expect(download.suggestedFilename()).toBe("fitstake-challenge.jpg");
+  await expect.poll(() => page.evaluate(() => window.__challengeExport)).toEqual({ width: 1080, height: 1920, type: "image/jpeg" });
 });
