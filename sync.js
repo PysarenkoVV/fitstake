@@ -23,7 +23,7 @@ window.Sync = (() => {
   let accountEmail = null;     // email, если вошёл в аккаунт; null у анонима
   let isAnon = true;
 
-  const state = { users: null, participants: null, challenges: null, ready: false, error: null };
+  const state = { users: null, participants: null, challenges: null, follows: null, activity: null, ready: false, error: null };
   let db = null, F = null, A = null, authInstance = null, onChange = null;
   let resolveAuthReady;
   const authReady = new Promise((resolve) => { resolveAuthReady = resolve; });
@@ -67,6 +67,14 @@ window.Sync = (() => {
         state.error = null;
         if (onChange) onChange();
       }, () => { state.ready = true; state.error = "sync"; if (onChange) onChange(); });
+      F.onValue(F.ref(db, "fitstake/follows"), (snap) => {
+        state.follows = snap.val() || {};
+        if (onChange) onChange();
+      });
+      F.onValue(F.ref(db, "fitstake/activity"), (snap) => {
+        state.activity = snap.val() || {};
+        if (onChange) onChange();
+      });
       // Состояние авторизации. Нет пользователя — входим анонимно (приложение работает сразу).
       authMod.onAuthStateChanged(authInstance, (user) => {
         if (user) {
@@ -246,6 +254,22 @@ window.Sync = (() => {
     });
   }
 
+  function setFollowing(targetUid, on) {
+    return new Promise((resolve) => ready(() => {
+      const ref = F.ref(db, "fitstake/follows/" + uid + "/" + targetUid);
+      const op = on ? F.set(ref, true) : F.remove(ref);
+      op.then(() => resolve(true)).catch(() => resolve(false));
+    }));
+  }
+
+  function publishActivity(payload) {
+    if (!enabled) return;
+    ready(() => {
+      const rec = Object.assign({}, payload, { actorId: uid, ts: Date.now() });
+      F.push(F.ref(db, "fitstake/activity"), rec).catch(() => {});
+    });
+  }
+
   // Отчёт о проблеме от тестера → общий узел bugReports (create-only по правилам БД).
   function reportBug(payload) {
     return new Promise((resolve) => {
@@ -258,7 +282,7 @@ window.Sync = (() => {
   }
 
   return {
-    enabled, state, init, registerUser, join, report, createChallenge, joinChallenge, leaveChallenge, reportChallenge, reportBug, signIn, signUp, signInGoogle, signOutUser,
+    enabled, state, init, registerUser, join, report, createChallenge, joinChallenge, leaveChallenge, reportChallenge, setFollowing, publishActivity, reportBug, signIn, signUp, signInGoogle, signOutUser,
     get uid() { return uid; },
     get email() { return accountEmail; },
     get isAnonymous() { return isAnon; },

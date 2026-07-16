@@ -4,7 +4,7 @@
 "use strict";
 
 // Версия оболочки — держать в синхроне с CACHE в sw.js; уходит в баг-репорты.
-const APP_VERSION = "v54";
+const APP_VERSION = "v55";
 // Последняя JS-ошибка — прикладываем к баг-репорту, чтобы сразу видеть причину.
 let lastError = "";
 window.addEventListener("error", (e) => {
@@ -47,6 +47,7 @@ const PATHS = {
   bolt: '<path d="M13 2L4 14h6l-1 8 9-12h-6z"/>',
   trend: '<path d="M3 17l6-6 4 4 8-8M15 7h6v6"/>',
   bug: '<ellipse cx="12" cy="13" rx="4.5" ry="6"/><circle cx="12" cy="6" r="2"/><path d="M12 8v10M7.6 11H4M7.6 14H4M8 17l-3 2M16.4 11H20M16.4 14H20M16 17l3 2M10.6 4.4L9.4 2.6M13.4 4.4l1.2-1.8"/>',
+  bell: '<path d="M5 17h14l-1.5-2.5V10a5.5 5.5 0 00-11 0v4.5L5 17z"/><path d="M10 20h4"/>',
   // Упражнения (силуэты сбоку): отжимания у пола, присед, вис на турнике, брусья.
   exPushups: '<circle cx="5" cy="9.5" r="1.8"/><path d="M6.8 10 L19 14.5"/><path d="M8.5 10.6 L8.5 17"/><path d="M3 17.5 H21"/>',
   exSquats: '<circle cx="12" cy="5" r="1.8"/><path d="M12 6.8 L11 12 L16.5 12.5 L16 19"/><path d="M11.5 8.6 L16 8"/>',
@@ -285,6 +286,14 @@ const RU = {
   "Text cut off or overlapping": "Текст обрезан или налезает", "Hard to see in dark or light theme": "Плохо видно в тёмной или светлой теме",
   "Froze or crashed": "Зависло или вылетело", "Laggy": "Тормозит", "Something won't load": "Что-то не грузится",
   "Buy coins": "Купить коины", "coins": "коинов", "Coins purchased": "Пополнение баланса", "+%lld coins": "+%lld коинов",
+  "Follow": "Подписаться", "Following": "Вы подписаны", "Unfollow": "Отписаться",
+  "Challenges joined": "Участвует в челленджах", "No active challenges": "Нет активных челленджей",
+  "Total reps": "Всего повторений", "Following %lld": "Подписок: %lld", "Followers %lld": "Подписчиков: %lld",
+  "Notifications": "Уведомления", "No notifications yet": "Уведомлений пока нет",
+  "%@ completed %@ in %@": "%@ закрыл упражнение «%@» в «%@»",
+  "%@ completed today's challenge in %@": "%@ выполнил дневную цель в «%@»",
+  "just now": "только что", "%lld min ago": "%lld мин назад", "%lld h ago": "%lld ч назад",
+  "Couldn't update subscription": "Не удалось изменить подписку",
 };
 
 // Перевод + подстановка %lld / %@ по порядку аргументов.
@@ -743,6 +752,7 @@ function addReps(ch, counts) {
   const me = C.me(ch);
   if (!me) return false;
   const wasDone = C.isTodayDone(ch);
+  const completedBefore = new Set(ch.goals.filter((g) => (ch.myTodayReps[g.exercise] || 0) >= C.norm(ch, g)).map((g) => g.exercise));
   app.totalReps += total;
   logEntry(ch.title, C.repsNorm(ch), total);
   for (const [ex, reps] of Object.entries(counts)) if (reps > 0) {
@@ -755,6 +765,15 @@ function addReps(ch, counts) {
   if (ch.id === "main") Sync.report(dateKey(), ch.myTodayReps, ch.myTotalReps);
   else if (ch.isPublic) Sync.reportChallenge(ch.id, dateKey(), ch.myTodayReps, ch.myTotalReps);
   const closed = !wasDone && C.isTodayDone(ch);
+  if (Sync.enabled && ch.participants.length > 1) {
+    const base = { actorName: store["profile.name"] || "Player", challengeId: ch.id, challengeTitle: ch.title, dateKey: dateKey() };
+    for (const g of ch.goals) {
+      if (!completedBefore.has(g.exercise) && (ch.myTodayReps[g.exercise] || 0) >= C.norm(ch, g)) {
+        Sync.publishActivity(Object.assign({}, base, { type: "exercise", exercise: g.exercise }));
+      }
+    }
+    if (closed) Sync.publishActivity(Object.assign({}, base, { type: "day" }));
+  }
   track("reps_added", { challenge_id: ch.id, total, exercises: Object.keys(counts).filter((k) => counts[k] > 0).join(",") });
   if (closed) track("workout_completed", { challenge_id: ch.id, day: ch.currentDay });
   return closed;
@@ -1021,8 +1040,11 @@ function lbl(text, extra = "") { return `<span class="label secondary ${extra}" 
 
 // Язык всегда доступен справа от заголовка основных экранов.
 function screenHeader(title) {
+  const unread = unreadActivityCount();
   return `<div class="screen-head">
-    <div class="between" style="gap:12px"><h1 class="screen-title">${esc(title)}</h1>${langToggle()}</div>
+    <div class="between" style="gap:12px"><h1 class="screen-title">${esc(title)}</h1><div class="row gap8">
+      <button class="header-icon-btn" data-act="openNotifications" aria-label="${t("Notifications")}">${icon("bell")}${unread ? `<span class="notification-count">${Math.min(unread, 9)}${unread > 9 ? "+" : ""}</span>` : ""}</button>
+      ${langToggle()}</div></div>
   </div>`;
 }
 function langToggle() {
@@ -1148,6 +1170,18 @@ function friendsList() {
   if (!Sync.enabled || !users) return [];
   return Object.entries(users).sort((a, b) => (b[1].joinedAt || 0) - (a[1].joinedAt || 0));
 }
+function isFollowing(id) {
+  return !!(Sync.state.follows && Sync.state.follows[Sync.uid] && Sync.state.follows[Sync.uid][id]);
+}
+function userChallenges(id) {
+  return app.challenges.filter((c) => c.participants.some((p) => p.id === id));
+}
+function followerCount(id) {
+  return Object.values(Sync.state.follows || {}).filter((list) => list && list[id]).length;
+}
+function followingCount(id) {
+  return Object.keys((Sync.state.follows && Sync.state.follows[id]) || {}).length;
+}
 // Компактная сводка на главном — полный список открывается отдельным листом.
 function friendsSummary() {
   const list = friendsList();
@@ -1167,14 +1201,47 @@ function FriendsSheet() {
   };
   const rows = list.map(([id, u]) => {
     const isNew = Date.now() - (u.joinedAt || 0) < 48 * 3600 * 1000;
-    return `<div class="entry-row">
+    return `<button class="entry-row" data-act="participant:${id}" style="width:100%;text-align:left">
       <div class="avatar">${id === Sync.uid ? icon("person") : esc((u.name || "?").slice(0, 1))}</div>
       <span style="flex:1;font-weight:500;font-size:15px">${id === Sync.uid ? t("You") : esc(u.name || "?")}</span>
+      ${id !== Sync.uid && isFollowing(id) ? `<span class="badge" style="color:var(--money)">${t("Following")}</span>` : ""}
       ${isNew ? `<span class="badge" style="color:var(--money)">NEW</span>` : ""}
       <span class="secondary" style="font-size:13px">${relDate(u.joinedAt)}</span>
-    </div>`;
+    </button>`;
   }).join("");
   return sheetShell(t("In the app: %lld", list.length), `<div style="display:flex;flex-direction:column;gap:6px">${rows}</div>`, true);
+}
+
+const ACTIVITY_SEEN_KEY = "fs.activity.seen";
+function sharedActivity() {
+  const joined = new Set(app.challenges.filter(C.isJoined).map((c) => c.id));
+  return Object.entries(Sync.state.activity || {}).map(([id, e]) => Object.assign({ id }, e))
+    .filter((e) => e.actorId !== Sync.uid && joined.has(e.challengeId))
+    .sort((a, b) => (b.ts || 0) - (a.ts || 0)).slice(0, 50);
+}
+function unreadActivityCount() {
+  const seen = +(localStorage.getItem(ACTIVITY_SEEN_KEY) || 0);
+  return sharedActivity().filter((e) => (e.ts || 0) > seen).length;
+}
+function relativeActivityTime(ts) {
+  const mins = Math.floor((Date.now() - (ts || 0)) / 60000);
+  if (mins < 1) return t("just now");
+  if (mins < 60) return t("%lld min ago", mins);
+  if (mins < 24 * 60) return t("%lld h ago", Math.floor(mins / 60));
+  return new Date(ts).toLocaleDateString(store.lang === "ru" ? "ru-RU" : "en-US", { day: "numeric", month: "short" });
+}
+function NotificationsSheet() {
+  const events = sharedActivity();
+  const rows = events.map((e) => {
+    const message = e.type === "day"
+      ? t("%@ completed today's challenge in %@", e.actorName || "?", e.challengeTitle || "?")
+      : t("%@ completed %@ in %@", e.actorName || "?", Exercise.displayName(e.exercise), e.challengeTitle || "?");
+    return `<button class="entry-row" data-act="notification:${e.challengeId}" style="width:100%;text-align:left;align-items:flex-start">
+      <div class="avatar" style="background:rgba(77,194,128,.14);color:var(--money)">${icon(e.type === "day" ? "check" : "bolt")}</div>
+      <span style="flex:1"><span style="display:block;font-size:14px;line-height:1.35">${esc(message)}</span><span class="secondary" style="display:block;font-size:12px;margin-top:4px">${relativeActivityTime(e.ts)}</span></span>
+    </button>`;
+  }).join("");
+  return sheetShell(t("Notifications"), rows || `<div class="card card-soft center secondary" style="padding:24px">${t("No notifications yet")}</div>`, true);
 }
 
 // ==========================================================================
@@ -2000,12 +2067,15 @@ function MeasureSheet() {
 
 // Календарь дней участника: тап по строке лидерборда (данные из Firebase).
 function ParticipantSheet() {
-  const c = app.challenges.find((x) => x.id === "main");
-  const p = c && c.participants.find((x) => x.id === ui.form.participantId);
-  if (!c || !p) return sheetShell(t("Leaderboard"), "", true);
-  const startKey = challengeStartKey(c);
+  const id = ui.form.participantId;
+  const challenges = userChallenges(id);
+  const c = app.challenges.find((x) => x.id === ui.form.challengeId) || challenges[0];
+  const p = c && c.participants.find((x) => x.id === id);
+  const user = (Sync.state.users && Sync.state.users[id]) || {};
+  if (!p && !user.name) return sheetShell(t("Leaderboard"), "", true);
+  const startKey = c && challengeStartKey(c);
   const cells = [];
-  for (let day = 1; day <= c.durationDays; day++) {
+  for (let day = 1; c && day <= c.durationDays; day++) {
     let cls = "future";
     if (startKey && day <= c.currentDay) {
       const dd = (p._days || {})[dateKey(dayEpoch(startKey, day))] || {};
@@ -2017,16 +2087,31 @@ function ParticipantSheet() {
     cells.push(`<div class="cal-cell ${cls}">${day}</div>`);
   }
   const legend = (cls, txt) => `<span class="row gap6" style="font-size:12px"><span class="cal-dot ${cls}"></span><span class="secondary">${esc(txt)}</span></span>`;
-  const name = p.isMe ? t("You") : p.name;
+  const isMe = id === Sync.uid;
+  const name = isMe ? t("You") : (user.name || (p && p.name) || "?");
+  const total = challenges.reduce((sum, challenge) => {
+    const member = challenge.participants.find((x) => x.id === id);
+    return sum + (member ? member._total || member.todayReps || 0 : 0);
+  }, 0);
+  const challengeRows = challenges.map((challenge) => {
+    const member = challenge.participants.find((x) => x.id === id);
+    return `<button class="card card-soft" data-act="notification:${challenge.id}" style="padding:14px 16px;width:100%;display:flex;align-items:center;gap:12px;text-align:left">
+      <span style="flex:1"><strong style="display:block;font-size:15px">${esc(challenge.title)}</strong><span class="secondary" style="font-size:12px">${member && member.doneToday ? t("Completed") : `${member ? member.todayReps : 0} / ${C.repsNorm(challenge)}`}</span></span>${icon("chevronRight")}
+    </button>`;
+  }).join("");
+  const follow = !isMe ? `<button class="action-btn ${isFollowing(id) ? "money" : ""}" data-act="follow:${id}" style="${isFollowing(id) ? "" : "background:var(--white-08);color:#fff"}">${icon(isFollowing(id) ? "check" : "plus")}${t(isFollowing(id) ? "Unfollow" : "Follow")}</button>` : "";
+  const calendar = c ? `<div class="form-section">${lbl(c.title, "tracking-1")}<div class="cal-grid">${cells.join("")}</div>
+    <div class="wrap" style="gap:8px 14px">${legend("closed", t("Closed"))}${legend("current", t("Today"))}${legend("missed", t("Missed"))}${legend("future", t("Upcoming"))}</div></div>` : "";
   const body = `
-    <div class="between" style="align-items:baseline">
-      <div class="row gap8">${lbl(t("Challenge total"), "tracking-1")}${p.state === "eliminated" ? badge(t("Out"), "var(--red)") : streakPill(p._streak || 0)}</div>
-      <span class="money" style="font-size:20px">${p._total || 0}</span>
+    <div class="social-profile-head">
+      <div class="avatar social-profile-avatar">${isMe ? icon("person") : esc(name.slice(0, 1))}</div>
+      <div class="display" style="font-size:26px">${esc(name)}</div>
+      <div class="secondary" style="font-size:13px">${t("Following %lld", followingCount(id))} · ${t("Followers %lld", followerCount(id))}</div>
     </div>
-    <div class="cal-grid">${cells.join("")}</div>
-    <div class="wrap" style="gap:8px 14px">
-      ${legend("closed", t("Closed"))}${legend("current", t("Today"))}${legend("missed", t("Missed"))}${legend("future", t("Upcoming"))}
-    </div>`;
+    <div class="card social-stat"><span class="secondary">${t("Total reps")}</span><strong class="money">${total}</strong></div>
+    ${follow}
+    <div class="form-section">${lbl(t("Challenges joined"), "tracking-1")}${challengeRows || `<div class="secondary">${t("No active challenges")}</div>`}</div>
+    ${calendar}`;
   return sheetShell(name, body, true);
 }
 
@@ -2785,7 +2870,12 @@ function openJoin(id) { ui.form = { challengeId: id, weight: store["profile.weig
 function openMeasure() { ui.form = { weight: store["profile.weightKg"], maxReps: store["profile.maxReps"] }; ui.sheet = MeasureSheet; render(); }
 function openStartPicker(id) { ui.form = { challengeId: id }; ui.sheet = StartPicker; render(); }
 function openLeave(id) { ui.form = { challengeId: id }; ui.sheet = LeaveSheet; render(); }
-function openParticipant(id) { ui.form = { participantId: id }; ui.sheet = ParticipantSheet; render(); }
+function openParticipant(id) {
+  const challengeId = ui.detailId || (userChallenges(id)[0] && userChallenges(id)[0].id) || null;
+  ui.form = { participantId: id, challengeId };
+  ui.sheet = ParticipantSheet;
+  render();
+}
 function closeSheet() { ui.sheet = null; ui.form = null; render(); }
 function openDayComplete(c) { ui.fullId = c.id; ui.full = DayCompleteFull; render(); }
 function openChallengeComplete(c) { ui.form = { challengeId: c.id, weight: store["profile.weightKg"], maxReps: store["profile.maxReps"], photo: null }; ui.full = ChallengeCompleteFull; render(); }
@@ -2899,6 +2989,7 @@ root.addEventListener("click", async (e) => {
     case "addMeasure": openMeasure(); return;
     case "unlockPhotos": photosUnlocked = true; render(); return;
     case "openFriends": ui.sheet = FriendsSheet; render(); return;
+    case "openNotifications": localStorage.setItem(ACTIVITY_SEEN_KEY, String(Date.now())); ui.sheet = NotificationsSheet; render(); return;
     case "profileSection": pageTransition("forward", () => { ui.profileSection = arg; }); window.scrollTo(0, 0); return;
     case "profileHome": pageTransition("back", () => { ui.profileSection = null; }); window.scrollTo(0, 0); return;
     case "editProfile": profileEditing = true; profileNameDraft = null; render(); return;
@@ -2912,6 +3003,14 @@ root.addEventListener("click", async (e) => {
     }
     case "invite": if (isGuest() && ui.detailId) openAuthGate("shareCreate"); else shareInvite(); return;
     case "participant": openParticipant(arg); return;
+    case "follow": {
+      if (isGuest()) { openAuthGate("account"); return; }
+      const next = !isFollowing(arg);
+      const ok = await Sync.setFollowing(arg, next);
+      if (!ok) toast(t("Couldn't update subscription"));
+      render(); return;
+    }
+    case "notification": ui.sheet = null; ui.form = null; openDetail(arg); return;
     case "dismissPwa": localStorage.setItem("fs.pwahint", "1"); render(); return;
     case "signOut": Sync.signOutUser().then(() => render()); return;
     case "toggleLang": store.lang = store.lang === "ru" ? "en" : "ru"; render(); return;

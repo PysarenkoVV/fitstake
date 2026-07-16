@@ -11,6 +11,31 @@
           "$other": { ".validate": false }
         }
       },
+      "follows": {
+        ".read": true,
+        "$followerUid": {
+          "$targetUid": {
+            ".write": "auth != null && auth.uid === $followerUid",
+            ".validate": "newData.val() === true"
+          }
+        }
+      },
+      "activity": {
+        ".read": "auth != null",
+        "$eventId": {
+          ".write": "auth != null && !data.exists() && newData.child('actorId').val() === auth.uid",
+          ".validate": "newData.hasChildren(['actorId','actorName','challengeId','challengeTitle','type','ts'])",
+          "actorId": { ".validate": "newData.isString() && newData.val() === auth.uid" },
+          "actorName": { ".validate": "newData.isString() && newData.val().length <= 20" },
+          "challengeId": { ".validate": "newData.isString() && newData.val().length <= 80" },
+          "challengeTitle": { ".validate": "newData.isString() && newData.val().length <= 40" },
+          "type": { ".validate": "newData.val() === 'exercise' || newData.val() === 'day'" },
+          "exercise": { ".validate": "newData.isString() && newData.val().length <= 20" },
+          "dateKey": { ".validate": "newData.isString() && newData.val().length <= 10" },
+          "ts": { ".validate": "newData.isNumber()" },
+          "$other": { ".validate": false }
+        }
+      },
       "bugReports": { ".read": true, "$id": { ".write": "auth != null && !data.exists()", ".validate": "newData.hasChildren(['category', 'ts'])", "category": { ".validate": "newData.isString() && newData.val().length <= 40" }, "problem": { ".validate": "newData.isString() && newData.val().length <= 80" }, "note": { ".validate": "newData.isString() && newData.val().length <= 1000" }, "screen": { ".validate": "newData.isString() && newData.val().length <= 40" }, "version": { ".validate": "newData.isString() && newData.val().length <= 16" }, "device": { ".validate": "newData.isString() && newData.val().length <= 300" }, "lang": { ".validate": "newData.isString() && newData.val().length <= 4" }, "err": { ".validate": "newData.isString() && newData.val().length <= 500" }, "uid": { ".validate": "newData.isString() && newData.val().length <= 40" }, "ts": { ".validate": "newData.isNumber()" }, "$other": { ".validate": false } } }
     }
   }

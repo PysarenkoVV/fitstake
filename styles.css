@@ -84,6 +84,14 @@ img { max-width: 100%; }
 /* Двухрядный хедер вкладок: служебная строка (жучок+язык) над крупным заголовком. */
 .screen-head { padding-top: 6px; margin-bottom: 8px; }
 .screen-head .badge { flex: none; min-height: 36px; padding: 8px 12px; }
+.header-icon-btn { position: relative; width: 38px; height: 38px; border-radius: 50%; display: flex; align-items: center; justify-content: center; background: var(--white-08); }
+.header-icon-btn svg { width: 20px; height: 20px; }
+.notification-count { position: absolute; top: -3px; right: -4px; min-width: 17px; height: 17px; padding: 0 4px; border-radius: 999px; display: flex; align-items: center; justify-content: center; background: var(--accent); color: #000; font: 800 10px/1 var(--mono); }
+.social-profile-head { display: flex; flex-direction: column; align-items: center; gap: 7px; padding: 4px 0 8px; text-align: center; }
+.social-profile-avatar { width: 68px; height: 68px; font-size: 26px; background: rgba(255,94,31,.15); color: var(--accent); }
+.social-profile-avatar svg { width: 30px; height: 30px; }
+.social-stat { padding: 14px 16px; display: flex; align-items: center; justify-content: space-between; }
+.social-stat strong { font-size: 22px; }
 .display {
   font-weight: 900;
   font-stretch: 75%;
