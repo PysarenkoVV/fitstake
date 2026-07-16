@@ -69,8 +69,14 @@ test("day share editor offers a 9:16 story with photo and gradient backgrounds",
   await expect(page.getByRole("button", { name: "Open camera", exact: true })).toBeVisible();
   await expect(page.getByRole("button", { name: "Share story", exact: true })).toBeVisible();
   await expect(page.getByRole("button", { name: "Minimal", exact: true })).toHaveClass(/active/);
+  await expect(page.locator(".share-reward")).toContainText("Potential reward");
+  await expect(page.locator(".share-reward")).toContainText(/🔥\d+/);
+  await page.evaluate(() => { window.__shareEditorNode = document.querySelector(".share-editor"); });
+  await page.getByRole("button", { name: "FitStake gradient", exact: true }).click();
+  await expect.poll(() => page.evaluate(() => document.querySelector(".share-editor") === window.__shareEditorNode)).toBe(true);
   await page.getByRole("button", { name: "Challenge", exact: true }).click();
   await expect(page.getByRole("button", { name: "Challenge", exact: true })).toHaveClass(/active/);
+  await expect.poll(() => page.evaluate(() => document.querySelector(".share-editor") === window.__shareEditorNode)).toBe(true);
   const preview = page.locator(".share-story-preview");
   await expect(preview).toHaveCSS("aspect-ratio", "9 / 16");
 
@@ -78,6 +84,7 @@ test("day share editor offers a 9:16 story with photo and gradient backgrounds",
   await page.getByRole("button", { name: "Photo library", exact: true }).click();
   const chooser = await chooserPromise;
   await chooser.setFiles("icons/icon-512.png");
+  await expect.poll(() => page.evaluate(() => document.querySelector(".share-editor") === window.__shareEditorNode)).toBe(true);
   await expect(page.getByRole("slider", { name: "Photo scale" })).toBeVisible();
   await page.getByRole("slider", { name: "Photo scale" }).fill("1.5");
   await page.getByRole("slider", { name: "Background dimming" }).fill("60");
@@ -96,6 +103,9 @@ test("day share editor offers a 9:16 story with photo and gradient backgrounds",
   const download = await downloadPromise;
   expect(download.suggestedFilename()).toBe("fitstake-story.jpg");
   await expect.poll(() => page.evaluate(() => window.__storyExport)).toEqual({ width: 1080, height: 1920, type: "image/jpeg" });
+  await page.getByRole("button", { name: "Back", exact: true }).click();
+  await expect(page.getByText("Share your day", { exact: true })).toHaveCount(0);
+  await expect(page.getByRole("heading", { name: "Today", exact: true })).toBeVisible();
 });
 
 test("completed day highlights the result before sharing", async ({ page }) => {
@@ -106,4 +116,8 @@ test("completed day highlights the result before sharing", async ({ page }) => {
   await expect(page.getByText("Today's place", { exact: true })).toBeVisible();
   await expect(page.getByText("Streak", { exact: true })).toBeVisible();
   await expect(page.getByRole("button", { name: "Share", exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "Share", exact: true }).click();
+  await expect(page.getByText("Share your day", { exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "Back", exact: true }).click();
+  await expect(page.getByText("Day done!", { exact: true })).toBeVisible();
 });
