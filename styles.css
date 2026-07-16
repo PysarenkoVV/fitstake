@@ -757,7 +757,11 @@ button:active:not(:disabled) { transform: scale(0.975); }
   border: 1px solid var(--white-14);
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
   z-index: 45; max-width: 536px; margin: 0 auto;
+  pointer-events: none;
 }
+.pwa-hint button { pointer-events: auto; }
+/* Подсказка не перекрывает последнюю кнопку экрана при автопрокрутке к ней. */
+#app:has(.pwa-hint) .screen { padding-bottom: calc(112px + var(--tabbar-h)); }
 
 /* мелочи */
 .muted { color: var(--text-secondary); }

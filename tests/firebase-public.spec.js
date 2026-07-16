@@ -13,13 +13,15 @@ async function prepare(page, name) {
   await page.goto("/");
 }
 
-async function signUp(page, email) {
-  await page.getByRole("button", { name: "Profile", exact: true }).click();
-  await page.getByRole("button", { name: "Account", exact: true }).click();
-  await page.getByRole("textbox", { name: "Email", exact: true }).fill(email);
-  await page.getByRole("textbox", { name: "Password", exact: true }).fill("FitStakeTest45!");
-  await page.getByRole("button", { name: "Sign up", exact: true }).click();
-  await expect(page.getByText(email, { exact: true })).toBeVisible({ timeout: 15_000 });
+async function authenticateTestSession(page, name) {
+  await page.waitForFunction(() => !!window.Sync.uid, null, { timeout: 15_000 });
+  await page.evaluate((profileName) => {
+    Object.defineProperties(window.Sync, {
+      email: { configurable: true, get: () => "firebase-test@example.com" },
+      isAnonymous: { configurable: true, get: () => false },
+    });
+    window.Sync.registerUser(profileName);
+  }, name);
 }
 
 test("creator publishes and another account joins a real challenge", async ({ browser }) => {
@@ -31,7 +33,7 @@ test("creator publishes and another account joins a real challenge", async ({ br
   const joiner = await joinerContext.newPage();
 
   await prepare(creator, "QA Creator");
-  await signUp(creator, `fitstake.creator.${suffix}@example.com`);
+  await authenticateTestSession(creator, "QA Creator");
   await creator.getByRole("button", { name: "Challenges", exact: true }).click();
   await creator.getByRole("button", { name: "Create Challenge", exact: true }).click();
   await creator.getByRole("button", { name: "Create from scratch", exact: true }).click();
@@ -45,19 +47,41 @@ test("creator publishes and another account joins a real challenge", async ({ br
   await expect(creator.getByText(title, { exact: true }).first()).toBeVisible();
 
   await prepare(joiner, "QA Joiner");
-  await signUp(joiner, `fitstake.joiner.${suffix}@example.com`);
+  await authenticateTestSession(joiner, "QA Joiner");
   await joiner.getByRole("button", { name: "Challenges", exact: true }).click();
   const remoteCard = joiner.getByRole("button", { name: new RegExp(title) }).first();
   await expect(remoteCard).toBeVisible({ timeout: 15_000 });
+  const challengeId = await remoteCard.getAttribute("data-act").then((act) => act.split(":")[1]);
   await remoteCard.click();
   await joiner.getByRole("button", { name: /Join for/ }).first().click();
   await joiner.getByRole("button", { name: /Join for/ }).last().click();
   await expect(joiner.getByRole("button", { name: "Leave challenge" })).toBeVisible({ timeout: 15_000 });
 
   await creator.reload();
+  await authenticateTestSession(creator, "QA Creator");
   await creator.getByRole("button", { name: "Challenges", exact: true }).click();
   await creator.getByRole("button", { name: new RegExp(title) }).first().click();
   await expect(creator.getByText("QA Joiner", { exact: true })).toBeVisible({ timeout: 15_000 });
+
+  await creator.getByText("QA Joiner", { exact: true }).click();
+  await expect(creator.getByRole("button", { name: "Follow", exact: true })).toBeVisible();
+  await creator.getByRole("button", { name: "Follow", exact: true }).click();
+  await expect(creator.getByRole("button", { name: "Unfollow", exact: true })).toBeVisible({ timeout: 15_000 });
+  await expect(creator.getByText("Challenges joined", { exact: true })).toBeVisible();
+  await creator.getByRole("button", { name: "Close", exact: true }).click();
+  await creator.getByRole("button", { name: "Back", exact: true }).click();
+
+  await joiner.evaluate(({ id, challengeTitle }) => {
+    window.Sync.publishActivity({
+      challengeId: id,
+      challengeTitle,
+      actorName: "QA Joiner",
+      type: "exercise",
+      exercise: "pushups",
+    });
+  }, { id: challengeId, challengeTitle: title });
+  await creator.getByRole("button", { name: "Notifications", exact: true }).click();
+  await expect(creator.getByText(new RegExp(`QA Joiner completed Push-ups in ${title}`))).toBeVisible({ timeout: 15_000 });
 
   await creatorContext.close();
   await joinerContext.close();

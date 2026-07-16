@@ -180,7 +180,7 @@ window.Sync = (() => {
     if (c.includes("wrong-password") || c.includes("invalid-credential")) return "wrong-password";
     if (c.includes("weak-password")) return "weak-password";
     if (c.includes("invalid-email")) return "invalid-email";
-    if (c.includes("operation-not-allowed") || c.includes("configuration-not-found")) return "provider-disabled";
+    if (c.includes("operation-not-allowed") || c.includes("configuration-not-found") || c.includes("admin-restricted-operation") || c.includes("admin-only-operation")) return "provider-disabled";
     if (c.includes("unauthorized-domain")) return "unauthorized-domain";
     if (c.includes("network")) return "network";
     return c || ((e && e.message) ? String(e.message) : "error");
