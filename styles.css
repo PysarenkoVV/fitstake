@@ -26,6 +26,7 @@
   --motion-press: 150ms;
   --motion-control: 180ms;
   --motion-sheet: 260ms;
+  --motion-page: 280ms;
 }
 
 * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
@@ -44,6 +45,26 @@ html, body {
 body { min-height: 100dvh; }
 
 #app { min-height: 100dvh; }
+
+.scroll-follow {
+  transition: translate 170ms cubic-bezier(0.2, 0, 0, 1);
+  will-change: translate;
+}
+.page-motion-ghost {
+  position: fixed;
+  inset: 0;
+  z-index: 94;
+  overflow: hidden;
+  pointer-events: none;
+  background: var(--bg);
+  will-change: transform;
+}
+.page-motion-entering {
+  position: relative;
+  z-index: 95 !important;
+  will-change: transform;
+}
+#detail-scroll.page-motion-entering { position: fixed; }
 
 button { font-family: inherit; cursor: pointer; border: none; background: none; color: inherit; }
 input, select { font-family: inherit; }

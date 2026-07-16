@@ -4,7 +4,7 @@
 "use strict";
 
 // Версия оболочки — держать в синхроне с CACHE в sw.js; уходит в баг-репорты.
-const APP_VERSION = "v51";
+const APP_VERSION = "v52";
 // Последняя JS-ошибка — прикладываем к баг-репорту, чтобы сразу видеть причину.
 let lastError = "";
 window.addEventListener("error", (e) => {
@@ -915,6 +915,39 @@ function moveView(direction) {
   pendingViewMotion = direction;
 }
 
+function motionView() {
+  return document.querySelector(".create-question, .create-review, #detail-scroll, #scroller");
+}
+
+function pageTransition(direction, update) {
+  const current = motionView();
+  if (!current || REDUCE_MOTION() || !current.animate) {
+    moveView(direction);
+    update();
+    render();
+    return;
+  }
+  const ghost = document.createElement("div");
+  ghost.className = "page-motion-ghost";
+  const copy = current.cloneNode(true);
+  const top = current.id === "scroller" ? window.scrollY : current.scrollTop;
+  copy.style.transform = `translate3d(0, ${-top}px, 0)`;
+  ghost.appendChild(copy);
+  ghost.style.zIndex = direction === "back" ? "96" : "94";
+  document.body.appendChild(ghost);
+
+  moveView(direction);
+  update();
+  render();
+
+  const endX = direction === "back" ? "100vw" : "-18vw";
+  const anim = ghost.animate([
+    { transform: "translate3d(0, 0, 0)", opacity: 1 },
+    { transform: `translate3d(${endX}, 0, 0)`, opacity: 1 }
+  ], { duration: direction === "back" ? 260 : 280, easing: "cubic-bezier(0.32, 0.72, 0, 1)", fill: "forwards" });
+  anim.finished.catch(() => {}).finally(() => ghost.remove());
+}
+
 // Подсказка «на экран Домой» — только iOS Safari вне standalone; закрывается навсегда.
 function pwaHint() {
   if (localStorage.getItem("fs.pwahint")) return "";
@@ -930,8 +963,8 @@ function pwaHint() {
 }
 
 function go(tab) { moveView("tab"); ui.tab = tab; ui.detailId = null; ui.profileSection = null; render(); window.scrollTo(0, 0); }
-function openDetail(id) { moveView("forward"); ui.detailId = id; render(); window.scrollTo(0, 0); }
-function back() { moveView("back"); ui.detailId = null; render(); window.scrollTo(0, 0); }
+function openDetail(id) { pageTransition("forward", () => { ui.detailId = id; }); window.scrollTo(0, 0); }
+function back() { pageTransition("back", () => { ui.detailId = null; }); window.scrollTo(0, 0); }
 function toast(msg) {
   const el = document.createElement("div");
   el.textContent = msg;
@@ -2866,8 +2899,8 @@ root.addEventListener("click", async (e) => {
     case "addMeasure": openMeasure(); return;
     case "unlockPhotos": photosUnlocked = true; render(); return;
     case "openFriends": ui.sheet = FriendsSheet; render(); return;
-    case "profileSection": ui.profileSection = arg; render(); window.scrollTo(0, 0); return;
-    case "profileHome": ui.profileSection = null; render(); window.scrollTo(0, 0); return;
+    case "profileSection": pageTransition("forward", () => { ui.profileSection = arg; }); window.scrollTo(0, 0); return;
+    case "profileHome": pageTransition("back", () => { ui.profileSection = null; }); window.scrollTo(0, 0); return;
     case "editProfile": profileEditing = true; profileNameDraft = null; render(); return;
     case "saveProfile": {
       const inp = document.getElementById("profile-name");
@@ -2950,7 +2983,11 @@ root.addEventListener("click", async (e) => {
     try { await navigator.clipboard.writeText(url); toast(t("Link copied")); } catch { prompt("URL", url); }
     return;
   }
-  if (cmd === "openCreated") { const id = ui.createdChallengeId; ui.full = null; ui.tab = "challenges"; ui.detailId = id; render(); return; }
+  if (cmd === "openCreated") {
+    const id = ui.createdChallengeId;
+    pageTransition("forward", () => { ui.full = null; ui.tab = "challenges"; ui.detailId = id; });
+    return;
+  }
   if (cmd === "savePreset") {
     if (saveChallengeForm()) { ui.full = null; ui.form = null; go("yours"); }
     return;
@@ -3129,14 +3166,16 @@ function afterRender() {
   if (pendingViewMotion && !REDUCE_MOTION()) {
     const direction = pendingViewMotion;
     pendingViewMotion = null;
-    const view = document.querySelector(".create-question, .create-review, #detail-scroll > .screen, #scroller");
+    const view = motionView();
     if (view && view.animate) {
-      const x = direction === "forward" ? 10 : direction === "back" ? -10 : 0;
+      const x = direction === "forward" ? "100vw" : direction === "back" ? "-18vw" : "0";
       const y = direction === "tab" ? 5 : 0;
-      view.animate([
-        { opacity: 0.72, transform: `translate3d(${x}px, ${y}px, 0)` },
+      if (direction !== "tab") view.classList.add("page-motion-entering");
+      const enterAnim = view.animate([
+        { opacity: direction === "tab" ? 0.8 : 1, transform: `translate3d(${x}, ${y}px, 0)` },
         { opacity: 1, transform: "translate3d(0, 0, 0)" }
-      ], { duration: 220, easing: "cubic-bezier(0.16, 1, 0.3, 1)" });
+      ], { duration: direction === "tab" ? 220 : 280, easing: "cubic-bezier(0.32, 0.72, 0, 1)" });
+      enterAnim.finished.catch(() => {}).finally(() => view.classList.remove("page-motion-entering"));
     }
   } else {
     pendingViewMotion = null;
@@ -3158,6 +3197,41 @@ function afterRender() {
   // Ручной ввод в колесе — сразу фокус и выделение для замены.
   const wi = document.getElementById("wheel-input");
   if (wi) { wi.focus(); wi.select(); }
+
+  bindScrollFollow();
+}
+
+let clearScrollFollow = null;
+function bindScrollFollow() {
+  if (clearScrollFollow) clearScrollFollow();
+  clearScrollFollow = null;
+  if (REDUCE_MOTION()) return;
+
+  const scrollBox = document.querySelector(".sheet, .fullscreen") || window;
+  const content = document.querySelector(".sheet-body, .fullscreen .screen, #detail-scroll > .screen, #scroller");
+  if (!content) return;
+  const blocks = Array.from(content.children).filter((el) => !el.classList.contains("navbar"));
+  if (blocks.length < 2) return;
+  blocks.forEach((el) => el.classList.add("scroll-follow"));
+
+  let last = scrollBox === window ? window.scrollY : scrollBox.scrollTop;
+  let settleTimer = 0;
+  const onScroll = () => {
+    const next = scrollBox === window ? window.scrollY : scrollBox.scrollTop;
+    const delta = Math.max(-16, Math.min(16, next - last));
+    last = next;
+    blocks.forEach((el, index) => {
+      const factor = Math.min(1, 0.58 + index * 0.045);
+      el.style.translate = `0 ${delta * factor}px`;
+    });
+    clearTimeout(settleTimer);
+    settleTimer = setTimeout(() => blocks.forEach((el) => { el.style.translate = "0 0"; }), 45);
+  };
+  scrollBox.addEventListener("scroll", onScroll, { passive: true });
+  clearScrollFollow = () => {
+    clearTimeout(settleTimer);
+    scrollBox.removeEventListener("scroll", onScroll);
+  };
 }
 
 // Сохранение позиции скролла при перерисовках на месте (степперы/тоглы).
