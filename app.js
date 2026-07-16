@@ -4,7 +4,7 @@
 "use strict";
 
 // Версия оболочки — держать в синхроне с CACHE в sw.js; уходит в баг-репорты.
-const APP_VERSION = "v46";
+const APP_VERSION = "v47";
 // Последняя JS-ошибка — прикладываем к баг-репорту, чтобы сразу видеть причину.
 let lastError = "";
 window.addEventListener("error", (e) => {
@@ -815,6 +815,7 @@ const root = document.getElementById("app");
 let scrollMemo = {};
 let pendingStagger = false; // проиграть каскадное появление карточек на ближайшем рендере (смена вкладки/старт)
 let pendingCelebrate = false; // проиграть последовательность появления на экране победы + вибро
+let pendingWizardMotion = 0; // 1 — вперёд, -1 — назад/редактирование
 // Системная настройка «уменьшить движение» — гасим необязательный моушн.
 const REDUCE_MOTION = () => window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 // Тактильный отклик. Работает на Android/поддерживающих браузерах; на iOS Safari вибро
@@ -2924,19 +2925,19 @@ root.addEventListener("click", async (e) => {
   if (cmd === "createNext") {
     const f = ui.form;
     if (f.step === 0 && !selectedExercises(f).length) { toast(t("Pick at least one exercise")); return; }
-    if (f.editingFromReview) { f.editingFromReview = false; f.step = CREATE_LAST; render(); return; }
-    f.step++; render();
+    if (f.editingFromReview) { f.editingFromReview = false; f.step = CREATE_LAST; pendingWizardMotion = 1; render(); return; }
+    f.step++; pendingWizardMotion = 1; render();
     return;
   }
   if (cmd === "editCreate") {
     ui.form.step = +arg;
     ui.form.editingFromReview = true;
-    render(); window.scrollTo(0, 0); return;
+    pendingWizardMotion = -1; render(); window.scrollTo(0, 0); return;
   }
   if (cmd === "createBack") {
     const f = ui.form;
-    if (f.editingFromReview) { f.editingFromReview = false; f.step = CREATE_LAST; render(); }
-    else if (f.step > 0) { f.step--; render(); } else { ui.full = null; ui.form = null; render(); }
+    if (f.editingFromReview) { f.editingFromReview = false; f.step = CREATE_LAST; pendingWizardMotion = 1; render(); }
+    else if (f.step > 0) { f.step--; pendingWizardMotion = -1; render(); } else { ui.full = null; ui.form = null; render(); }
     return;
   }
   if (cmd === "saveChallenge") {
@@ -3127,6 +3128,17 @@ function afterRender() {
   }
   afterRender._sheetOpen = !!_sheet;
 
+  // Шаги мастера двигаются в направлении навигации, но только на несколько пикселей:
+  // достаточно для пространственной связи, без медленного «слайда страницы».
+  if (pendingWizardMotion) {
+    const dir = pendingWizardMotion;
+    pendingWizardMotion = 0;
+    const view = document.querySelector(".create-question, .create-review");
+    if (view && !REDUCE_MOTION()) view.animate(
+      [{ opacity: 0, transform: `translateX(${dir * 14}px)` }, { opacity: 1, transform: "translateX(0)" }],
+      { duration: 240, easing: "cubic-bezier(0.23,1,0.32,1)", fill: "backwards" });
+  }
+
   // Плавный «счёт вверх» помеченных чисел (баланс, выигрыш) при изменении значения.
   document.querySelectorAll(".count-up").forEach((el) => {
     const key = el.dataset.countKey, target = +el.dataset.count, sym = el.dataset.countSym || "";
@@ -3154,7 +3166,7 @@ function afterRender() {
         if (i === 0) return; // трофей/печать — своя pop-in анимация, не дублируем
         if (el.animate) el.animate(
           [{ opacity: 0, transform: "translateY(16px) scale(0.98)" }, { opacity: 1, transform: "none" }],
-          { duration: 820, delay: Math.min(i * 145, 850), easing: "cubic-bezier(0.34,1.28,0.7,1)", fill: "backwards" });
+          { duration: 420, delay: Math.min(i * 65, 390), easing: "cubic-bezier(0.23,1,0.32,1)", fill: "backwards" });
       });
     }
   }
@@ -3172,7 +3184,7 @@ function afterRender() {
       items.forEach((el, i) => {
         if (el.animate) el.animate(
           [{ opacity: 0, transform: "translateY(14px)" }, { opacity: 1, transform: "none" }],
-          { duration: 640, delay: Math.min(i * 80, 560), easing: "cubic-bezier(0.32,0.72,0,1)", fill: "backwards" });
+          { duration: 280, delay: Math.min(i * 45, 270), easing: "cubic-bezier(0.23,1,0.32,1)", fill: "backwards" });
       });
     }
   }
@@ -3245,10 +3257,10 @@ function navRender(dir) {
   root._navBusy = true;
   root.classList.add("nav-layer");
 
-  const push = dir === "push", DUR = 640;
+  const push = dir === "push", DUR = 280;
   root.style.zIndex = push ? "71" : "70";
   snap.style.zIndex = push ? "70" : "71";
-  root.style.transform = push ? "translateX(100%)" : "translateX(-30%)";
+  root.style.transform = push ? "translateX(18%)" : "translateX(-8%)";
   if (!push) snap.style.boxShadow = "-8px 0 24px rgba(0,0,0,0.4)";
 
   requestAnimationFrame(() => requestAnimationFrame(() => {
@@ -3256,8 +3268,8 @@ function navRender(dir) {
     root.style.transition = `transform ${DUR}ms ${ease}`;
     snap.style.transition = `transform ${DUR}ms ${ease}, opacity ${DUR}ms ${ease}`;
     root.style.transform = "translateX(0)";
-    if (push) { snap.style.transform = "translateX(-30%)"; snap.style.opacity = "0.5"; }
-    else { snap.style.transform = "translateX(100%)"; }
+    if (push) { snap.style.transform = "translateX(-8%)"; snap.style.opacity = "0.72"; }
+    else { snap.style.transform = "translateX(18%)"; }
   }));
 
   setTimeout(() => {

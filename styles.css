@@ -23,6 +23,8 @@
   /* iOS-моушн: стандартная кривая листов/навигации + пружина с лёгким overshoot. */
   --ease-ios: cubic-bezier(0.32, 0.72, 0, 1);
   --ease-spring: cubic-bezier(0.34, 1.28, 0.7, 1);
+  --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
+  --ease-in-out: cubic-bezier(0.77, 0, 0.175, 1);
 }
 
 * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
@@ -118,7 +120,7 @@ img { max-width: 100%; }
   height: 100%;
   border-radius: 999px;
   background: var(--accent);
-  transition: width 0.35s ease;
+  transition: width 0.24s var(--ease-out);
 }
 .progress.money > span { background: var(--money); }
 
@@ -136,7 +138,7 @@ img { max-width: 100%; }
   font-weight: 900;
   font-stretch: 75%;
   font-size: 18px;
-  transition: transform 0.6s var(--ease-spring), opacity 0.28s ease;
+  transition: transform 0.14s var(--ease-out), opacity 0.14s ease;
 }
 .action-btn:active { opacity: 0.75; transform: scale(0.96); }
 .action-btn.money { background: var(--money); }
@@ -144,16 +146,16 @@ img { max-width: 100%; }
 /* Единый iOS-отклик на тап: лёгкое сжатие + возврат с пружиной.
    Круглые/мелкие контролы жмём чуть сильнее. */
 /* Фолбэк для всех кнопок без своего правила (текстовые, карточки-опции, назад и т.д.). */
-button { transition: transform 0.55s var(--ease-spring); }
-button:active:not(:disabled) { transform: scale(0.96); }
+button { transition: transform 0.14s var(--ease-out), background-color 0.16s ease, border-color 0.16s ease, color 0.16s ease; }
+button:active:not(:disabled) { transform: scale(0.97); }
 .card, .entry-row, .picker-row, .bug-chip, .segmented button,
 .stepper button, .sess-nav button, .day-chip, .streak-pill {
-  transition: transform 0.6s var(--ease-spring);
+  transition: transform 0.14s var(--ease-out), background-color 0.16s ease, border-color 0.16s ease;
 }
 .entry-row:active, .picker-row:active, .bug-chip:active,
 .segmented button:active, .day-chip:active { transform: scale(0.97); }
 .cam-btn, .stepper button, .sess-nav button, .tabbar button svg, .navbar .icon-btn {
-  transition: transform 0.5s var(--ease-spring);
+  transition: transform 0.12s var(--ease-out);
 }
 .cam-btn:active, .stepper button:active, .sess-nav button:active,
 .navbar .icon-btn:active { transform: scale(0.9); }
@@ -411,7 +413,7 @@ button:active:not(:disabled) { transform: scale(0.96); }
 .sess-countdown.show {
   opacity: 1;
   transform: scale(1);
-  transition: opacity .16s ease, transform .45s var(--ease-spring);
+  transition: opacity .14s ease, transform .26s var(--ease-out);
 }
 .session .hud {
   position: absolute; left: 0; right: 0; bottom: 0;
@@ -460,7 +462,7 @@ button:active:not(:disabled) { transform: scale(0.96); }
   background: rgba(0, 0, 0, 0.5);
   z-index: 90;
   display: flex; align-items: flex-end;
-  animation: backdrop-in 0.58s ease both;
+  animation: backdrop-in 0.22s var(--ease-out) both;
 }
 @keyframes backdrop-in { from { background: rgba(0, 0, 0, 0); } to { background: rgba(0, 0, 0, 0.5); } }
 .sheet {
@@ -469,7 +471,7 @@ button:active:not(:disabled) { transform: scale(0.96); }
   background: var(--bg);
   border-radius: 20px 20px 0 0;
   overflow-y: auto;
-  animation: slideup 0.7s var(--ease-ios);
+  animation: slideup 0.28s var(--ease-ios);
   padding-bottom: env(safe-area-inset-bottom);
 }
 @keyframes slideup { from { transform: translateY(100%); } to { transform: translateY(0); } }
@@ -553,9 +555,9 @@ button:active:not(:disabled) { transform: scale(0.96); }
   background: var(--white-08); border: 1px solid transparent;
   color: #fff; font-size: 14px; font-weight: 600; line-height: 1;
 }
-.bug-chip.sel { background: rgba(255, 94, 31, 0.16); border-color: var(--accent); color: var(--accent); animation: chip-pop 0.54s var(--ease-spring); }
+.bug-chip.sel { background: rgba(255, 94, 31, 0.16); border-color: var(--accent); color: var(--accent); animation: chip-pop 0.22s var(--ease-out); }
 .bug-chip:active { transform: scale(0.92); }
-@keyframes chip-pop { 0% { transform: scale(0.86); } 55% { transform: scale(1.08); } 100% { transform: scale(1); } }
+@keyframes chip-pop { from { transform: scale(0.96); } to { transform: scale(1); } }
 .bug-note {
   width: 100%; min-height: 76px; resize: vertical;
   padding: 13px 14px; border-radius: 12px;
@@ -569,8 +571,8 @@ button:active:not(:disabled) { transform: scale(0.96); }
 /* полноэкранное поздравление */
 .fullscreen { position: fixed; inset: 0; background: var(--bg); z-index: 95; overflow-y: auto; }
 .celebrate { min-height: 100dvh; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; padding: 24px 20px calc(24px + env(safe-area-inset-bottom)); gap: 18px; }
-.pop-in { animation: popin 0.98s var(--ease-spring); }
-@keyframes popin { from { transform: scale(0.72); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+.pop-in { animation: popin 0.38s var(--ease-out); }
+@keyframes popin { from { transform: scale(0.94); opacity: 0; } to { transform: scale(1); opacity: 1; } }
 
 /* Подготовка перед камерой: один чеклист для демо и настоящих челленджей. */
 .camera-prep { z-index: 98; }
