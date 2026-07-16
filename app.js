@@ -4,7 +4,7 @@
 "use strict";
 
 // Версия оболочки — держать в синхроне с CACHE в sw.js; уходит в баг-репорты.
-const APP_VERSION = "v58";
+const APP_VERSION = "v59";
 // Последняя JS-ошибка — прикладываем к баг-репорту, чтобы сразу видеть причину.
 let lastError = "";
 window.addEventListener("error", (e) => {
@@ -196,6 +196,7 @@ const RU = {
   "Show photos": "Показать фото", "Upload from library": "Загрузить из галереи", "Week %lld": "Неделя %lld",
   "Share your day": "Поделиться днём", "Choose a background": "Выбери фон", "FitStake gradient": "Градиент FitStake",
   "Photo library": "Фото из галереи", "Open camera": "Открыть камеру", "Share story": "Поделиться сторис",
+  "Share today's result": "Поделиться результатом",
   "reps": "повторов", "Exercises": "Упражнения", "Your turn": "Твой ход",
   "Body & measurements": "Тело и замеры", "Wallet": "Кошелёк", "Privacy & data": "Приватность и данные",
   "Video is processed on your device by the camera — not recorded and not sent to any server.": "Видео обрабатывается на твоём устройстве камерой — не записывается и не отправляется на сервер.",
@@ -1280,6 +1281,7 @@ function DetailScreen(id) {
   if (joined) {
     const ended = challengeEnded(c);
     const inviteBtn = `<button class="action-btn" data-act="invite" style="background:var(--white-08);color:#fff">${icon("share")}${t("Invite friends")}</button>`;
+    const shareDayBtn = C.isTodayDone(c) ? `<button class="action-btn share-result-btn" data-act="shareDay:${c.id}">${iconF("share")}${t("Share today's result")}</button>` : "";
     const leaveBtn = `<button class="action-btn" data-act="askLeave:${c.id}" style="background:transparent;color:var(--red);box-shadow:none">${t("Leave challenge")}</button>`;
     body = ended ? [
       finaleCard(c), totalCard(c), participantsCard(c), potCard(c), rulesCard(c),
@@ -1287,7 +1289,7 @@ function DetailScreen(id) {
     ].join("") : [
       totalCard(c), todayCard(c),
       C.isFinished(c) ? `<button class="action-btn money" data-act="showResult:${c.id}">${iconF("trophy")}${t("Show result")}</button>` : "",
-      callToAction(c), inviteBtn,
+      callToAction(c), shareDayBtn, inviteBtn,
       potCard(c), socialCard(c), rulesCard(c),
       c.beforePhoto ? beforeAfterCard(c) : "", participantsCard(c), callToAction(c), leaveBtn,
     ].join("");
