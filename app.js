@@ -4,7 +4,7 @@
 "use strict";
 
 // Версия оболочки — держать в синхроне с CACHE в sw.js; уходит в баг-репорты.
-const APP_VERSION = "v53";
+const APP_VERSION = "v54";
 // Последняя JS-ошибка — прикладываем к баг-репорту, чтобы сразу видеть причину.
 let lastError = "";
 window.addEventListener("error", (e) => {
@@ -933,7 +933,7 @@ function pageTransition(direction, update) {
   const top = current.id === "scroller" ? window.scrollY : current.scrollTop;
   copy.style.transform = `translate3d(0, ${-top}px, 0)`;
   ghost.appendChild(copy);
-  ghost.style.zIndex = direction === "back" ? "96" : "94";
+  ghost.style.zIndex = direction === "back" ? "42" : "40";
   document.body.appendChild(ghost);
 
   moveView(direction);
