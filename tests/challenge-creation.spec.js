@@ -127,6 +127,28 @@ test("completed day highlights the result before sharing", async ({ page }) => {
   await expect(page.getByText("Day done!", { exact: true })).toBeVisible();
 });
 
+test("completed day stores workout time and set performance", async ({ page }) => {
+  const summary = await page.evaluate(() => {
+    const challenge = app.challenges.find((item) => item.id === "main");
+    challenge.myTodayReps = {};
+    let me = C.me(challenge);
+    if (!me) { me = { id: "test-me", name: "Test", isMe: true, state: "active", doneToday: false, todayReps: 0 }; challenge.participants.unshift(me); }
+    me.todayReps = 0; me.doneToday = false;
+    challenge.workoutStatsByDay = {};
+    const previous = new Date(Date.now() - 86400000);
+    challenge.workoutStatsByDay[dateKey(previous.getTime())] = { elapsedMs: 300000, restMs: 120000, setReps: [40, 40, 40, 40, 40], reps: 200, completedAt: previous.getTime() };
+    addReps(challenge, { pushups: 150, squats: 50 }, { elapsedMs: 248000, restMs: 100000, setReps: [40, 40, 40, 40, 40] });
+    openDayComplete(challenge);
+    return workoutSummary(challenge);
+  });
+  expect(summary).toMatchObject({ time: "04:08", sets: 5, average: 40, best: 40, improvementMs: 52000 });
+  await expect(page.getByText("04:08", { exact: true })).toBeVisible();
+  await expect(page.getByText("52 sec faster", { exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "Share", exact: true }).click();
+  await expect(page.locator(".share-story-preview")).toContainText("04:08");
+  await expect(page.locator(".share-story-preview")).toContainText("5 · avg 40");
+});
+
 test("completed challenge exports an informative 9:16 story", async ({ page }) => {
   await page.evaluate(() => {
     const original = HTMLCanvasElement.prototype.toBlob;

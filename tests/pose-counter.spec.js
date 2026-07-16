@@ -74,3 +74,42 @@ test("recorded workout frame includes exercise, target, challenge, and progress"
   });
   expect(frame).toEqual({ width: 720, height: 1280, bottomAlpha: 255 });
 });
+
+test("first rep starts the workout clock and finishing a set opens rest", async ({ page }) => {
+  await page.evaluate(async () => {
+    class FakePoseSession {
+      constructor(exercises) {
+        this.exercises = exercises;
+        this.snapshot = { results: exercises.map((exercise) => ({ exercise, repCount: 0, status: "up", bendAngle: 170 })) };
+        window.__fakePoseSession = this;
+      }
+      setRecordingContext() {}
+      setActive(index) { this.active = index; }
+      setCountingEnabled(on) { this.countingEnabled = on; }
+      async start() {}
+      stop() {}
+      isRecording() { return false; }
+      async toggleRecording() { return false; }
+    }
+    window.PoseSession = FakePoseSession;
+    await window.openSession("demo", "pushups");
+    window.__fakePoseSession.snapshot.results[0].repCount = 1;
+  });
+
+  await expect(page.locator("#sess-elapsed")).toHaveText(/00:0[0-9]/);
+  await page.waitForTimeout(1100);
+  await expect(page.locator("#sess-elapsed")).toHaveText(/00:0[1-9]/);
+  await page.getByRole("button", { name: "Finish set", exact: true }).click();
+  await expect(page.locator("#sess-rest")).toBeVisible();
+  await expect(page.locator("#sess-rest-set")).toHaveText("Set 1 completed");
+  await expect(page.locator("#sess-rest-reps")).toHaveText("1 reps");
+  await expect(page.locator("#sess-rest-time")).toHaveText(/01:2[89]/);
+  await page.getByRole("button", { name: "+30 sec", exact: true }).click();
+  await expect(page.locator("#sess-rest-time")).toHaveText(/01:5[89]/);
+  await page.getByRole("button", { name: "Start next set", exact: true }).click();
+  await expect(page.locator("#sess-rest")).toBeHidden();
+
+  await page.getByRole("button", { name: "Close", exact: true }).click();
+  await page.getByRole("button", { name: "Exit without saving", exact: true }).click();
+  await expect(page.locator(".session")).toHaveCount(0);
+});

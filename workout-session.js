@@ -22,6 +22,7 @@ async function openSession(challengeId, startExercise) {
     <div class="topbar">
       <div class="between" style="align-items:flex-start">
         <button class="cam-btn" data-sess="close" aria-label="${t("Close")}">${icon("xmark")}</button>
+        <div class="sess-elapsed"><span>${t("Overall time")}</span><strong id="sess-elapsed">00:00</strong></div>
         <div class="cam-col">
           ${CAN_RECORD ? `<button class="cam-btn" data-sess="record" aria-label="${t("Record video")}">${icon("record")}</button>` : ""}
         </div>
@@ -29,6 +30,14 @@ async function openSession(challengeId, startExercise) {
       <div class="hint" id="sess-hint"></div>
     </div>
     <div class="sess-countdown" id="sess-countdown" aria-live="assertive"></div>
+    <div class="sess-rest" id="sess-rest" hidden>
+      <div class="sess-rest-timer">
+        <svg viewBox="0 0 220 220" aria-hidden="true"><circle class="rest-track" cx="110" cy="110" r="96"></circle><circle class="rest-progress" id="sess-rest-progress" cx="110" cy="110" r="96"></circle></svg>
+        <div class="sess-rest-clock"><span>${t("Rest")}</span><strong id="sess-rest-time">01:30</strong></div>
+      </div>
+      <div class="sess-rest-summary"><div class="sess-rest-title"><span>${icon("check")}</span><strong id="sess-rest-set"></strong></div><span id="sess-rest-reps"></span><div class="sess-rest-total" id="sess-rest-total"></div></div>
+      <div class="sess-rest-actions"><button class="sess-rest-plus" data-sess="restPlus">${t("+30 sec")}</button><button class="sess-rest-next" data-sess="restResume"><span class="sess-stop-mark"></span>${t("Start next set")}</button></div>
+    </div>
     <div class="hud"><div id="sess-counters"></div><div id="sess-bottom" style="width:100%;display:flex;flex-direction:column;align-items:center;gap:10px"></div></div>`;
   document.body.appendChild(overlay);
 
@@ -36,6 +45,13 @@ async function openSession(challengeId, startExercise) {
   const canvas = overlay.querySelector(".skeleton");
   const hintEl = overlay.querySelector("#sess-hint");
   const countdownEl = overlay.querySelector("#sess-countdown");
+  const elapsedEl = overlay.querySelector("#sess-elapsed");
+  const restEl = overlay.querySelector("#sess-rest");
+  const restTimeEl = overlay.querySelector("#sess-rest-time");
+  const restProgressEl = overlay.querySelector("#sess-rest-progress");
+  const restSetEl = overlay.querySelector("#sess-rest-set");
+  const restRepsEl = overlay.querySelector("#sess-rest-reps");
+  const restTotalEl = overlay.querySelector("#sess-rest-total");
   const countersEl = overlay.querySelector("#sess-counters");
   const bottomEl = overlay.querySelector("#sess-bottom");
 
@@ -97,6 +113,73 @@ async function openSession(challengeId, startExercise) {
   renderCounter();
   let prevGoalReached = false, prevBottomKey = "", prevTracked = false, lastWarnTs = 0;
   let countingStarted = false, readySince = 0, countdownShown = 0, demoFinishing = false;
+  const priorWorkoutMs = isDemo ? 0 : workoutSummary(c).elapsedMs;
+  let workoutStartedAt = 0, workoutStoppedAt = 0, lastClockText = "";
+  let setStartTotal = 0, setReps = [];
+  let resting = false, restStartedAt = 0, restEndsAt = 0, restDurationMs = 90000, restTotalMs = 0, restCuePlayed = false;
+
+  const sessionRepTotal = () => sess.snapshot.results.reduce((sum, result) => sum + result.repCount, 0);
+  const currentSetReps = () => Math.max(0, sessionRepTotal() - setStartTotal);
+  const sessionElapsedMs = (now = performance.now()) => workoutStartedAt ? Math.max(0, (workoutStoppedAt || now) - workoutStartedAt) : 0;
+  const elapsedWorkoutMs = (now = performance.now()) => priorWorkoutMs + sessionElapsedMs(now);
+  const dayRepTotal = () => goals.reduce((sum, goal) => sum + goal.start + (resultFor(goal.exercise) ? resultFor(goal.exercise).repCount : 0), 0);
+  const restClock = (ms) => {
+    const seconds = Math.max(0, Math.ceil(ms / 1000));
+    return String(Math.floor(seconds / 60)).padStart(2, "0") + ":" + String(seconds % 60).padStart(2, "0");
+  };
+  function closeCurrentSet() {
+    const reps = currentSetReps();
+    if (reps <= 0) return 0;
+    setReps.push(reps);
+    setStartTotal = sessionRepTotal();
+    return reps;
+  }
+  function updateElapsed(now) {
+    const text = workoutClock(elapsedWorkoutMs(now));
+    if (text !== lastClockText) { elapsedEl.textContent = text; lastClockText = text; }
+  }
+  function updateRest(now) {
+    if (!resting) return;
+    const remaining = Math.max(0, restEndsAt - now);
+    restTimeEl.textContent = restClock(remaining);
+    const circumference = 603.19;
+    restProgressEl.style.strokeDashoffset = String(circumference * (1 - remaining / restDurationMs));
+    if (!remaining && !restCuePlayed) {
+      restCuePlayed = true;
+      wsfx("transition");
+      haptic([0, 60, 50, 100]);
+      restEl.classList.add("ready");
+    }
+  }
+  function startRest() {
+    const reps = closeCurrentSet();
+    if (!reps || resting) return;
+    const now = performance.now();
+    resting = true;
+    restStartedAt = now;
+    restDurationMs = 90000;
+    restEndsAt = now + restDurationMs;
+    restCuePlayed = false;
+    restEl.classList.remove("ready");
+    restEl.hidden = false;
+    restSetEl.textContent = t("Set %lld completed", setReps.length);
+    restRepsEl.textContent = t("%lld reps", reps);
+    restTotalEl.textContent = t("Total %@", `${dayRepTotal()} / ${goals.reduce((sum, goal) => sum + (goal.target || 0), 0)}`);
+    sess.setCountingEnabled(false);
+    updateRest(now);
+    prevBottomKey = "";
+  }
+  function resumeAfterRest() {
+    if (!resting) return;
+    const now = performance.now();
+    restTotalMs += Math.max(0, now - restStartedAt);
+    resting = false;
+    restEl.hidden = true;
+    restEl.classList.remove("ready");
+    setStartTotal = sessionRepTotal();
+    sess.setCountingEnabled(true);
+    prevBottomKey = "";
+  }
 
   function resetReadyState() {
     countingStarted = false;
@@ -123,6 +206,11 @@ async function openSession(challengeId, startExercise) {
       const g = goals[active], ar = resultFor(g.exercise), total = totalFor(g, ar);
       const curReached = g.target != null && total >= g.target;
       const allReached = goals.every((x) => x.target != null && totalFor(x, resultFor(x.exercise)) >= x.target);
+      const now = performance.now();
+      if (sessionTotal > 0 && !workoutStartedAt) workoutStartedAt = now;
+      if (allReached && workoutStartedAt && !workoutStoppedAt) { workoutStoppedAt = now; closeCurrentSet(); }
+      updateElapsed(now);
+      updateRest(now);
 
       // Счётчик активного упражнения
       const numEl = countersEl.querySelector("#sess-num");
@@ -149,7 +237,6 @@ async function openSession(challengeId, startExercise) {
 
       // Сначала стабильно находим тело, затем даём человеку 3 секунды занять позицию.
       const tracked = !!(ar && (ar.status === "up" || ar.status === "down"));
-      const now = performance.now();
       if (!countingStarted) {
         if (!tracked) {
           readySince = 0;
@@ -196,12 +283,12 @@ async function openSession(challengeId, startExercise) {
 
       // Нижняя панель: угол текущего упражнения + кнопка Завершить/Готово (переключение упражнений — в блоке счётчика)
       const angle = ar && ar.bendAngle != null ? Math.round(ar.bendAngle) : null;
-      const key = `${curReached}|${allReached}|${sessionTotal > 0}|${angle}`;
+      const key = `${curReached}|${allReached}|${sessionTotal}|${currentSetReps()}|${setReps.length}|${resting}|${angle}`;
       if (key !== prevBottomKey) {
         prevBottomKey = key;
         let b = angle != null ? `<span class="angle">${angle}°</span>` : "";
         if (allReached) b += `<button class="action-btn money" data-sess="finish" style="max-width:340px">${iconF("checkCircle")}${t("Finish")}</button>`;
-        else if (sessionTotal > 0) b += `<button class="action-btn" data-sess="finish" style="max-width:340px">${icon("check")}${t("Done")}</button>`;
+        else if (!resting && currentSetReps() > 0) b += `<button class="sess-finish-set" data-sess="finishSet" style="max-width:340px"><span class="sess-stop-mark"></span>${t("Finish set")}</button>`;
         bottomEl.innerHTML = b;
       }
       prevGoalReached = curReached;
@@ -218,6 +305,12 @@ async function openSession(challengeId, startExercise) {
     finishing = true;
     const counts = {};
     sess.snapshot.results.forEach((r) => (counts[r.exercise] = r.repCount));
+    const now = performance.now();
+    if (sessionRepTotal() > 0 && !workoutStartedAt) workoutStartedAt = now;
+    if (workoutStartedAt && !workoutStoppedAt) workoutStoppedAt = now;
+    if (resting) { restTotalMs += Math.max(0, now - restStartedAt); resting = false; }
+    closeCurrentSet();
+    const sessionStats = { elapsedMs: sessionElapsedMs(now), restMs: restTotalMs, setReps: setReps.slice() };
     if (sess.isRecording()) { try { await sess.toggleRecording(); } catch (e) { wsfx("recError"); } }
     if (save) {
       if (isDemo) {
@@ -226,7 +319,7 @@ async function openSession(challengeId, startExercise) {
         return;
       }
       let closed;
-      try { closed = addReps(c, counts); }
+      try { closed = addReps(c, counts, sessionStats); }
       catch (e) { finishing = false; toast(t("Couldn't save. Try again.")); return; } // разблокируем — можно повторить
       sess.stop(); overlay.remove(); liveSession = null;
       render();
@@ -260,14 +353,25 @@ async function openSession(challengeId, startExercise) {
     const a = b.dataset.sess;
     if (a === "close") askExit();
     else if (a === "finish") endSession(true);
+    else if (a === "finishSet") startRest();
+    else if (a === "restPlus") {
+      if (resting) {
+        restEndsAt += 30000;
+        restDurationMs += 30000;
+        restCuePlayed = false;
+        restEl.classList.remove("ready");
+        updateRest(performance.now());
+      }
+    }
+    else if (a === "restResume") resumeAfterRest();
     else if (a === "doSave") { setBtnLoading(b, true, t("Save workout")); await endSession(true); if (document.body.contains(overlay)) setBtnLoading(b, false); }
     else if (a === "doExit") endSession(false);
     else if (a === "doContinue") { const m = overlay.querySelector(".sess-modal"); if (m) m.remove(); }
     else if (a === "next") {
-      if (active < goals.length - 1) { active++; sess.setActive(active); resetReadyState(); wsfx("transition"); renderCounter(); prevBottomKey = ""; prevGoalReached = false; }
+      if (active < goals.length - 1) { closeCurrentSet(); active++; sess.setActive(active); resetReadyState(); wsfx("transition"); renderCounter(); prevBottomKey = ""; prevGoalReached = false; }
     }
     else if (a === "prev") {
-      if (active > 0) { active--; sess.setActive(active); resetReadyState(); renderCounter(); prevBottomKey = ""; prevGoalReached = false; }
+      if (active > 0) { closeCurrentSet(); active--; sess.setActive(active); resetReadyState(); renderCounter(); prevBottomKey = ""; prevGoalReached = false; }
     }
     else if (a === "record") {
       let on;

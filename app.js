@@ -4,7 +4,7 @@
 "use strict";
 
 // Версия оболочки — держать в синхроне с CACHE в sw.js; уходит в баг-репорты.
-const APP_VERSION = "v62";
+const APP_VERSION = "v63";
 // Последняя JS-ошибка — прикладываем к баг-репорту, чтобы сразу видеть причину.
 let lastError = "";
 window.addEventListener("error", (e) => {
@@ -134,6 +134,11 @@ const RU = {
   "30 days · 20 a day": "30 дней · 20 в день",
   "Preparing workout…": "Готовим тренировку…", "Workout sounds": "Звуки тренировки", "Interface sounds": "Звуки интерфейса",
   "%@ completed": "%@ — готово", "Recording started": "Запись началась",
+  "Overall time": "Общее время", "Finish set": "Закончить сет", "Rest": "Отдых",
+  "Set %lld completed": "Сет %lld завершён", "%lld reps": "%lld повторов", "Total %@": "Всего %@",
+  "+30 sec": "+30 сек", "Start next set": "Начать следующий сет", "Rest finished": "Отдых закончен",
+  "Time": "Время", "Sets": "Сеты", "Average set": "Средний сет", "Best set": "Лучший сет",
+  "%lld sets": "%lld сетов", "avg %lld": "в среднем %lld", "%lld sec faster": "на %lld сек быстрее",
   "Finish workout?": "Завершить тренировку?", "Save completed reps?": "Сохранить выполненные повторы?",
   "Save workout": "Сохранить тренировку", "Exit without saving": "Выйти без сохранения",
   "Couldn't save. Try again.": "Не удалось сохранить. Попробуй ещё раз.",
@@ -427,7 +432,7 @@ function mockParticipants(total, eliminated, othersDoneToday, includeMe, repsPer
 function newChallenge(o) {
   return Object.assign({
     id: uid(), missPolicy: "oneTotal", progression: { step: 0, period: "day" },
-    myTodayReps: {}, myTotalReps: 0, myTotalByExercise: {}, startWeight: null, startMaxReps: null,
+    myTodayReps: {}, myTotalReps: 0, myTotalByExercise: {}, workoutStatsByDay: {}, startWeight: null, startMaxReps: null,
     beforePhoto: null, afterPhoto: null, isCompleted: false,
   }, o);
 }
@@ -448,6 +453,30 @@ function currentDayFromStart(days) {
 function dateKey(ts) {
   const d = new Date(ts || Date.now());
   return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0");
+}
+
+function workoutClock(ms) {
+  const seconds = Math.max(0, Math.floor((+ms || 0) / 1000));
+  const minutes = Math.floor(seconds / 60);
+  return String(minutes).padStart(2, "0") + ":" + String(seconds % 60).padStart(2, "0");
+}
+function workoutSummary(c, key = dateKey()) {
+  const raw = c && c.workoutStatsByDay && c.workoutStatsByDay[key];
+  if (!raw) return { elapsedMs: 0, time: "00:00", sets: 0, average: 0, best: 0, reps: 0, improvementMs: 0 };
+  const setReps = Array.isArray(raw.setReps) ? raw.setReps.filter((n) => +n > 0).map(Number) : [];
+  const reps = raw.reps != null ? +raw.reps : setReps.reduce((sum, n) => sum + n, 0);
+  const keys = Object.keys(c.workoutStatsByDay || {}).filter((day) => day < key && c.workoutStatsByDay[day] && c.workoutStatsByDay[day].completedAt).sort();
+  const previous = keys.length ? c.workoutStatsByDay[keys[keys.length - 1]] : null;
+  const improvementMs = previous && previous.elapsedMs > raw.elapsedMs ? previous.elapsedMs - raw.elapsedMs : 0;
+  return {
+    elapsedMs: +raw.elapsedMs || 0,
+    time: workoutClock(raw.elapsedMs),
+    sets: setReps.length,
+    average: setReps.length ? Math.round(reps / setReps.length) : 0,
+    best: setReps.length ? Math.max(...setReps) : 0,
+    reps,
+    improvementMs,
+  };
 }
 
 function mockChallenges() {
@@ -665,7 +694,7 @@ function saveApp() {
   app.balance = saved.balance != null ? saved.balance : app.balance;
   app.transactions = saved.transactions || app.transactions;
   app.challenges = saved.challenges;
-  app.challenges.forEach((c) => { if (!c.myTotalByExercise) c.myTotalByExercise = {}; });
+  app.challenges.forEach((c) => { if (!c.myTotalByExercise) c.myTotalByExercise = {}; if (!c.workoutStatsByDay) c.workoutStatsByDay = {}; });
   app.history = saved.history || [];
   app.measurements = saved.measurements || [];
   app.totalReps = saved.totalReps != null ? saved.totalReps : (saved.totalPushups || 0); // миграция старого ключа
@@ -769,7 +798,7 @@ function leaveChallenge(id) {
 }
 
 // Плюсует подход; возвращает true, если дневная норма закрылась впервые.
-function addReps(ch, counts) {
+function addReps(ch, counts, sessionStats) {
   const total = Object.values(counts).reduce((a, b) => a + b, 0);
   if (total <= 0) return false;
   const me = C.me(ch);
@@ -787,9 +816,20 @@ function addReps(ch, counts) {
   ch.myTotalReps += total;
   me.todayReps = C.myTodayTotal(ch);
   if (C.isTodayDone(ch)) me.doneToday = true;
+  const closed = !wasDone && C.isTodayDone(ch);
+  if (!wasDone && sessionStats && sessionStats.elapsedMs > 0) {
+    ch.workoutStatsByDay = ch.workoutStatsByDay || {};
+    const key = dateKey();
+    const day = ch.workoutStatsByDay[key] || { elapsedMs: 0, restMs: 0, setReps: [], reps: 0, completedAt: null };
+    day.elapsedMs += Math.max(0, Math.round(sessionStats.elapsedMs));
+    day.restMs += Math.max(0, Math.round(sessionStats.restMs || 0));
+    day.setReps.push(...(sessionStats.setReps || []).filter((n) => +n > 0).map(Number));
+    day.reps += total;
+    if (closed) day.completedAt = Date.now();
+    ch.workoutStatsByDay[key] = day;
+  }
   if (ch.id === "main") Sync.report(dateKey(), ch.myTodayReps, ch.myTotalReps);
   else if (ch.isPublic) Sync.reportChallenge(ch.id, dateKey(), ch.myTodayReps, ch.myTotalReps);
-  const closed = !wasDone && C.isTodayDone(ch);
   if (Sync.enabled && ch.participants.length > 1) {
     const base = { actorName: store["profile.name"] || "Player", challengeId: ch.id, challengeTitle: ch.title, dateKey: dateKey() };
     if (closed) Sync.publishActivity(Object.assign({}, base, { type: "day" }));
@@ -2166,6 +2206,7 @@ function confetti() {
 function DayCompleteFull() {
   const c = app.challenges.find((x) => x.id === ui.fullId);
   const today = C.myTodayTotal(c), extra = Math.max(0, today - C.repsNorm(c));
+  const workout = workoutSummary(c);
   const days = app.history.flatMap((d) => d.entries.filter((e) => e.title === c.title).map((e) => e.reps));
   const best = Math.max(today, ...days, 0);
   const ranked = C.active(c).slice().sort((a, b) => b.todayReps - a.todayReps);
@@ -2174,6 +2215,11 @@ function DayCompleteFull() {
     <div class="c-money pop-in" style="font-size:84px;display:flex">${iconF("seal")}</div>
     <div class="display" style="font-size:42px">${t("Day done!")}</div>
     <div class="form-footer" style="max-width:360px">${t("%lld reps today. Day %lld of %lld in the bag.", C.myTodayTotal(c), c.currentDay, c.durationDays)}</div>
+    ${workout.sets ? `<div class="day-workout-summary">
+      <div><span>${t("Time")}</span><strong>${workout.time}</strong></div>
+      <div><span>${t("Sets")}</span><strong>${workout.sets}</strong></div>
+      <div><span>${t("Average set")}</span><strong>${workout.average}</strong></div>
+    </div>${workout.improvementMs ? `<div class="day-improvement">${icon("trend")}${t("%lld sec faster", Math.round(workout.improvementMs / 1000))}</div>` : ""}` : ""}
     <div class="day-win-stats">
       <div><span>${t("Above goal")}</span><strong>+${extra}</strong></div>
       <div><span>${t("Best day")}</span><strong>${best}</strong></div>
@@ -2215,17 +2261,20 @@ function ShareDayEditorFull() {
 
 function shareStoryCopy(c, f) {
   const exercises = c.goals.map((g) => `${C.myToday(c, g.exercise)} ${Exercise.displayName(g.exercise).toLowerCase()}`).join(" · ");
+  const workout = workoutSummary(c);
+  const workoutLine = workout.sets ? `<div class="share-session-line"><strong>${workout.time}</strong><span>${t("%lld sets", workout.sets)}</span><span>${t("avg %lld", workout.average)}</span></div>${workout.improvementMs ? `<div class="share-improvement">${t("%lld sec faster", Math.round(workout.improvementMs / 1000))}</div>` : ""}` : "";
   const reward = `<div class="share-reward"><span>${t("Potential reward")}</span><strong>${COIN_SYM}${fmt(C.payout(c))}</strong></div>`;
   if (f.template === "challenge") return `
     <div class="share-dare"><span>${t("I did mine")}</span><strong>${C.myTodayTotal(c)}</strong><small>${t("reps")}</small></div>
     <div class="share-dare-exercises">${esc(exercises)}</div>
+    ${workoutLine}
     ${reward}
     <div class="share-exercise-mark">${c.goals.map((g) => icon(EXERCISE_ICON[g.exercise] || "flame")).join(icon("chevronRight"))}</div>
     <div class="share-brand">FIT<span>STAKE</span><small>${t("Now it's your turn")}</small></div>`;
   return `
     <div class="share-metric"><span>${t("Reps")}</span><strong>${C.myTodayTotal(c)}</strong></div>
     <div class="share-metric"><span>${t("Exercises")}</span><strong class="share-exercises">${esc(exercises)}</strong></div>
-    <div class="share-metric"><span>${t("Progress")}</span><strong>${t("Day %lld of %lld", c.currentDay, c.durationDays)}</strong></div>
+    ${workout.sets ? `<div class="share-metric"><span>${t("Time")}</span><strong>${workout.time}</strong></div><div class="share-metric"><span>${t("Sets")}</span><strong>${workout.sets} · ${t("avg %lld", workout.average)}</strong></div>${workout.improvementMs ? `<div class="share-improvement">${t("%lld sec faster", Math.round(workout.improvementMs / 1000))}</div>` : ""}` : `<div class="share-metric"><span>${t("Progress")}</span><strong>${t("Day %lld of %lld", c.currentDay, c.durationDays)}</strong></div>`}
     ${reward}
     <div class="share-exercise-mark">${c.goals.map((g) => icon(EXERCISE_ICON[g.exercise] || "flame")).join(icon("chevronRight"))}</div>
     <div class="share-brand">FIT<span>STAKE</span><small>${t("Your turn")}</small></div>`;
@@ -2423,6 +2472,7 @@ async function shareDayStory(c, options) {
   const value = (text, y, size = 66) => { g.fillStyle = "#fff"; g.font = `800 ${size}px -apple-system,system-ui,sans-serif`; g.fillText(text, pad, y); };
   g.textAlign = "left"; g.textBaseline = "alphabetic";
   const exercises = c.goals.map((goal) => `${C.myToday(c, goal.exercise)} ${Exercise.displayName(goal.exercise).toLowerCase()}`).join(" · ");
+  const workout = workoutSummary(c);
   if (options.template === "challenge") {
     value(t("I did mine").toUpperCase(), 190, 58);
     value(String(C.myTodayTotal(c)), 340, 136);
@@ -2430,7 +2480,17 @@ async function shareDayStory(c, options) {
     g.font = "800 45px -apple-system,system-ui,sans-serif";
     const lines = wrapLines(g, exercises, W - pad * 2, 2);
     lines.forEach((line, i) => value(line, 510 + i * 58, 45));
-    const rewardY = 610 + lines.length * 58;
+    let rewardY = 610 + lines.length * 58;
+    if (workout.sets) {
+      label(t("Time"), rewardY); value(workout.time, rewardY + 76, 66);
+      label(t("Sets"), rewardY + 154); value(`${workout.sets} · ${t("avg %lld", workout.average)}`, rewardY + 226, 48);
+      rewardY += 316;
+      if (workout.improvementMs) {
+        g.fillStyle = "#ff5e1f"; g.font = "800 42px -apple-system,system-ui,sans-serif";
+        g.fillText(t("%lld sec faster", Math.round(workout.improvementMs / 1000)).toUpperCase(), pad, rewardY);
+        rewardY += 88;
+      }
+    }
     label(t("Potential reward"), rewardY); value(COIN_SYM + fmt(C.payout(c)), rewardY + 76, 58);
   } else {
     label(t("Reps"), 170); value(String(C.myTodayTotal(c)), 252, 82);
@@ -2439,8 +2499,20 @@ async function shareDayStory(c, options) {
     const lines = wrapLines(g, exercises, W - pad * 2, 2);
     lines.forEach((line, i) => value(line, 422 + i * 58, 47));
     const progressY = 422 + lines.length * 58 + 46;
-    label(t("Progress"), progressY); value(t("Day %lld of %lld", c.currentDay, c.durationDays), progressY + 76, 58);
-    const rewardY = progressY + 174;
+    let rewardY;
+    if (workout.sets) {
+      label(t("Time"), progressY); value(workout.time, progressY + 76, 66);
+      label(t("Sets"), progressY + 160); value(`${workout.sets} · ${t("avg %lld", workout.average)}`, progressY + 232, 48);
+      rewardY = progressY + 322;
+      if (workout.improvementMs) {
+        g.fillStyle = "#ff5e1f"; g.font = "800 42px -apple-system,system-ui,sans-serif";
+        g.fillText(t("%lld sec faster", Math.round(workout.improvementMs / 1000)).toUpperCase(), pad, rewardY);
+        rewardY += 88;
+      }
+    } else {
+      label(t("Progress"), progressY); value(t("Day %lld of %lld", c.currentDay, c.durationDays), progressY + 76, 58);
+      rewardY = progressY + 174;
+    }
     label(t("Potential reward"), rewardY); value(COIN_SYM + fmt(C.payout(c)), rewardY + 76, 58);
   }
 
