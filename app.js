@@ -4,7 +4,7 @@
 "use strict";
 
 // Версия оболочки — держать в синхроне с CACHE в sw.js; уходит в баг-репорты.
-const APP_VERSION = "v68";
+const APP_VERSION = "v69";
 // Последняя JS-ошибка — прикладываем к баг-репорту, чтобы сразу видеть причину.
 let lastError = "";
 window.addEventListener("error", (e) => {
@@ -42,6 +42,7 @@ const PATHS = {
   personXmark: '<circle cx="9" cy="8" r="3.5"/><path d="M3 21c0-3.5 3-5.5 6-5.5M16 9l5 5M21 9l-5 5"/>',
   xCircle: '<circle cx="12" cy="12" r="10"/><path d="M9 9l6 6M15 9l-6 6"/>',
   plusCircle: '<circle cx="12" cy="12" r="10"/><path d="M12 8v8M8 12h8" stroke="#0a0a0a"/>',
+  plusCircleLine: '<circle cx="12" cy="12" r="10"/><path d="M12 8v8M8 12h8"/>', // контурный: круг и плюс currentColor (для кнопок)
   calendar: '<rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 9h18M8 3v4M16 3v4"/>',
   dollar: '<circle cx="12" cy="12" r="10"/><path d="M12 7v10M14.5 9.2c-.4-1-1.4-1.4-2.5-1.4-1.4 0-2.5.7-2.5 1.9 0 2.7 5 1.3 5 4 0 1.3-1.2 2-2.5 2-1.2 0-2.2-.5-2.6-1.5" stroke="#0a0a0a"/>',
   bolt: '<path d="M13 2L4 14h6l-1 8 9-12h-6z"/>',
@@ -1015,7 +1016,11 @@ function render() {
 // Фолбэк (нет поддержки / reduced motion) — обычный мгновенный render.
 function navRender() {
   if (REDUCE_MOTION() || typeof document.startViewTransition !== "function") { render(); return; }
-  document.startViewTransition(() => render());
+  // На время перехода стекло непрозрачно: в VT-снимках backdrop-filter не работает,
+  // иначе контент просвечивает и блюр «догоняет» после анимации (правило .vt в styles.css).
+  document.documentElement.classList.add("vt");
+  const vt = document.startViewTransition(() => render());
+  vt.finished.catch(() => {}).finally(() => document.documentElement.classList.remove("vt"));
 }
 
 // Подсказка «на экран Домой» — только iOS Safari вне standalone; закрывается навсегда.
@@ -1413,7 +1418,7 @@ function callToAction(c) {
     const done = C.isTodayDone(c);
     // Комбо — большая кнопка открывает выбор, с какого упражнения начать; одиночное — сразу старт.
     const act = c.goals.length > 1 ? `startPick:${c.id}` : `play:${c.id}`;
-    return `<button class="action-btn ${done ? "money" : ""}" data-act="${act}">${iconF(done ? "plusCircle" : "flame")}${done ? t("Extra reps") : C.actionText(c)}</button>`;
+    return `<button class="action-btn ${done ? "money" : ""}" data-act="${act}">${done ? icon("plusCircleLine") : iconF("flame")}${done ? t("Extra reps") : C.actionText(c)}</button>`;
   }
   return `<button class="action-btn" data-act="join:${c.id}">${t("Join for")} ${coin(c.buyIn)}</button>`;
 }
