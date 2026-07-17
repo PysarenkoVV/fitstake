@@ -40,7 +40,7 @@
   --ease-standard: cubic-bezier(0.2, 0, 0, 1);
   --ease-in: cubic-bezier(0.4, 0, 1, 1);     /* выходы: уезд/исчезание */
   --ease-press: cubic-bezier(0.4, 0, 0.2, 1); /* нажатия: мягкий старт и завершение, без рывка */
-  --motion-press: 720ms;
+  --motion-press: 360ms;
   --motion-control: 180ms;
   --motion-sheet: 260ms;
   --motion-page: 280ms;
@@ -82,8 +82,8 @@ body::after { width: 56vw; height: 56vw; bottom: -12vw; left: -16vw; background:
 /* Навигация — нативный View Transitions API: старый гаснет, новый всплывает снизу
    и проявляется (кроссфейд + подъём). Темп под кривую iOS; тап-обновления (без
    navRender) переходов не запускают. */
-::view-transition-old(root) { animation: vt-old 840ms var(--ease-standard) both; }
-::view-transition-new(root) { animation: vt-new 1120ms var(--ease-out) both; }
+::view-transition-old(root) { animation: vt-old 420ms var(--ease-standard) both; }
+::view-transition-new(root) { animation: vt-new 560ms var(--ease-out) both; }
 @keyframes vt-old { to { opacity: 0; } }
 @keyframes vt-new { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
 /* Во время View Transition backdrop-filter в снимках не работает — стекло на этот
@@ -247,11 +247,11 @@ button:active:not(:disabled) { transform: scale(0.97); filter: brightness(0.92);
 /* Строка лидерборда (кликабельный div) — press как крупная строка. */
 .lb-row { border-radius: 12px; transition: transform var(--motion-press) var(--ease-press), filter var(--motion-press) var(--ease-press); }
 .lb-row:active { transform: scale(0.98); filter: brightness(0.92); }
-/* Карточка челленджа жмётся как единое целое: контейнер не масштабируем (иначе двойное
-   сжатие с внутренней кнопкой), основную зону и play-FAB жмём раздельно. */
-.challenge-card.card:active { transform: none; filter: none; }
-.challenge-card-main { transition: transform var(--motion-press) var(--ease-press), filter var(--motion-press) var(--ease-press); }
-.challenge-card-main:active { transform: scale(0.98); filter: brightness(0.94); }
+/* Карточка челленджа жмётся ЦЕЛИКОМ: масштабируем весь контейнер, внутреннюю кнопку
+   отдельно не жмём (иначе двойное сжатие), play-FAB жмётся сильнее поверх. */
+.challenge-card { transition: transform var(--motion-press) var(--ease-press), filter var(--motion-press) var(--ease-press); }
+.challenge-card.card:active { transform: scale(0.98); filter: brightness(0.94); }
+.challenge-card-main:active { transform: none; filter: none; }
 .card-play { transition: transform var(--motion-press) var(--ease-press); }
 .card-play:active { transform: scale(0.9); }
 .action-btn:disabled { opacity: 0.4; }
