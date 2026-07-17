@@ -4,7 +4,7 @@
 "use strict";
 
 // Версия оболочки — держать в синхроне с CACHE в sw.js; уходит в баг-репорты.
-const APP_VERSION = "v66";
+const APP_VERSION = "v67";
 // Последняя JS-ошибка — прикладываем к баг-репорту, чтобы сразу видеть причину.
 let lastError = "";
 window.addEventListener("error", (e) => {
@@ -347,8 +347,23 @@ const COIN_SYM = "🔥";
 function coin(value) {
   return `<span class="money">${COIN_SYM}${fmt(value)}</span>`;
 }
+// Число «крутится» вверх до значения при появлении экрана победы (запуск — в afterRender).
+// data-countup держит целевое число; текст-фолбэк = финальное значение (если анимация не сыграет).
 function coinCountUp(value, key, fromZero) {
-  return `<span class="money">${COIN_SYM}${fmt(value)}</span>`;
+  return `<span class="money" data-countup="${value}">${COIN_SYM}${fmt(value)}</span>`;
+}
+function animateCountUp(el) {
+  const to = parseFloat(el.dataset.countup);
+  if (!isFinite(to)) return;
+  if (REDUCE_MOTION() || to <= 0) { el.textContent = `${COIN_SYM}${fmt(to)}`; return; }
+  const dur = 850, t0 = performance.now();
+  const ease = (p) => 1 - Math.pow(1 - p, 3); // easeOutCubic
+  function step(now) {
+    const p = Math.min(1, (now - t0) / dur);
+    el.textContent = `${COIN_SYM}${fmt(Math.round(to * ease(p)))}`;
+    if (p < 1) requestAnimationFrame(step);
+  }
+  requestAnimationFrame(step);
 }
 
 // ==========================================================================
@@ -998,8 +1013,25 @@ function render() {
 // Навигация получает один короткий, непрерывный переход. Анимируем только новый
 // контент: без копий старого экрана, задержек и конкурирующих CSS-анимаций.
 let pendingViewMotion = null;
+let firstPaint = true; // холодный старт приложения — один раз даём каскад появления
 function moveView(direction) {
   pendingViewMotion = direction;
+}
+
+// Каскад появления: прямые блоки текущего экрана поднимаются и проявляются по очереди.
+// Только на навигации (табы/старт), не на каждой перерисовке — иначе список дёргается.
+function staggerEnter() {
+  const scroller = document.getElementById("scroller");
+  if (!scroller) return;
+  const blocks = Array.from(scroller.children).filter((el) => el.nodeType === 1);
+  blocks.forEach((el, i) => {
+    el.style.setProperty("--i", Math.min(i, 8)); // кап задержки, чтобы низ списка не ждал долго
+    el.classList.add("enter-item");
+    el.addEventListener("animationend", () => {
+      el.classList.remove("enter-item");
+      el.style.removeProperty("--i");
+    }, { once: true });
+  });
 }
 
 function motionView() {
@@ -1030,8 +1062,8 @@ function pageTransition(direction, update) {
   const endX = direction === "back" ? "100vw" : "-18vw";
   const anim = ghost.animate([
     { transform: "translate3d(0, 0, 0)", opacity: 1 },
-    { transform: `translate3d(${endX}, 0, 0)`, opacity: 1 }
-  ], { duration: direction === "back" ? 260 : 280, easing: "cubic-bezier(0.32, 0.72, 0, 1)", fill: "forwards" });
+    { transform: `translate3d(${endX}, 0, 0)`, opacity: direction === "back" ? 1 : 0.6 }
+  ], { duration: direction === "back" ? 300 : 320, easing: "cubic-bezier(0.16, 1, 0.3, 1)", fill: "forwards" });
   anim.finished.catch(() => {}).finally(() => ghost.remove());
 }
 
@@ -1060,7 +1092,7 @@ function toast(msg) {
   el.className = "toast"; // внешний вид (стекло) — в styles.css
   el.style.cssText = "position:fixed;left:50%;bottom:calc(80px + env(safe-area-inset-bottom));transform:translateX(-50%);padding:12px 18px;z-index:200;font-weight:600";
   document.body.appendChild(el);
-  setTimeout(() => el.remove(), 1900);
+  setTimeout(() => { el.classList.add("toast--out"); setTimeout(() => el.remove(), 220); }, 1700);
 }
 
 // Индикация «в процессе» для сетевых кнопок: подпись + aria-busy + блокировка
@@ -2808,7 +2840,26 @@ function openParticipant(id) {
   ui.sheet = ParticipantSheet;
   render();
 }
-function closeSheet() { ui.sheet = null; ui.form = null; render(); }
+// Проигрываем выход (.closing), затем чистим состояние и рендерим. Гейт REDUCE_MOTION —
+// мгновенно. Защита: если за время анимации открыли другой лист, старое не затираем.
+function playExit(selectors, apply) {
+  if (REDUCE_MOTION()) { apply(); return; }
+  const els = selectors.map((s) => document.querySelector(s)).filter(Boolean);
+  const main = els[0];
+  if (!main || main.dataset.closing) { apply(); return; }
+  let done = false;
+  const finish = () => { if (done) return; done = true; apply(); };
+  els.forEach((el) => { el.dataset.closing = "1"; el.classList.add("closing"); });
+  main.addEventListener("animationend", finish, { once: true });
+  setTimeout(finish, 360); // фолбэк, если animationend не придёт
+}
+function closeSheet() {
+  const was = ui.sheet;
+  playExit([".sheet", ".sheet-backdrop"], () => {
+    if (ui.sheet !== was) return; // за время выхода открыли другой лист — не трогаем
+    ui.sheet = null; ui.form = null; render();
+  });
+}
 function openDayComplete(c) { ui.fullId = c.id; ui.full = DayCompleteFull; render(); }
 function openShareDay(c) {
   const shareReturn = ui.full === DayCompleteFull ? "dayComplete" : "close";
@@ -2817,7 +2868,13 @@ function openShareDay(c) {
   render();
 }
 function openChallengeComplete(c) { ui.form = { challengeId: c.id, weight: store["profile.weightKg"], maxReps: store["profile.maxReps"], photo: null }; ui.full = ChallengeCompleteFull; render(); }
-function closeFull() { ui.full = null; ui.form = null; render(); }
+function closeFull() {
+  const was = ui.full;
+  playExit([".fullscreen"], () => {
+    if (ui.full !== was) return;
+    ui.full = null; ui.form = null; render();
+  });
+}
 
 function CameraPrepFull() {
   const rows = [
@@ -3231,22 +3288,36 @@ function afterRender() {
   }
   afterRender._sheetOpen = !!_sheet;
 
-  if (pendingViewMotion && !REDUCE_MOTION()) {
-    const direction = pendingViewMotion;
+  // То же для полноэкранного оверлея: вход играем только на первом появлении,
+  // на перерисовках (шаги мастера, драг фото) — глушим.
+  const _full = document.querySelector(".fullscreen");
+  const _fullJustOpened = _full && !afterRender._fullOpen;
+  if (_full && afterRender._fullOpen) _full.classList.add("no-enter");
+  afterRender._fullOpen = !!_full;
+  // Count-up цифр — только при первом появлении экрана (не на каждой перерисовке).
+  if (_fullJustOpened) _full.querySelectorAll("[data-countup]").forEach(animateCountUp);
+
+  if ((pendingViewMotion || firstPaint) && !REDUCE_MOTION()) {
+    const direction = pendingViewMotion || "tab"; // холодный старт — как таб (каскад карточек)
     pendingViewMotion = null;
+    firstPaint = false;
     const view = motionView();
-    if (view && view.animate) {
-      const x = direction === "forward" ? "100vw" : direction === "back" ? "-18vw" : "0";
-      const y = direction === "tab" ? 5 : 0;
-      if (direction !== "tab") view.classList.add("page-motion-entering");
+    if (view && view.animate && (direction === "forward" || direction === "back")) {
+      // Детали (push): слайд всего экрана из-за края.
+      const x = direction === "forward" ? "100vw" : "-18vw";
+      view.classList.add("page-motion-entering");
       const enterAnim = view.animate([
-        { opacity: direction === "tab" ? 0.8 : 1, transform: `translate3d(${x}, ${y}px, 0)` },
+        { opacity: 1, transform: `translate3d(${x}, 0, 0)` },
         { opacity: 1, transform: "translate3d(0, 0, 0)" }
-      ], { duration: direction === "tab" ? 220 : 280, easing: "cubic-bezier(0.32, 0.72, 0, 1)" });
+      ], { duration: 320, easing: "cubic-bezier(0.16, 1, 0.3, 1)" });
       enterAnim.finished.catch(() => {}).finally(() => view.classList.remove("page-motion-entering"));
+    } else if (view === document.getElementById("scroller") || direction === "tab") {
+      // Табы/холодный старт: каскад прямых блоков экрана (подъём + fade).
+      staggerEnter();
     }
   } else {
     pendingViewMotion = null;
+    firstPaint = false;
   }
 
   document.querySelectorAll(".wheel").forEach((w) => {
