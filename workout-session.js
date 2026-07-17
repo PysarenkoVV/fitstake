@@ -390,11 +390,11 @@ async function openSession(challengeId, startExercise) {
     const dlg = document.createElement("div");
     dlg.className = "sess-modal";
     dlg.style.cssText = "position:absolute;inset:0;z-index:40;display:flex;align-items:center;justify-content:center;padding:24px;background:rgba(0,0,0,.6)";
-    dlg.innerHTML = `<div role="dialog" aria-modal="true" style="background:var(--card,#1a1a1a);border-radius:20px;padding:22px;width:100%;max-width:340px;display:flex;flex-direction:column;gap:12px;text-align:center">
+    dlg.innerHTML = `<div role="dialog" aria-modal="true" style="background:rgba(22,22,22,.72);backdrop-filter:blur(24px);-webkit-backdrop-filter:blur(24px);box-shadow:inset 0 0 0 1px rgba(255,255,255,.1);border-radius:20px;padding:22px;width:100%;max-width:340px;display:flex;flex-direction:column;gap:12px;text-align:center">
       <div style="font-weight:800;font-size:20px">${t("Finish workout?")}</div>
       <div style="color:var(--text-secondary);font-size:15px;margin-bottom:6px">${t("Save completed reps?")}</div>
       <button class="action-btn money" data-sess="doSave">${t("Save workout")}</button>
-      <button class="action-btn" data-sess="doExit" style="background:var(--white-08);color:#fff">${t("Exit without saving")}</button>
+      <button class="action-btn plain" data-sess="doExit">${t("Exit without saving")}</button>
       <button class="text-btn" data-sess="doContinue">${t("Continue workout")}</button>
     </div>`;
     overlay.appendChild(dlg);

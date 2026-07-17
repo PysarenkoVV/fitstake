@@ -4,7 +4,7 @@
 "use strict";
 
 // Версия оболочки — держать в синхроне с CACHE в sw.js; уходит в баг-репорты.
-const APP_VERSION = "v65";
+const APP_VERSION = "v66";
 // Последняя JS-ошибка — прикладываем к баг-репорту, чтобы сразу видеть причину.
 let lastError = "";
 window.addEventListener("error", (e) => {
@@ -1057,7 +1057,8 @@ function toast(msg) {
   el.textContent = msg;
   el.setAttribute("role", "status");
   el.setAttribute("aria-live", "polite");
-  el.style.cssText = "position:fixed;left:50%;bottom:calc(80px + env(safe-area-inset-bottom));transform:translateX(-50%);background:#222;color:#fff;padding:12px 18px;border-radius:12px;z-index:200;font-weight:600;box-shadow:0 8px 24px rgba(0,0,0,.5)";
+  el.className = "toast"; // внешний вид (стекло) — в styles.css
+  el.style.cssText = "position:fixed;left:50%;bottom:calc(80px + env(safe-area-inset-bottom));transform:translateX(-50%);padding:12px 18px;z-index:200;font-weight:600";
   document.body.appendChild(el);
   setTimeout(() => el.remove(), 1900);
 }
@@ -1198,7 +1199,7 @@ function YoursTab() {
     ${bar(todayNorm ? todayReps / todayNorm : 0, todayReps >= todayNorm)}
     <div class="row label secondary" style="gap:14px;font-size:12px;flex-wrap:wrap;margin-top:2px">${meta.join("")}</div>
     ${allDone
-      ? `<div class="action-btn" style="background:var(--white-08);color:var(--money);pointer-events:none;margin-top:4px">${iconF("checkCircle")}${t("All done for today")}</div>`
+      ? `<div class="action-btn plain" style="color:var(--money);pointer-events:none;margin-top:4px">${iconF("checkCircle")}${t("All done for today")}</div>`
       : `<button class="action-btn" data-act="play:${nextUp.id}" style="margin-top:4px">${iconF("play")}${t("Continue workout")}</button>`}
   </div>` : "";
 
@@ -1227,7 +1228,7 @@ function YoursTab() {
     ${todayHero}
     ${mine.length ? mine.map((c) => ChallengeCard(c, true)).join("") : empty}
     ${mine.length ? statsCard : ""}
-    <button class="action-btn" data-act="invite" style="background:var(--white-08);color:#fff">${icon("share")}${t("Invite friends")}</button>
+    <button class="action-btn plain" data-act="invite">${icon("share")}${t("Invite friends")}</button>
     ${friendsSummary()}
   </div>`;
 }
@@ -1344,7 +1345,7 @@ function DetailScreen(id) {
   let body;
   if (joined) {
     const ended = challengeEnded(c);
-    const inviteBtn = `<button class="action-btn" data-act="invite" style="background:var(--white-08);color:#fff">${icon("share")}${t("Invite friends")}</button>`;
+    const inviteBtn = `<button class="action-btn plain" data-act="invite">${icon("share")}${t("Invite friends")}</button>`;
     const shareDayBtn = C.isTodayDone(c) ? `<button class="action-btn share-result-btn" data-act="shareDay:${c.id}">${iconF("share")}${t("Share today's result")}</button>` : "";
     const leaveBtn = `<button class="action-btn" data-act="askLeave:${c.id}" style="background:transparent;color:var(--red);box-shadow:none">${t("Leave challenge")}</button>`;
     body = ended ? [
@@ -1456,8 +1457,8 @@ function LeaveSheet() {
       <div style="font-weight:700;font-size:17px">${esc(c.title)}</div>
       <div class="secondary" style="font-size:14px;line-height:1.45">${t("Your buy-in won't be refunded and you won't be able to see the results.")}</div>
     </div>
-    <button class="action-btn" data-act="confirmLeave:${c.id}" style="background:var(--red);color:#fff">${t("Leave")}</button>
-    <button class="action-btn" data-act="closeSheet" style="background:var(--white-08);color:#fff">${t("Cancel")}</button>`;
+    <button class="action-btn danger" data-act="confirmLeave:${c.id}">${t("Leave")}</button>
+    <button class="action-btn plain" data-act="closeSheet">${t("Cancel")}</button>`;
   return sheetShell(t("Leave challenge?"), body, true);
 }
 
@@ -1503,7 +1504,7 @@ function openBug() { ui.bug = { pick: null, note: "" }; ui.sheet = BugSheet; ren
 // Магазин коинов: тестовые пакеты (реальной оплаты нет — валюта тестовая).
 const COIN_PACKS = [500, 1500, 5000];
 function BuyCoinsSheet() {
-  const rows = COIN_PACKS.map((n) => `<button class="action-btn" data-act="buyCoins:${n}" style="background:var(--white-08);color:#fff;justify-content:space-between">
+  const rows = COIN_PACKS.map((n) => `<button class="action-btn plain" data-act="buyCoins:${n}" style="justify-content:space-between">
     <span class="row gap8"><span style="color:var(--money);display:flex">${iconF("plusCircle")}</span>${fmt(n)} ${t("coins")}</span>
     <span class="c-money money" style="font-size:16px">+${fmt(n)}</span></button>`).join("");
   return sheetShell(t("Buy coins"), `<div class="form-footer">${t("Test currency — no real money.")}</div><div class="stack">${rows}</div>`, true);
@@ -1752,7 +1753,7 @@ function ProfileTab() {
   else if (photosUnlocked) photosInner = withPhotos.map((c) => `<div style="display:flex;flex-direction:column;gap:8px">
     <div style="font-weight:600;font-size:15px">${esc(c.title)}</div>
     <div class="grid2">${photoSlot(c.beforePhoto, t("Before"))}${photoSlot(c.afterPhoto, t("After"))}</div></div>`).join("");
-  else photosInner = `<button class="action-btn" data-act="unlockPhotos" style="background:var(--white-08);color:#fff">${t("Show photos")}</button>`;
+  else photosInner = `<button class="action-btn plain" data-act="unlockPhotos">${t("Show photos")}</button>`;
   const photosCard = `<div class="card" style="padding:16px;display:flex;flex-direction:column;gap:12px">
     ${lbl(t("Before / After photos"), "tracking-1")}
     ${photosInner}</div>`;
@@ -1773,7 +1774,7 @@ function ProfileTab() {
     ${lbl(t("Settings"), "tracking-1")}
     ${soundToggle("workoutSounds", t("Workout sounds"))}
     ${soundToggle("interfaceSounds", t("Interface sounds"))}
-    <button class="action-btn" data-act="openBug" style="background:var(--white-08);color:#fff">${icon("bug")}${t("Report a problem")}</button>
+    <button class="action-btn plain" data-act="openBug">${icon("bug")}${t("Report a problem")}</button>
   </div>`;
 
   // Приватность и данные — честный текст о том, что происходит с видео/фото/замерами.
@@ -1818,7 +1819,7 @@ function photoSlot(dataURL, caption) {
 }
 // Форма входа (Google + email/пароль) — общая для профиля и онбординга.
 function authForm() {
-  return `<button class="action-btn" data-act="googleAuth" style="background:#fff;color:#1f1f1f">${t("Continue with Google")}</button>
+  return `<button class="action-btn" data-act="googleAuth" style="background:#fff;color:#1f1f1f;box-shadow:none;backdrop-filter:none;-webkit-backdrop-filter:none">${t("Continue with Google")}</button>
     <div class="form-footer" style="text-align:center;opacity:.5">${t("or")}</div>
     <label class="form-label" for="auth-email">${t("Email")}</label>
     <input class="field" id="auth-email" type="email" inputmode="email" autocomplete="email" placeholder="${esc(t("Email"))}">
