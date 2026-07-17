@@ -31,6 +31,7 @@ async function openSession(challengeId, startExercise) {
     </div>
     <div class="sess-countdown" id="sess-countdown" aria-live="assertive"></div>
     <div class="sess-rest" id="sess-rest" hidden>
+      <div class="sess-rest-counter" id="sess-rest-counter"></div>
       <div class="sess-rest-timer">
         <svg viewBox="0 0 220 220" aria-hidden="true"><circle class="rest-track" cx="110" cy="110" r="96"></circle><circle class="rest-progress" id="sess-rest-progress" cx="110" cy="110" r="96"></circle></svg>
         <div class="sess-rest-clock"><span>${t("Rest")}</span><strong id="sess-rest-time">01:30</strong></div>
@@ -57,6 +58,7 @@ async function openSession(challengeId, startExercise) {
   const completeTotalEl = overlay.querySelector("#sess-complete-total");
   const completeSummaryEl = overlay.querySelector("#sess-complete-summary");
   const restActionsEl = overlay.querySelector("#sess-rest-actions");
+  const restCounterEl = overlay.querySelector("#sess-rest-counter");
   const countersEl = overlay.querySelector("#sess-counters");
   const bottomEl = overlay.querySelector("#sess-bottom");
 
@@ -154,7 +156,7 @@ async function openSession(challengeId, startExercise) {
       restCuePlayed = true;
       wsfx("transition");
       haptic([0, 60, 50, 100]);
-      restEl.classList.add("ready");
+      resumeAfterRest(); // таймер вышел — следующий сет стартует сам
     }
   }
   function renderRestActions(completed) {
@@ -177,6 +179,9 @@ async function openSession(challengeId, startExercise) {
     restCuePlayed = false;
     restEl.classList.remove("ready", "complete");
     restEl.hidden = false;
+    overlay.classList.add("resting");
+    const rg = goals[active], rTotal = totalFor(rg, resultFor(rg.exercise));
+    restCounterEl.textContent = `${Exercise.displayName(rg.exercise)}  ${rTotal}${rg.target != null ? ` / ${rg.target}` : ""}`;
     restSetEl.textContent = t("Set %lld completed", setReps.length);
     restRepsEl.textContent = t("%lld reps", reps);
     restTotalEl.textContent = t("Total %@", `${dayRepTotal()} / ${goals.reduce((sum, goal) => sum + (goal.target || 0), 0)}`);
@@ -192,6 +197,7 @@ async function openSession(challengeId, startExercise) {
     resting = false;
     restEl.hidden = true;
     restEl.classList.remove("ready");
+    overlay.classList.remove("resting");
     setStartTotal = sessionRepTotal();
     sess.setCountingEnabled(true);
     prevBottomKey = "";
@@ -202,6 +208,7 @@ async function openSession(challengeId, startExercise) {
     restEl.classList.remove("ready");
     restEl.classList.add("complete");
     restEl.hidden = false;
+    overlay.classList.add("resting");
     restProgressEl.style.strokeDashoffset = "0";
     completeTotalEl.textContent = `${dayRepTotal()} / ${goals.reduce((sum, goal) => sum + (goal.target || 0), 0)}`;
     const total = setReps.reduce((sum, reps) => sum + reps, 0);
@@ -216,6 +223,7 @@ async function openSession(challengeId, startExercise) {
     completionDismissed = true;
     restEl.hidden = true;
     restEl.classList.remove("complete");
+    overlay.classList.remove("resting");
     setStartTotal = sessionRepTotal();
     sess.setCountingEnabled(true);
     prevBottomKey = "";
