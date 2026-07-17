@@ -4,7 +4,7 @@
 "use strict";
 
 // Версия оболочки — держать в синхроне с CACHE в sw.js; уходит в баг-репорты.
-const APP_VERSION = "v75";
+const APP_VERSION = "v76";
 // Последняя JS-ошибка — прикладываем к баг-репорту, чтобы сразу видеть причину.
 let lastError = "";
 window.addEventListener("error", (e) => {
@@ -2879,6 +2879,7 @@ root.addEventListener("click", async (e) => {
   const [cmd, arg] = act.split(":");
   sfx(sfxFor(cmd, arg)); // звук нажатия — свой для разных действий
   if (el.classList.contains("action-btn")) haptic(8); // лёгкий тактильный отклик на первичных кнопках
+  await pressFinish(); // дать сжатию доиграть ДО действия — иначе render снесёт пульс
 
   if (act === "closeSheetBg") { if (e.target.classList.contains("sheet-backdrop")) closeSheet(); return; }
 
@@ -3382,8 +3383,11 @@ document.addEventListener("touchstart", function () {}, { passive: true });
 // Полный цикл нажатия независимо от длины тапа: :active гаснет при отпускании,
 // поэтому класс .pressed (те же стили, см. :is(:active, .pressed) в styles.css)
 // держим минимум PRESS_HOLD мс — сжатие доигрывает, потом полностью играет возврат.
-const PRESS_HOLD = 360;        // держать в синхроне с --motion-press
+// Действие клика при этом ждёт конца сжатия (await pressFinish() в диспетчере) —
+// иначе render/View Transition снесёт DOM раньше, чем пульс успеет показаться.
+const PRESS_HOLD = 200;        // держать в синхроне с --motion-press
 const PRESS_TOUCH_DELAY = 50;  // не пульсировать при старте скролла
+const PRESS_RETURN_LAG = 80;   // возврат стартует после диспетчеризации и перерисовки
 const PRESSABLE = "button, [data-act], [data-sess], [data-err]";
 const press = { el: null, sel: "", start: 0, pending: null, applyTimer: 0, releaseTimer: 0 };
 // «Тот же» элемент в перерисованном DOM ищем по data-атрибутам действия.
@@ -3408,11 +3412,19 @@ function pressRelease() {
     if (press.pending) { pressApply(press.pending); press.pending = null; }
   }
   if (!press.el) return;
-  const wait = Math.max(0, PRESS_HOLD - (performance.now() - press.start));
+  // Возврат — после конца сжатия + запас на диспетчеризацию/перерисовку:
+  // к этому моменту пульс уже перенесён на новый DOM (см. патч render).
+  const wait = Math.max(0, PRESS_HOLD - (performance.now() - press.start)) + PRESS_RETURN_LAG;
   press.releaseTimer = setTimeout(() => {
     if (press.el) press.el.classList.remove("pressed");
     press.el = null; press.sel = ""; press.releaseTimer = 0;
   }, wait);
+}
+// Диспетчер ждёт этим промисом конца фазы сжатия — нажатие видно ДО смены экрана.
+function pressFinish() {
+  if (!press.el) return Promise.resolve();
+  const wait = Math.max(0, PRESS_HOLD - (performance.now() - press.start));
+  return wait ? new Promise((res) => setTimeout(res, wait)) : Promise.resolve();
 }
 document.addEventListener("pointerdown", (e) => {
   pressCancel();

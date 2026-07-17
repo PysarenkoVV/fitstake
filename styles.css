@@ -40,7 +40,7 @@
   --ease-standard: cubic-bezier(0.2, 0, 0, 1);
   --ease-in: cubic-bezier(0.4, 0, 1, 1);     /* выходы: уезд/исчезание */
   --ease-press: cubic-bezier(0.4, 0, 0.2, 1); /* нажатия: мягкий старт и завершение, без рывка */
-  --motion-press: 360ms;
+  --motion-press: 200ms;
   --motion-control: 180ms;
   --motion-sheet: 260ms;
   --motion-page: 280ms;
