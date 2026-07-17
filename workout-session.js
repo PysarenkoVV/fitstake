@@ -34,9 +34,11 @@ async function openSession(challengeId, startExercise) {
       <div class="sess-rest-timer">
         <svg viewBox="0 0 220 220" aria-hidden="true"><circle class="rest-track" cx="110" cy="110" r="96"></circle><circle class="rest-progress" id="sess-rest-progress" cx="110" cy="110" r="96"></circle></svg>
         <div class="sess-rest-clock"><span>${t("Rest")}</span><strong id="sess-rest-time">01:30</strong></div>
+        <div class="sess-complete-clock"><span class="sess-complete-check">${icon("check")}</span><strong>${t("Day complete")}</strong><b id="sess-complete-total"></b></div>
       </div>
       <div class="sess-rest-summary"><div class="sess-rest-title"><span>${icon("check")}</span><strong id="sess-rest-set"></strong></div><span id="sess-rest-reps"></span><div class="sess-rest-total" id="sess-rest-total"></div></div>
-      <div class="sess-rest-actions"><button class="sess-rest-plus" data-sess="restPlus">${t("+30 sec")}</button><button class="sess-rest-next" data-sess="restResume"><span class="sess-stop-mark"></span>${t("Start next set")}</button></div>
+      <div class="sess-complete-summary" id="sess-complete-summary"></div>
+      <div class="sess-rest-actions" id="sess-rest-actions"></div>
     </div>
     <div class="hud"><div id="sess-counters"></div><div id="sess-bottom" style="width:100%;display:flex;flex-direction:column;align-items:center;gap:10px"></div></div>`;
   document.body.appendChild(overlay);
@@ -52,6 +54,9 @@ async function openSession(challengeId, startExercise) {
   const restSetEl = overlay.querySelector("#sess-rest-set");
   const restRepsEl = overlay.querySelector("#sess-rest-reps");
   const restTotalEl = overlay.querySelector("#sess-rest-total");
+  const completeTotalEl = overlay.querySelector("#sess-complete-total");
+  const completeSummaryEl = overlay.querySelector("#sess-complete-summary");
+  const restActionsEl = overlay.querySelector("#sess-rest-actions");
   const countersEl = overlay.querySelector("#sess-counters");
   const bottomEl = overlay.querySelector("#sess-bottom");
 
@@ -117,6 +122,7 @@ async function openSession(challengeId, startExercise) {
   let workoutStartedAt = 0, workoutStoppedAt = 0, lastClockText = "";
   let setStartTotal = 0, setReps = [];
   let resting = false, restStartedAt = 0, restEndsAt = 0, restDurationMs = 90000, restTotalMs = 0, restCuePlayed = false;
+  let completionShown = false, completionDismissed = false;
 
   const sessionRepTotal = () => sess.snapshot.results.reduce((sum, result) => sum + result.repCount, 0);
   const currentSetReps = () => Math.max(0, sessionRepTotal() - setStartTotal);
@@ -151,6 +157,15 @@ async function openSession(challengeId, startExercise) {
       restEl.classList.add("ready");
     }
   }
+  function renderRestActions(completed) {
+    restActionsEl.classList.toggle("complete", completed);
+    restActionsEl.innerHTML = completed
+      ? `<button class="sess-rest-action sess-rest-primary" data-sess="finish">${icon("check")}${t("Finish workout")}</button>
+         <button class="sess-rest-action sess-rest-secondary" data-sess="restExtra">${icon("plus")}${t("Extra set")}</button>`
+      : `<button class="sess-rest-action sess-rest-primary" data-sess="restResume">${iconF("play")}${t("Start next set")}</button>
+         <button class="sess-rest-action sess-rest-secondary" data-sess="restPlus">${t("+30 sec")}</button>
+         <button class="sess-rest-action sess-rest-secondary" data-sess="finish"><span class="sess-stop-mark is-white"></span>${t("Finish workout")}</button>`;
+  }
   function startRest() {
     const reps = closeCurrentSet();
     if (!reps || resting) return;
@@ -160,11 +175,12 @@ async function openSession(challengeId, startExercise) {
     restDurationMs = 90000;
     restEndsAt = now + restDurationMs;
     restCuePlayed = false;
-    restEl.classList.remove("ready");
+    restEl.classList.remove("ready", "complete");
     restEl.hidden = false;
     restSetEl.textContent = t("Set %lld completed", setReps.length);
     restRepsEl.textContent = t("%lld reps", reps);
     restTotalEl.textContent = t("Total %@", `${dayRepTotal()} / ${goals.reduce((sum, goal) => sum + (goal.target || 0), 0)}`);
+    renderRestActions(false);
     sess.setCountingEnabled(false);
     updateRest(now);
     prevBottomKey = "";
@@ -176,6 +192,30 @@ async function openSession(challengeId, startExercise) {
     resting = false;
     restEl.hidden = true;
     restEl.classList.remove("ready");
+    setStartTotal = sessionRepTotal();
+    sess.setCountingEnabled(true);
+    prevBottomKey = "";
+  }
+  function showCompletion() {
+    if (completionShown) return;
+    completionShown = true;
+    restEl.classList.remove("ready");
+    restEl.classList.add("complete");
+    restEl.hidden = false;
+    restProgressEl.style.strokeDashoffset = "0";
+    completeTotalEl.textContent = `${dayRepTotal()} / ${goals.reduce((sum, goal) => sum + (goal.target || 0), 0)}`;
+    const total = setReps.reduce((sum, reps) => sum + reps, 0);
+    const average = setReps.length ? Math.round(total / setReps.length) : 0;
+    completeSummaryEl.textContent = `${t("%lld sets", setReps.length)} • ${t("avg %lld", average)}`;
+    renderRestActions(true);
+    sess.setCountingEnabled(false);
+    prevBottomKey = "";
+  }
+  function startExtraSet() {
+    if (!completionShown || completionDismissed) return;
+    completionDismissed = true;
+    restEl.hidden = true;
+    restEl.classList.remove("complete");
     setStartTotal = sessionRepTotal();
     sess.setCountingEnabled(true);
     prevBottomKey = "";
@@ -208,7 +248,11 @@ async function openSession(challengeId, startExercise) {
       const allReached = goals.every((x) => x.target != null && totalFor(x, resultFor(x.exercise)) >= x.target);
       const now = performance.now();
       if (sessionTotal > 0 && !workoutStartedAt) workoutStartedAt = now;
-      if (allReached && workoutStartedAt && !workoutStoppedAt) { workoutStoppedAt = now; closeCurrentSet(); }
+      if (allReached && workoutStartedAt && !workoutStoppedAt) {
+        workoutStoppedAt = now;
+        closeCurrentSet();
+        if (!completionDismissed) showCompletion();
+      }
       updateElapsed(now);
       updateRest(now);
 
@@ -268,7 +312,8 @@ async function openSession(challengeId, startExercise) {
       // Плашка нужна только пока камера не готова. Во время нормального счёта
       // она исчезает, чтобы текст не мелькал над человеком на каждом движении.
       let hint;
-      if (!ar || ar.status === "noBody") hint = t("Step into frame");
+      if (resting || (completionShown && !completionDismissed)) hint = null;
+      else if (!ar || ar.status === "noBody") hint = t("Step into frame");
       else if (!tracked) hint = g.exercise === "squats" ? t("Both legs must be fully in frame") : t("Both arms must be fully in frame");
       else if (!countingStarted) hint = t("Body found — hold still");
       else hint = null;
@@ -364,6 +409,7 @@ async function openSession(challengeId, startExercise) {
       }
     }
     else if (a === "restResume") resumeAfterRest();
+    else if (a === "restExtra") startExtraSet();
     else if (a === "doSave") { setBtnLoading(b, true, t("Save workout")); await endSession(true); if (document.body.contains(overlay)) setBtnLoading(b, false); }
     else if (a === "doExit") endSession(false);
     else if (a === "doContinue") { const m = overlay.querySelector(".sess-modal"); if (m) m.remove(); }

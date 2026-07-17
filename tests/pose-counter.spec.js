@@ -104,11 +104,62 @@ test("first rep starts the workout clock and finishing a set opens rest", async 
   await expect(page.locator("#sess-rest-set")).toHaveText("Set 1 completed");
   await expect(page.locator("#sess-rest-reps")).toHaveText("1 reps");
   await expect(page.locator("#sess-rest-time")).toHaveText(/01:2[89]/);
+  await expect(page.getByRole("button", { name: "Finish workout", exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Start next set", exact: true }).locator("svg.filled")).toBeVisible();
+  const pauseButtons = await page.locator(".sess-rest-action").evaluateAll((buttons) => buttons.map((button) => {
+    const rect = button.getBoundingClientRect();
+    return { width: Math.round(rect.width), height: Math.round(rect.height), fontSize: getComputedStyle(button).fontSize };
+  }));
+  expect(pauseButtons[0].height).toBe(pauseButtons[1].height);
+  expect(pauseButtons[1]).toEqual(pauseButtons[2]);
   await page.getByRole("button", { name: "+30 sec", exact: true }).click();
   await expect(page.locator("#sess-rest-time")).toHaveText(/01:5[89]/);
   await page.getByRole("button", { name: "Start next set", exact: true }).click();
   await expect(page.locator("#sess-rest")).toBeHidden();
 
+  await page.getByRole("button", { name: "Close", exact: true }).click();
+  await page.getByRole("button", { name: "Exit without saving", exact: true }).click();
+  await expect(page.locator(".session")).toHaveCount(0);
+});
+
+test("daily target completion shows finish and extra-set actions", async ({ page }) => {
+  await page.evaluate(async () => {
+    class FakePoseSession {
+      constructor(exercises) {
+        this.snapshot = { results: exercises.map((exercise) => ({ exercise, repCount: 0, status: "up", bendAngle: 170 })) };
+        window.__fakePoseSession = this;
+      }
+      setRecordingContext() {}
+      setActive() {}
+      setCountingEnabled(on) { this.countingEnabled = on; }
+      async start() {}
+      stop() {}
+      isRecording() { return false; }
+      async toggleRecording() { return false; }
+    }
+    window.PoseSession = FakePoseSession;
+    const challenge = app.challenges.find((item) => item.id === "main");
+    challenge.goals = [{ exercise: "pushups", repsPerDay: 2 }];
+    challenge.progression = { step: 0, period: "day" };
+    challenge.myTodayReps = {};
+    await window.openSession("main", "pushups");
+    window.__fakePoseSession.snapshot.results[0].repCount = 2;
+  });
+
+  await expect(page.locator("#sess-rest.complete")).toBeVisible();
+  await expect(page.getByText("Day complete", { exact: true })).toBeVisible();
+  await expect(page.locator("#sess-complete-total")).toHaveText("2 / 2");
+  await expect(page.getByRole("button", { name: "Finish workout", exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Extra set", exact: true })).toBeVisible();
+
+  const completedButtons = await page.locator(".sess-rest-action").evaluateAll((buttons) => buttons.map((button) => {
+    const rect = button.getBoundingClientRect();
+    return { width: Math.round(rect.width), height: Math.round(rect.height), fontSize: getComputedStyle(button).fontSize };
+  }));
+  expect(completedButtons[0]).toEqual(completedButtons[1]);
+
+  await page.getByRole("button", { name: "Extra set", exact: true }).click();
+  await expect(page.locator("#sess-rest")).toBeHidden();
   await page.getByRole("button", { name: "Close", exact: true }).click();
   await page.getByRole("button", { name: "Exit without saving", exact: true }).click();
   await expect(page.locator(".session")).toHaveCount(0);
