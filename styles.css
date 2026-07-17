@@ -40,7 +40,7 @@
   --ease-standard: cubic-bezier(0.2, 0, 0, 1);
   --ease-in: cubic-bezier(0.4, 0, 1, 1);     /* выходы: уезд/исчезание */
   --ease-press: cubic-bezier(0.4, 0, 0.2, 1); /* нажатия: мягкий старт и завершение, без рывка */
-  --motion-press: 360ms;
+  --motion-press: 720ms;
   --motion-control: 180ms;
   --motion-sheet: 260ms;
   --motion-page: 280ms;
@@ -82,8 +82,8 @@ body::after { width: 56vw; height: 56vw; bottom: -12vw; left: -16vw; background:
 /* Навигация — нативный View Transitions API: старый гаснет, новый всплывает снизу
    и проявляется (кроссфейд + подъём). Темп под кривую iOS; тап-обновления (без
    navRender) переходов не запускают. */
-::view-transition-old(root) { animation: vt-old 420ms var(--ease-standard) both; }
-::view-transition-new(root) { animation: vt-new 560ms var(--ease-out) both; }
+::view-transition-old(root) { animation: vt-old 840ms var(--ease-standard) both; }
+::view-transition-new(root) { animation: vt-new 1120ms var(--ease-out) both; }
 @keyframes vt-old { to { opacity: 0; } }
 @keyframes vt-new { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
 /* Во время View Transition backdrop-filter в снимках не работает — стекло на этот
