@@ -4,7 +4,7 @@
 "use strict";
 
 // Версия оболочки — держать в синхроне с CACHE в sw.js; уходит в баг-репорты.
-const APP_VERSION = "v67";
+const APP_VERSION = "v68";
 // Последняя JS-ошибка — прикладываем к баг-репорту, чтобы сразу видеть причину.
 let lastError = "";
 window.addEventListener("error", (e) => {
@@ -1010,61 +1010,12 @@ function render() {
   afterRender();
 }
 
-// Навигация получает один короткий, непрерывный переход. Анимируем только новый
-// контент: без копий старого экрана, задержек и конкурирующих CSS-анимаций.
-let pendingViewMotion = null;
-let firstPaint = true; // холодный старт приложения — один раз даём каскад появления
-function moveView(direction) {
-  pendingViewMotion = direction;
-}
-
-// Каскад появления: прямые блоки текущего экрана поднимаются и проявляются по очереди.
-// Только на навигации (табы/старт), не на каждой перерисовке — иначе список дёргается.
-function staggerEnter() {
-  const scroller = document.getElementById("scroller");
-  if (!scroller) return;
-  const blocks = Array.from(scroller.children).filter((el) => el.nodeType === 1);
-  blocks.forEach((el, i) => {
-    el.style.setProperty("--i", Math.min(i, 8)); // кап задержки, чтобы низ списка не ждал долго
-    el.classList.add("enter-item");
-    el.addEventListener("animationend", () => {
-      el.classList.remove("enter-item");
-      el.style.removeProperty("--i");
-    }, { once: true });
-  });
-}
-
-function motionView() {
-  return document.querySelector(".create-question, .create-review, #detail-scroll, #scroller");
-}
-
-function pageTransition(direction, update) {
-  const current = motionView();
-  if (!current || REDUCE_MOTION() || !current.animate) {
-    moveView(direction);
-    update();
-    render();
-    return;
-  }
-  const ghost = document.createElement("div");
-  ghost.className = "page-motion-ghost";
-  const copy = current.cloneNode(true);
-  const top = current.id === "scroller" ? window.scrollY : current.scrollTop;
-  copy.style.transform = `translate3d(0, ${-top}px, 0)`;
-  ghost.appendChild(copy);
-  ghost.style.zIndex = direction === "back" ? "42" : "40";
-  document.body.appendChild(ghost);
-
-  moveView(direction);
-  update();
-  render();
-
-  const endX = direction === "back" ? "100vw" : "-18vw";
-  const anim = ghost.animate([
-    { transform: "translate3d(0, 0, 0)", opacity: 1 },
-    { transform: `translate3d(${endX}, 0, 0)`, opacity: direction === "back" ? 1 : 0.6 }
-  ], { duration: direction === "back" ? 300 : 320, easing: "cubic-bezier(0.16, 1, 0.3, 1)", fill: "forwards" });
-  anim.finished.catch(() => {}).finally(() => ghost.remove());
+// Навигация — через нативный View Transitions API: браузер атомарно кроссфейдит
+// старый DOM в новый. Никаких клонов/призраков поверх body → слои не наложатся.
+// Фолбэк (нет поддержки / reduced motion) — обычный мгновенный render.
+function navRender() {
+  if (REDUCE_MOTION() || typeof document.startViewTransition !== "function") { render(); return; }
+  document.startViewTransition(() => render());
 }
 
 // Подсказка «на экран Домой» — только iOS Safari вне standalone; закрывается навсегда.
@@ -1081,9 +1032,9 @@ function pwaHint() {
   </div>`;
 }
 
-function go(tab) { moveView("tab"); ui.tab = tab; ui.detailId = null; ui.profileSection = null; render(); window.scrollTo(0, 0); }
-function openDetail(id) { pageTransition("forward", () => { ui.detailId = id; }); window.scrollTo(0, 0); }
-function back() { pageTransition("back", () => { ui.detailId = null; }); window.scrollTo(0, 0); }
+function go(tab) { ui.tab = tab; ui.detailId = null; ui.profileSection = null; window.scrollTo(0, 0); navRender(); }
+function openDetail(id) { ui.detailId = id; window.scrollTo(0, 0); navRender(); }
+function back() { ui.detailId = null; window.scrollTo(0, 0); navRender(); }
 function toast(msg) {
   const el = document.createElement("div");
   el.textContent = msg;
@@ -2840,26 +2791,8 @@ function openParticipant(id) {
   ui.sheet = ParticipantSheet;
   render();
 }
-// Проигрываем выход (.closing), затем чистим состояние и рендерим. Гейт REDUCE_MOTION —
-// мгновенно. Защита: если за время анимации открыли другой лист, старое не затираем.
-function playExit(selectors, apply) {
-  if (REDUCE_MOTION()) { apply(); return; }
-  const els = selectors.map((s) => document.querySelector(s)).filter(Boolean);
-  const main = els[0];
-  if (!main || main.dataset.closing) { apply(); return; }
-  let done = false;
-  const finish = () => { if (done) return; done = true; apply(); };
-  els.forEach((el) => { el.dataset.closing = "1"; el.classList.add("closing"); });
-  main.addEventListener("animationend", finish, { once: true });
-  setTimeout(finish, 360); // фолбэк, если animationend не придёт
-}
-function closeSheet() {
-  const was = ui.sheet;
-  playExit([".sheet", ".sheet-backdrop"], () => {
-    if (ui.sheet !== was) return; // за время выхода открыли другой лист — не трогаем
-    ui.sheet = null; ui.form = null; render();
-  });
-}
+// Закрытие — через View Transitions: браузер плавно уводит лист/фон, атомарно, без «застрявшего» DOM.
+function closeSheet() { ui.sheet = null; ui.form = null; navRender(); }
 function openDayComplete(c) { ui.fullId = c.id; ui.full = DayCompleteFull; render(); }
 function openShareDay(c) {
   const shareReturn = ui.full === DayCompleteFull ? "dayComplete" : "close";
@@ -2868,13 +2801,7 @@ function openShareDay(c) {
   render();
 }
 function openChallengeComplete(c) { ui.form = { challengeId: c.id, weight: store["profile.weightKg"], maxReps: store["profile.maxReps"], photo: null }; ui.full = ChallengeCompleteFull; render(); }
-function closeFull() {
-  const was = ui.full;
-  playExit([".fullscreen"], () => {
-    if (ui.full !== was) return;
-    ui.full = null; ui.form = null; render();
-  });
-}
+function closeFull() { ui.full = null; ui.form = null; navRender(); }
 
 function CameraPrepFull() {
   const rows = [
@@ -2985,8 +2912,8 @@ root.addEventListener("click", async (e) => {
     case "unlockPhotos": photosUnlocked = true; render(); return;
     case "openFriends": ui.sheet = FriendsSheet; render(); return;
     case "openNotifications": localStorage.setItem(ACTIVITY_SEEN_KEY, String(Date.now())); ui.sheet = NotificationsSheet; render(); return;
-    case "profileSection": pageTransition("forward", () => { ui.profileSection = arg; }); window.scrollTo(0, 0); return;
-    case "profileHome": pageTransition("back", () => { ui.profileSection = null; }); window.scrollTo(0, 0); return;
+    case "profileSection": ui.profileSection = arg; window.scrollTo(0, 0); navRender(); return;
+    case "profileHome": ui.profileSection = null; window.scrollTo(0, 0); navRender(); return;
     case "editProfile": profileEditing = true; profileNameDraft = null; render(); return;
     case "saveProfile": {
       const inp = document.getElementById("profile-name");
@@ -3068,22 +2995,19 @@ root.addEventListener("click", async (e) => {
   if (cmd === "createNext") {
     const f = ui.form;
     if (f.step === 0 && !selectedExercises(f).length) { toast(t("Pick at least one exercise")); return; }
-    moveView("forward");
-    if (f.editingFromReview) { f.editingFromReview = false; f.step = CREATE_LAST; render(); return; }
-    f.step++; render();
+    if (f.editingFromReview) { f.editingFromReview = false; f.step = CREATE_LAST; navRender(); return; }
+    f.step++; navRender();
     return;
   }
   if (cmd === "editCreate") {
-    moveView("back");
     ui.form.step = +arg;
     ui.form.editingFromReview = true;
-    render(); window.scrollTo(0, 0); return;
+    navRender(); window.scrollTo(0, 0); return;
   }
   if (cmd === "createBack") {
     const f = ui.form;
-    moveView("back");
-    if (f.editingFromReview) { f.editingFromReview = false; f.step = CREATE_LAST; render(); }
-    else if (f.step > 0) { f.step--; render(); } else { ui.full = null; ui.form = null; render(); }
+    if (f.editingFromReview) { f.editingFromReview = false; f.step = CREATE_LAST; navRender(); }
+    else if (f.step > 0) { f.step--; navRender(); } else { ui.full = null; ui.form = null; navRender(); }
     return;
   }
   if (cmd === "saveChallenge") {
@@ -3099,8 +3023,8 @@ root.addEventListener("click", async (e) => {
     return;
   }
   if (cmd === "openCreated") {
-    const id = ui.createdChallengeId;
-    pageTransition("forward", () => { ui.full = null; ui.tab = "challenges"; ui.detailId = id; });
+    ui.full = null; ui.tab = "challenges"; ui.detailId = ui.createdChallengeId;
+    navRender();
     return;
   }
   if (cmd === "savePreset") {
@@ -3296,29 +3220,6 @@ function afterRender() {
   afterRender._fullOpen = !!_full;
   // Count-up цифр — только при первом появлении экрана (не на каждой перерисовке).
   if (_fullJustOpened) _full.querySelectorAll("[data-countup]").forEach(animateCountUp);
-
-  if ((pendingViewMotion || firstPaint) && !REDUCE_MOTION()) {
-    const direction = pendingViewMotion || "tab"; // холодный старт — как таб (каскад карточек)
-    pendingViewMotion = null;
-    firstPaint = false;
-    const view = motionView();
-    if (view && view.animate && (direction === "forward" || direction === "back")) {
-      // Детали (push): слайд всего экрана из-за края.
-      const x = direction === "forward" ? "100vw" : "-18vw";
-      view.classList.add("page-motion-entering");
-      const enterAnim = view.animate([
-        { opacity: 1, transform: `translate3d(${x}, 0, 0)` },
-        { opacity: 1, transform: "translate3d(0, 0, 0)" }
-      ], { duration: 320, easing: "cubic-bezier(0.16, 1, 0.3, 1)" });
-      enterAnim.finished.catch(() => {}).finally(() => view.classList.remove("page-motion-entering"));
-    } else if (view === document.getElementById("scroller") || direction === "tab") {
-      // Табы/холодный старт: каскад прямых блоков экрана (подъём + fade).
-      staggerEnter();
-    }
-  } else {
-    pendingViewMotion = null;
-    firstPaint = false;
-  }
 
   document.querySelectorAll(".wheel").forEach((w) => {
     const key = w.dataset.wheel, min = +w.dataset.min, max = +w.dataset.max;
