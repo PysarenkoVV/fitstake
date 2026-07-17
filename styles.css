@@ -39,7 +39,8 @@
   --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
   --ease-standard: cubic-bezier(0.2, 0, 0, 1);
   --ease-in: cubic-bezier(0.4, 0, 1, 1);     /* выходы: уезд/исчезание */
-  --motion-press: 280ms;
+  --ease-press: cubic-bezier(0.4, 0, 0.2, 1); /* нажатия: мягкий старт и завершение, без рывка */
+  --motion-press: 360ms;
   --motion-control: 180ms;
   --motion-sheet: 260ms;
   --motion-page: 280ms;
@@ -209,7 +210,7 @@ img { max-width: 100%; }
   font-weight: 900;
   font-stretch: 75%;
   font-size: 18px;
-  transition: transform var(--motion-press) var(--ease-out);
+  transition: transform var(--motion-press) var(--ease-press);
 }
 .action-btn:active { transform: scale(0.975); background: rgba(255, 94, 31, 0.3); }
 .action-btn.money { background: var(--glass-money); box-shadow: inset 0 0 0 1px var(--ring-money); }
@@ -226,7 +227,7 @@ img { max-width: 100%; }
 button, .card, .entry-row, .picker-row, .day-chip, .bug-chip, .reaction-chip,
 .duration-option, .miss-option, .social-stat, .segmented button,
 .header-icon-btn, .stepper button, .preset-stepper button, .stepper input, .navbar .icon-btn {
-  transition: transform var(--motion-press) var(--ease-out), filter var(--motion-press) var(--ease-out);
+  transition: transform var(--motion-press) var(--ease-press), filter var(--motion-press) var(--ease-press);
 }
 /* Фолбэк для всех кнопок (текстовые, назад, опции). */
 button:active:not(:disabled) { transform: scale(0.97); filter: brightness(0.92); }
@@ -241,17 +242,17 @@ button:active:not(:disabled) { transform: scale(0.97); filter: brightness(0.92);
 /* Таб-бар: жмём всю кнопку целиком (метка + иконка вместе). */
 .tabbar button:active { transform: scale(0.9); }
 /* Камера — эталон, поведение своих контролов сохраняем. */
-.cam-btn, .sess-nav button { transition: transform var(--motion-press) var(--ease-out); }
+.cam-btn, .sess-nav button { transition: transform var(--motion-press) var(--ease-press); }
 .cam-btn:active, .sess-nav button:active { transform: scale(0.9); }
 /* Строка лидерборда (кликабельный div) — press как крупная строка. */
-.lb-row { border-radius: 12px; transition: transform var(--motion-press) var(--ease-out), filter var(--motion-press) var(--ease-out); }
+.lb-row { border-radius: 12px; transition: transform var(--motion-press) var(--ease-press), filter var(--motion-press) var(--ease-press); }
 .lb-row:active { transform: scale(0.98); filter: brightness(0.92); }
 /* Карточка челленджа жмётся как единое целое: контейнер не масштабируем (иначе двойное
    сжатие с внутренней кнопкой), основную зону и play-FAB жмём раздельно. */
 .challenge-card.card:active { transform: none; filter: none; }
-.challenge-card-main { transition: transform var(--motion-press) var(--ease-out), filter var(--motion-press) var(--ease-out); }
+.challenge-card-main { transition: transform var(--motion-press) var(--ease-press), filter var(--motion-press) var(--ease-press); }
 .challenge-card-main:active { transform: scale(0.98); filter: brightness(0.94); }
-.card-play { transition: transform var(--motion-press) var(--ease-out); }
+.card-play { transition: transform var(--motion-press) var(--ease-press); }
 .card-play:active { transform: scale(0.9); }
 .action-btn:disabled { opacity: 0.4; }
 .action-btn svg { width: 20px; height: 20px; }
