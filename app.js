@@ -4,7 +4,7 @@
 "use strict";
 
 // Версия оболочки — держать в синхроне с CACHE в sw.js; уходит в баг-репорты.
-const APP_VERSION = "v69";
+const APP_VERSION = "v70";
 // Последняя JS-ошибка — прикладываем к баг-репорту, чтобы сразу видеть причину.
 let lastError = "";
 window.addEventListener("error", (e) => {
@@ -1014,12 +1014,14 @@ function render() {
 // Навигация — через нативный View Transitions API: браузер атомарно кроссфейдит
 // старый DOM в новый. Никаких клонов/призраков поверх body → слои не наложатся.
 // Фолбэк (нет поддержки / reduced motion) — обычный мгновенный render.
-function navRender() {
-  if (REDUCE_MOTION() || typeof document.startViewTransition !== "function") { render(); return; }
+// before() выполняется ВНУТРИ перехода (после снятия старого кадра, перед render):
+// туда уносим сброс скролла, иначе старый кадр снимется уже прокрученным наверх.
+function navRender(before) {
+  if (REDUCE_MOTION() || typeof document.startViewTransition !== "function") { if (before) before(); render(); return; }
   // На время перехода стекло непрозрачно: в VT-снимках backdrop-filter не работает,
   // иначе контент просвечивает и блюр «догоняет» после анимации (правило .vt в styles.css).
   document.documentElement.classList.add("vt");
-  const vt = document.startViewTransition(() => render());
+  const vt = document.startViewTransition(() => { if (before) before(); render(); });
   vt.finished.catch(() => {}).finally(() => document.documentElement.classList.remove("vt"));
 }
 
@@ -1037,9 +1039,9 @@ function pwaHint() {
   </div>`;
 }
 
-function go(tab) { ui.tab = tab; ui.detailId = null; ui.profileSection = null; window.scrollTo(0, 0); navRender(); }
-function openDetail(id) { ui.detailId = id; window.scrollTo(0, 0); navRender(); }
-function back() { ui.detailId = null; window.scrollTo(0, 0); navRender(); }
+function go(tab) { ui.tab = tab; ui.detailId = null; ui.profileSection = null; navRender(() => window.scrollTo(0, 0)); }
+function openDetail(id) { ui.detailId = id; navRender(() => window.scrollTo(0, 0)); }
+function back() { ui.detailId = null; navRender(() => window.scrollTo(0, 0)); }
 function toast(msg) {
   const el = document.createElement("div");
   el.textContent = msg;
@@ -1144,7 +1146,7 @@ function ChallengeCard(c, withPlay) {
 
   const canPlay = joined && !C.isTodayDone(c) && !challengeEnded(c);
   const playBtn = canPlay ? (withPlay
-    ? `<button data-act="play:${c.id}" style="width:44px;height:44px;border-radius:50%;background:var(--accent);color:#000;display:flex;align-items:center;justify-content:center">${iconF("play")}</button>`
+    ? `<button class="card-play" data-act="play:${c.id}" style="width:44px;height:44px;border-radius:50%;background:var(--accent);color:#000;display:flex;align-items:center;justify-content:center">${iconF("play")}</button>`
     : `<span style="width:44px;height:44px;border-radius:50%;background:var(--accent);color:#000;display:flex;align-items:center;justify-content:center">${iconF("play")}</span>`) : "";
 
   return `<div class="card challenge-card ${doneBorder}"><button class="challenge-card-main" data-act="open:${c.id}">
@@ -1543,7 +1545,7 @@ function participantsCard(c) {
   const tappable = Sync.enabled;
   const row = (p, rank) => {
     const done = p.todayReps >= norm;
-    return `<div ${tappable ? `data-act="participant:${p.id}" ` : ""}class="row gap12" style="opacity:${p.state === "eliminated" ? 0.45 : 1}${tappable ? ";cursor:pointer" : ""}">
+    return `<div ${tappable ? `data-act="participant:${p.id}" ` : ""}class="row gap12${tappable ? " lb-row" : ""}" style="opacity:${p.state === "eliminated" ? 0.45 : 1}${tappable ? ";cursor:pointer" : ""}">
       <div class="rank" style="width:28px">${rankBadge(rank)}</div>
       <div class="avatar">${p.isMe ? icon("person") : esc(p.name.slice(0, 1))}</div>
       <div style="flex:1;display:flex;flex-direction:column;gap:6px">
@@ -2917,8 +2919,8 @@ root.addEventListener("click", async (e) => {
     case "unlockPhotos": photosUnlocked = true; render(); return;
     case "openFriends": ui.sheet = FriendsSheet; render(); return;
     case "openNotifications": localStorage.setItem(ACTIVITY_SEEN_KEY, String(Date.now())); ui.sheet = NotificationsSheet; render(); return;
-    case "profileSection": ui.profileSection = arg; window.scrollTo(0, 0); navRender(); return;
-    case "profileHome": ui.profileSection = null; window.scrollTo(0, 0); navRender(); return;
+    case "profileSection": ui.profileSection = arg; navRender(() => window.scrollTo(0, 0)); return;
+    case "profileHome": ui.profileSection = null; navRender(() => window.scrollTo(0, 0)); return;
     case "editProfile": profileEditing = true; profileNameDraft = null; render(); return;
     case "saveProfile": {
       const inp = document.getElementById("profile-name");
@@ -3007,7 +3009,7 @@ root.addEventListener("click", async (e) => {
   if (cmd === "editCreate") {
     ui.form.step = +arg;
     ui.form.editingFromReview = true;
-    navRender(); window.scrollTo(0, 0); return;
+    navRender(() => window.scrollTo(0, 0)); return;
   }
   if (cmd === "createBack") {
     const f = ui.form;
@@ -3365,6 +3367,10 @@ render = function () {
   window.scrollTo(0, winTop);
   saveApp();
 };
+
+// iOS Safari применяет :active к не-кнопкам (кликабельным div) только при наличии
+// touch-слушателя — даём пустой, чтобы press-анимация работала на всех элементах.
+document.addEventListener("touchstart", function () {}, { passive: true });
 
 // Escape закрывает открытый лист — тот же выход, что и тап по фону.
 document.addEventListener("keydown", (e) => {
