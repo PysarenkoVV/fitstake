@@ -212,15 +212,15 @@ img { max-width: 100%; }
   font-size: 18px;
   transition: transform var(--motion-press) var(--ease-press);
 }
-.action-btn:active { transform: scale(0.975); background: rgba(255, 94, 31, 0.3); }
+.action-btn:is(:active, .pressed) { transform: scale(0.975); background: rgba(255, 94, 31, 0.3); }
 .action-btn.money { background: var(--glass-money); box-shadow: inset 0 0 0 1px var(--ring-money); }
-.action-btn.money:active { background: rgba(77, 194, 128, 0.3); }
+.action-btn.money:is(:active, .pressed) { background: rgba(77, 194, 128, 0.3); }
 /* Вторичная кнопка: нейтральное стекло без акцентного кольца и блюра. */
 .action-btn.plain { background: var(--glass-input); box-shadow: inset 0 0 0 1px var(--ring); backdrop-filter: none; -webkit-backdrop-filter: none; }
-.action-btn.plain:active { background: var(--white-14); }
+.action-btn.plain:is(:active, .pressed) { background: var(--white-14); }
 /* Разрушающее действие: красное стекло. */
 .action-btn.danger { background: rgba(255, 69, 58, 0.2); box-shadow: inset 0 0 0 1px rgba(255, 69, 58, 0.8); }
-.action-btn.danger:active { background: rgba(255, 69, 58, 0.3); }
+.action-btn.danger:is(:active, .pressed) { background: rgba(255, 69, 58, 0.3); }
 
 /* Единая система нажатий: сжатие + лёгкое «вдавливание» стекла (brightness),
    мягкий возврат по кривой iOS. Крупные тапаемые — .97, мелкие/круглые — .93. */
@@ -230,30 +230,30 @@ button, .card, .entry-row, .picker-row, .day-chip, .bug-chip, .reaction-chip,
   transition: transform var(--motion-press) var(--ease-press), filter var(--motion-press) var(--ease-press);
 }
 /* Фолбэк для всех кнопок (текстовые, назад, опции). */
-button:active:not(:disabled) { transform: scale(0.97); filter: brightness(0.92); }
+button:is(:active, .pressed):not(:disabled) { transform: scale(0.97); filter: brightness(0.92); }
 /* Крупные тапаемые карточки/строки (в т.ч. не-button). */
-.card:active, .entry-row:active, .picker-row:active,
-.duration-option:active, .miss-option:active, .social-stat:active,
-.segmented button:active { transform: scale(0.97); filter: brightness(0.92); }
+.card:is(:active, .pressed), .entry-row:is(:active, .pressed), .picker-row:is(:active, .pressed),
+.duration-option:is(:active, .pressed), .miss-option:is(:active, .pressed), .social-stat:is(:active, .pressed),
+.segmented button:is(:active, .pressed) { transform: scale(0.97); filter: brightness(0.92); }
 /* Мелкие/круглые контролы и чипы — сжимаем сильнее. */
-.header-icon-btn:active:not(:disabled), .navbar .icon-btn:active:not(:disabled),
-.stepper button:active:not(:disabled), .preset-stepper button:active:not(:disabled),
-.day-chip:active, .bug-chip:active, .reaction-chip:active { transform: scale(0.93); filter: brightness(0.9); }
+.header-icon-btn:is(:active, .pressed):not(:disabled), .navbar .icon-btn:is(:active, .pressed):not(:disabled),
+.stepper button:is(:active, .pressed):not(:disabled), .preset-stepper button:is(:active, .pressed):not(:disabled),
+.day-chip:is(:active, .pressed), .bug-chip:is(:active, .pressed), .reaction-chip:is(:active, .pressed) { transform: scale(0.93); filter: brightness(0.9); }
 /* Таб-бар: жмём всю кнопку целиком (метка + иконка вместе). */
-.tabbar button:active { transform: scale(0.9); }
+.tabbar button:is(:active, .pressed) { transform: scale(0.9); }
 /* Камера — эталон, поведение своих контролов сохраняем. */
 .cam-btn, .sess-nav button { transition: transform var(--motion-press) var(--ease-press); }
-.cam-btn:active, .sess-nav button:active { transform: scale(0.9); }
+.cam-btn:is(:active, .pressed), .sess-nav button:is(:active, .pressed) { transform: scale(0.9); }
 /* Строка лидерборда (кликабельный div) — press как крупная строка. */
 .lb-row { border-radius: 12px; transition: transform var(--motion-press) var(--ease-press), filter var(--motion-press) var(--ease-press); }
-.lb-row:active { transform: scale(0.98); filter: brightness(0.92); }
+.lb-row:is(:active, .pressed) { transform: scale(0.98); filter: brightness(0.92); }
 /* Карточка челленджа жмётся ЦЕЛИКОМ: масштабируем весь контейнер, внутреннюю кнопку
    отдельно не жмём (иначе двойное сжатие), play-FAB жмётся сильнее поверх. */
 .challenge-card { transition: transform var(--motion-press) var(--ease-press), filter var(--motion-press) var(--ease-press); }
-.challenge-card.card:active { transform: scale(0.98); filter: brightness(0.94); }
-.challenge-card-main:active { transform: none; filter: none; }
+.challenge-card.card:is(:active, .pressed) { transform: scale(0.98); filter: brightness(0.94); }
+.challenge-card-main:is(:active, .pressed) { transform: none; filter: none; }
 .card-play { transition: transform var(--motion-press) var(--ease-press); }
-.card-play:active { transform: scale(0.9); }
+.card-play:is(:active, .pressed) { transform: scale(0.9); }
 .action-btn:disabled { opacity: 0.4; }
 .action-btn svg { width: 20px; height: 20px; }
 
@@ -717,7 +717,7 @@ button:active:not(:disabled) { transform: scale(0.97); filter: brightness(0.92);
 .create-review-copy { min-width: 0; flex: 1; display: flex; flex-direction: column; gap: 4px; }
 .create-review-label { color: var(--text-secondary); font-size: 12px; font-weight: 650; }
 .create-review-value { color: #fff; font-size: 14px; font-weight: 700; line-height: 1.25; text-wrap: pretty; }
-.create-review-card:active { transform: scale(.98); }
+.create-review-card:is(:active, .pressed) { transform: scale(.98); }
 .create-review-card:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .create-rule-block { padding: 14px; border-radius: 16px; background: var(--glass-panel); box-shadow: inset 0 0 0 1px var(--ring); display: flex; flex-direction: column; gap: 12px; }
 .create-rule-heading { display: flex; flex-direction: column; gap: 5px; }
@@ -748,7 +748,7 @@ button:active:not(:disabled) { transform: scale(0.97); filter: brightness(0.92);
   color: #fff; font-size: 14px; font-weight: 600; line-height: 1;
 }
 .bug-chip.sel { background: rgba(255, 94, 31, 0.16); border-color: var(--accent); color: var(--accent); }
-.bug-chip:active { transform: scale(0.92); }
+.bug-chip:is(:active, .pressed) { transform: scale(0.92); }
 .bug-note {
   width: 100%; min-height: 76px; resize: vertical;
   padding: 13px 14px; border-radius: 12px;

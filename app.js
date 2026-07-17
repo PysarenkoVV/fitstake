@@ -4,7 +4,7 @@
 "use strict";
 
 // Версия оболочки — держать в синхроне с CACHE в sw.js; уходит в баг-репорты.
-const APP_VERSION = "v74";
+const APP_VERSION = "v75";
 // Последняя JS-ошибка — прикладываем к баг-репорту, чтобы сразу видеть причину.
 let lastError = "";
 window.addEventListener("error", (e) => {
@@ -3365,12 +3365,69 @@ render = function () {
   if (detailTop != null) { const d = document.querySelector("#detail-scroll"); if (d) d.scrollTop = detailTop; }
   if (fullTop != null) { const f = document.querySelector(".fullscreen"); if (f) f.scrollTop = fullTop; }
   window.scrollTo(0, winTop);
+  // Перерисовка убила нажатый элемент — переносим пульс на его копию в новом DOM,
+  // чтобы анимация нажатия доиграла до конца (степперы, тоглы и т.п.).
+  if (press.el && !press.el.isConnected && press.sel) {
+    const again = document.querySelector(press.sel);
+    if (again) { again.classList.add("pressed"); press.el = again; }
+    else { press.el = null; press.sel = ""; }
+  }
   saveApp();
 };
 
 // iOS Safari применяет :active к не-кнопкам (кликабельным div) только при наличии
 // touch-слушателя — даём пустой, чтобы press-анимация работала на всех элементах.
 document.addEventListener("touchstart", function () {}, { passive: true });
+
+// Полный цикл нажатия независимо от длины тапа: :active гаснет при отпускании,
+// поэтому класс .pressed (те же стили, см. :is(:active, .pressed) в styles.css)
+// держим минимум PRESS_HOLD мс — сжатие доигрывает, потом полностью играет возврат.
+const PRESS_HOLD = 360;        // держать в синхроне с --motion-press
+const PRESS_TOUCH_DELAY = 50;  // не пульсировать при старте скролла
+const PRESSABLE = "button, [data-act], [data-sess], [data-err]";
+const press = { el: null, sel: "", start: 0, pending: null, applyTimer: 0, releaseTimer: 0 };
+// «Тот же» элемент в перерисованном DOM ищем по data-атрибутам действия.
+function pressSelector(el) {
+  const parts = [];
+  for (const a of ["data-act", "data-sess", "data-err", "data-key", "data-store", "data-by"]) {
+    const v = el.getAttribute(a);
+    if (v != null) parts.push(`[${a}="${v.replace(/"/g, '\\"')}"]`);
+  }
+  return parts.join("");
+}
+function pressApply(el) { el.classList.add("pressed"); press.el = el; press.start = performance.now(); }
+function pressCancel() { // скролл/новое нажатие — снимаем сразу, без пульса
+  clearTimeout(press.applyTimer); clearTimeout(press.releaseTimer);
+  press.applyTimer = 0; press.releaseTimer = 0; press.pending = null;
+  if (press.el) press.el.classList.remove("pressed");
+  press.el = null; press.sel = "";
+}
+function pressRelease() {
+  if (press.applyTimer) { // тап быстрее задержки — всё равно полный цикл
+    clearTimeout(press.applyTimer); press.applyTimer = 0;
+    if (press.pending) { pressApply(press.pending); press.pending = null; }
+  }
+  if (!press.el) return;
+  const wait = Math.max(0, PRESS_HOLD - (performance.now() - press.start));
+  press.releaseTimer = setTimeout(() => {
+    if (press.el) press.el.classList.remove("pressed");
+    press.el = null; press.sel = ""; press.releaseTimer = 0;
+  }, wait);
+}
+document.addEventListener("pointerdown", (e) => {
+  pressCancel();
+  let el = e.target.closest(PRESSABLE);
+  if (!el || el.disabled || el.classList.contains("sheet-backdrop")) return;
+  // Карточка челленджа жмётся целиком — переносим пульс на контейнер.
+  if (el.classList.contains("challenge-card-main")) el = el.closest(".challenge-card") || el;
+  press.sel = pressSelector(el);
+  if (e.pointerType === "touch") {
+    press.pending = el;
+    press.applyTimer = setTimeout(() => { press.applyTimer = 0; pressApply(press.pending); press.pending = null; }, PRESS_TOUCH_DELAY);
+  } else pressApply(el);
+}, { capture: true, passive: true });
+document.addEventListener("pointerup", pressRelease, { capture: true, passive: true });
+document.addEventListener("pointercancel", pressCancel, { capture: true, passive: true });
 
 // Escape закрывает открытый лист — тот же выход, что и тап по фону.
 document.addEventListener("keydown", (e) => {
