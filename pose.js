@@ -584,7 +584,10 @@ async function shareVideo(blob) {
   const ext = blob.type.includes("mp4") ? "mp4" : "webm";
   const file = new File([blob], "fitstake." + ext, { type: blob.type });
   if (navigator.canShare && navigator.canShare({ files: [file] })) {
-    try { await navigator.share({ files: [file], title: "FitStake" }); return; } catch {}
+    // Отмена (свайп вниз) — не повод скачивать: download-фолбэк открывал в PWA
+    // превью Safari, после которого iOS оставлял камеру замороженной.
+    try { await navigator.share({ files: [file], title: "FitStake" }); } catch {}
+    return;
   }
   const a = document.createElement("a");
   a.href = URL.createObjectURL(blob);

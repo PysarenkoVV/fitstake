@@ -94,6 +94,32 @@ test("push-ups at an angle to the camera count via the 3D elbow angle", async ({
   expect(result).toEqual({ with3d: 1, flat2d: 0 });
 });
 
+test("cancelling the share sheet does not fall back to a file download", async ({ page }) => {
+  const result = await page.evaluate(async () => {
+    const blob = new Blob(["x"], { type: "video/mp4" });
+    let clicks = 0;
+    const origClick = HTMLAnchorElement.prototype.click;
+    HTMLAnchorElement.prototype.click = function () { clicks++; };
+    try {
+      // Web Share есть, но пользователь отменил (свайп вниз) → скачивать нельзя.
+      navigator.canShare = () => true;
+      navigator.share = () => Promise.reject(new DOMException("Abort", "AbortError"));
+      await window.shareVideo(blob);
+      const withShare = clicks;
+
+      // Web Share недоступен (десктоп) → download-фолбэк остаётся живым.
+      clicks = 0;
+      navigator.canShare = undefined;
+      await window.shareVideo(blob);
+      const withoutShare = clicks;
+      return { withShare, withoutShare };
+    } finally {
+      HTMLAnchorElement.prototype.click = origClick;
+    }
+  });
+  expect(result).toEqual({ withShare: 0, withoutShare: 1 });
+});
+
 test("recorded workout frame includes exercise, target, challenge, and progress", async ({ page }) => {
   const frame = await page.evaluate(() => {
     const size = { width: 720, height: 1280 };

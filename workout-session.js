@@ -90,9 +90,10 @@ async function openSession(challengeId, startExercise) {
     const tk2 = sess.videoTrack();
     if (!tk2 || tk2.readyState === "ended" || tk2.muted) await sess.restartCamera();
   }
-  // Единый teardown — снимает слушатель (без утечки), стопает камеру, убирает оверлей.
+  // Единый teardown — снимает слушатели (без утечки), стопает камеру, убирает оверлей.
   function destroySession() {
     document.removeEventListener("visibilitychange", onVisible);
+    window.removeEventListener("focus", onVisible);
     sess.stop(); overlay.remove(); liveSession = null;
   }
 
@@ -106,6 +107,8 @@ async function openSession(challengeId, startExercise) {
     await sess.start(video, canvas);
     loader.remove();
     document.addEventListener("visibilitychange", onVisible);
+    // focus ловит возврат из share sheet / встроенного превью, когда visibilitychange не пришёл.
+    window.addEventListener("focus", onVisible);
   } catch (err) {
     // Ошибка камеры/модели: завершаем сессию, чистим и предлагаем повтор — приложение не виснет.
     destroySession();
