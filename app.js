@@ -4,7 +4,7 @@
 "use strict";
 
 // Версия оболочки — держать в синхроне с CACHE в sw.js; уходит в баг-репорты.
-const APP_VERSION = "v76";
+const APP_VERSION = "v77";
 // Последняя JS-ошибка — прикладываем к баг-репорту, чтобы сразу видеть причину.
 let lastError = "";
 window.addEventListener("error", (e) => {
@@ -636,14 +636,25 @@ function applySync() {
     });
     const me = ch.participants.find((p) => p.isMe);
     if (me) {
-    ch.myTodayReps = Object.assign({}, me._days[today] || {});
-    ch.myTotalReps = me._total;
+    // Не затираем локальные повторы серверными: незасинканная офлайн-тренировка
+    // (report повис в памяти SDK и не долетел) иначе пропала бы. Берём max, а если
+    // локальное впереди сервера — досылаем, чтобы сервер догнал (по кругу не зациклит).
+    const serverToday = me._days[today] || {};
+    const localToday = ch.myTodayReps || {};
+    const mergedToday = {};
+    for (const ex of new Set([...Object.keys(localToday), ...Object.keys(serverToday)])) {
+      mergedToday[ex] = Math.max(+localToday[ex] || 0, +serverToday[ex] || 0);
+    }
+    ch.myTodayReps = mergedToday;
+    ch.myTotalReps = Math.max(+ch.myTotalReps || 0, me._total);
     ch.myTotalByExercise = totalsByExercise(me._days);
-    app.totalReps = me._total;
+    app.totalReps = Math.max(+app.totalReps || 0, me._total);
     app.history = Object.entries(me._days).sort(([a], [b]) => (a < b ? -1 : 1)).map(([date, per]) => ({
       id: date, date: new Date(date + "T00:00:00").getTime(),
       entries: [{ id: date + "e", title: ch.title, norm: C.repsNorm(ch), reps: Object.values(per).reduce((a, b) => a + b, 0) }],
     }));
+    const ahead = ch.myTotalReps > me._total || Object.keys(mergedToday).some((ex) => (mergedToday[ex] || 0) > (+serverToday[ex] || 0));
+    if (ahead && Sync.enabled) Sync.report(today, ch.myTodayReps, ch.myTotalReps);
     }
   }
   applyPublicChallenges(today);
@@ -1022,6 +1033,7 @@ function navRender(before) {
   // иначе контент просвечивает и блюр «догоняет» после анимации (правило .vt в styles.css).
   document.documentElement.classList.add("vt");
   const vt = document.startViewTransition(() => { if (before) before(); render(); });
+  vt.ready.catch(() => {}); // быстрая повторная навигация прерывает переход → AbortError, глушим
   vt.finished.catch(() => {}).finally(() => document.documentElement.classList.remove("vt"));
 }
 
@@ -2076,6 +2088,7 @@ function CreateWizard() {
 
 // Собрать goals из выбранных упражнений и создать челлендж. false — если нечем оплатить/ничего не выбрано.
 function saveChallengeForm() {
+  if (!ui.form) return false; // второй тап после того как первый уже создал челлендж и обнулил форму
   const f = ui.form, sel = selectedExercises(f);
   if (!sel.length) { toast(t("Pick at least one exercise")); return false; }
   const clamp = (n) => Math.min(Math.max(n, 1), 500);
@@ -2872,6 +2885,9 @@ function parseVal(v) {
   return /^-?\d+(?:\.\d+)?$/.test(v) ? Number(v) : v;
 }
 
+// Действия «на месте» (селект/степпер/тогл) — элемент не исчезает, пульс переносится
+// патчем render; задержку pressFinish на них не вешаем, чтобы отклик был мгновенным.
+const INSTANT_CMDS = new Set(["inc", "dec", "seg", "toggle", "toggleStore", "react", "goalChoice", "presetDuration", "bugPick", "shareBg", "toggleLang", "unlockPhotos"]);
 root.addEventListener("click", async (e) => {
   const el = e.target.closest("[data-act]");
   if (!el) return;
@@ -2879,7 +2895,9 @@ root.addEventListener("click", async (e) => {
   const [cmd, arg] = act.split(":");
   sfx(sfxFor(cmd, arg)); // звук нажатия — свой для разных действий
   if (el.classList.contains("action-btn")) haptic(8); // лёгкий тактильный отклик на первичных кнопках
-  await pressFinish(); // дать сжатию доиграть ДО действия — иначе render снесёт пульс
+  // Ждём конца сжатия ДО действия только там, где действие снесёт элемент (навигация):
+  // у степперов/тоглов/сегментов элемент остаётся, пульс переносится сам — жать мгновенно.
+  if (!INSTANT_CMDS.has(cmd)) await pressFinish();
 
   if (act === "closeSheetBg") { if (e.target.classList.contains("sheet-backdrop")) closeSheet(); return; }
 
@@ -3019,6 +3037,7 @@ root.addEventListener("click", async (e) => {
     return;
   }
   if (cmd === "saveChallenge") {
+    if (!ui.form) return; // второй тап: первый уже создал челлендж и обнулил форму
     if (ui.form.isPublic && isGuest()) { openAuthGate("publicCreate"); return; }
     const wasPublic = ui.form.isPublic;
     if (saveChallengeForm()) { ui.form = null; if (wasPublic) { ui.full = ChallengeCreatedFull; render(); } else { ui.full = null; go("yours"); } }

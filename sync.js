@@ -208,7 +208,10 @@ window.Sync = (() => {
     if (!enabled) return;
     ready(() => {
       const upd = { name: name || "Player" };
-      if (!(state.participants && state.participants[uid])) {
+      // total:0 пишем ТОЛЬКО когда снапшот загружен И нас в нём точно нет. Если
+      // participants ещё null (не загрузился), не трогаем total/joinedAt — иначе
+      // затрём накопленный прогресс существующего участника (гонка при старте).
+      if (state.participants && !state.participants[uid]) {
         upd.joinedAt = Date.now();
         upd.total = 0;
       }
@@ -239,8 +242,14 @@ window.Sync = (() => {
 
   function joinChallenge(id, name) {
     return new Promise((resolve) => ready(() => {
-      F.update(F.ref(db, "fitstake/challenges/" + id + "/participants/" + uid),
-        { name: name || "Player", joinedAt: Date.now(), total: 0 }).then(() => resolve(true)).catch(() => resolve(false));
+      // total:0 только если снапшот челленджей загружен и нас в участниках нет —
+      // иначе (повторный заход по ссылке / гонка при старте) сохраняем прогресс.
+      const rec = state.challenges && state.challenges[id];
+      const isMember = rec && rec.participants && rec.participants[uid];
+      const upd = { name: name || "Player" };
+      if (state.challenges && !isMember) { upd.joinedAt = Date.now(); upd.total = 0; }
+      F.update(F.ref(db, "fitstake/challenges/" + id + "/participants/" + uid), upd)
+        .then(() => resolve(true)).catch(() => resolve(false));
     }));
   }
 

@@ -2,7 +2,7 @@
   "rules": {
     "fitstake": {
       "users": { ".read": true, "$uid": { ".write": "auth != null && auth.uid === $uid", ".validate": "newData.hasChildren(['name'])", "name": { ".validate": "newData.isString() && newData.val().length <= 20" }, "joinedAt": { ".validate": "newData.isNumber()" }, "$other": { ".validate": false } } },
-      "challenge_main": { "participants": { ".read": true, "$uid": { ".write": "auth != null && auth.uid === $uid", "name": { ".validate": "newData.isString() && newData.val().length <= 20" }, "joinedAt": { ".validate": "newData.isNumber()" }, "total": { ".validate": "newData.isNumber() && newData.val() >= 0" }, "days": { "$date": { "$exercise": { ".validate": "newData.isNumber() && newData.val() >= 0" } } } } } },
+      "challenge_main": { "participants": { ".read": true, "$uid": { ".write": "auth != null && auth.uid === $uid", "name": { ".validate": "newData.isString() && newData.val().length <= 20" }, "joinedAt": { ".validate": "newData.isNumber()" }, "total": { ".validate": "newData.isNumber() && newData.val() >= 0" }, "days": { "$date": { "$exercise": { ".validate": "newData.isNumber() && newData.val() >= 0" } } }, "$other": { ".validate": false } } } },
       "challenges": {
         ".read": true,
         "$challengeId": {
