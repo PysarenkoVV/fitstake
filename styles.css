@@ -943,6 +943,10 @@ button:is(:active, .pressed):not(:disabled) { transform: scale(0.97); filter: br
 /* SVG-графики */
 .chart { width: 100%; height: 170px; display: block; }
 .chart-dot { width: 7px; height: 7px; border-radius: 50%; flex: none; }
+.stat-filter { display: flex; gap: 3px; background: var(--white-08); border-radius: 999px; padding: 3px; flex: none; }
+.stat-filter button { font: 600 11px/1 var(--mono); padding: 5px 9px; border-radius: 999px; color: var(--text-secondary); white-space: nowrap; transition: transform var(--motion-press) var(--ease-press), background .18s, color .18s; }
+.stat-filter button.active { background: var(--money); color: #06130c; }
+.stat-filter button:is(:active, .pressed) { transform: scale(0.94); }
 
 /* стрик-пилюля */
 .streak-pill {

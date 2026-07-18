@@ -4,7 +4,7 @@
 "use strict";
 
 // Версия оболочки — держать в синхроне с CACHE в sw.js; уходит в баг-репорты.
-const APP_VERSION = "v80";
+const APP_VERSION = "v81";
 // Последняя JS-ошибка — прикладываем к баг-репорту, чтобы сразу видеть причину.
 let lastError = "";
 window.addEventListener("error", (e) => {
@@ -210,7 +210,7 @@ const RU = {
   "I did mine": "Я своё сделал", "Now it's your turn": "Теперь твоя очередь",
   "Potential reward": "Возможная награда",
   "Above goal": "Сверх нормы", "Best day": "Лучший день", "Today's place": "Место сегодня", "Streak": "Серия",
-  "Reps · 30 days": "Повторы · 30 дней", "Completion": "Выполнено",
+  "Reps · 30 days": "Повторы · 30 дней", "Completion": "Выполнено", "All": "Все",
   "%lld of %lld": "%lld из %lld",
   "reps": "повторов", "Exercises": "Упражнения", "Your turn": "Твой ход",
   "Body & measurements": "Тело и замеры", "Wallet": "Кошелёк", "Privacy & data": "Приватность и данные",
@@ -584,7 +584,13 @@ function mockHistory(joined) {
         case 1: case 2: reps = norm + Math.floor(norm / 5); break;
         default: reps = norm;
       }
-      return { id: uid(), title: ch.title, norm, reps };
+      // Разбивка по упражнениям пропорционально дневным нормам (для фильтра Weekly volume).
+      const byEx = {}; let acc = 0;
+      ch.goals.forEach((g, gi) => {
+        const share = gi === ch.goals.length - 1 ? reps - acc : Math.round(reps * C.norm(ch, g) / (norm || 1));
+        byEx[g.exercise] = Math.max(0, share); acc += byEx[g.exercise];
+      });
+      return { id: uid(), title: ch.title, norm, reps, byEx };
     });
     out.push({ id: uid(), date, entries });
   }
@@ -653,7 +659,7 @@ function applySync() {
     app.totalReps = Math.max(+app.totalReps || 0, me._total);
     app.history = Object.entries(me._days).sort(([a], [b]) => (a < b ? -1 : 1)).map(([date, per]) => ({
       id: date, date: new Date(date + "T00:00:00").getTime(),
-      entries: [{ id: date + "e", title: ch.title, norm: C.repsNorm(ch), reps: Object.values(per).reduce((a, b) => a + b, 0) }],
+      entries: [{ id: date + "e", title: ch.title, norm: C.repsNorm(ch), reps: Object.values(per).reduce((a, b) => a + b, 0), byEx: per }],
     }));
     const ahead = ch.myTotalReps > me._total || Object.keys(mergedToday).some((ex) => (mergedToday[ex] || 0) > (+serverToday[ex] || 0));
     if (ahead && Sync.enabled) Sync.report(today, ch.myTodayReps, ch.myTotalReps);
@@ -782,13 +788,15 @@ function buyCoins(amount) {
   toast(t("+%lld coins", amount));
 }
 
-function logEntry(title, norm, reps) {
+function logEntry(title, norm, reps, byEx) {
   const today = startOfDay(Date.now());
   let last = app.history[app.history.length - 1];
   if (!last || startOfDay(last.date) !== today) { last = { id: uid(), date: today, entries: [] }; app.history.push(last); }
   const e = last.entries.find((x) => x.title === title);
-  if (e) { e.reps += reps; if (norm != null) e.norm = norm; }
-  else last.entries.push({ id: uid(), title, norm, reps });
+  if (e) {
+    e.reps += reps; if (norm != null) e.norm = norm;
+    if (byEx) { e.byEx = e.byEx || {}; for (const [ex, n] of Object.entries(byEx)) e.byEx[ex] = (e.byEx[ex] || 0) + n; }
+  } else last.entries.push({ id: uid(), title, norm, reps, byEx: byEx ? Object.assign({}, byEx) : undefined });
 }
 
 function joinChallenge(ch, weight, maxReps, beforePhoto) {
@@ -836,7 +844,7 @@ function addReps(ch, counts, sessionStats) {
   const wasDone = C.isTodayDone(ch);
   const completedBefore = new Set(ch.goals.filter((g) => (ch.myTodayReps[g.exercise] || 0) >= C.norm(ch, g)).map((g) => g.exercise));
   app.totalReps += total;
-  logEntry(ch.title, C.repsNorm(ch), total);
+  logEntry(ch.title, C.repsNorm(ch), total, counts);
   for (const [ex, reps] of Object.entries(counts)) if (reps > 0) {
     ch.myTodayReps[ex] = (ch.myTodayReps[ex] || 0) + reps;
     ch.myTotalByExercise = ch.myTotalByExercise || {};
@@ -1579,6 +1587,7 @@ function participantsCard(c) {
 // ==========================================================================
 // Статистика
 // ==========================================================================
+let statExFilter = "all"; // фильтр Weekly volume: "all" | код упражнения
 function StatsTab() {
   const joined = app.challenges.filter(C.isJoined);
   const dot = (color, title) => `<div class="row gap8"><span class="chart-dot" style="background:${color}"></span><span class="label" style="font-size:11px;letter-spacing:1px">${esc(title)}</span></div>`;
@@ -1596,12 +1605,28 @@ function StatsTab() {
   // Дневная норма — сумма норм назначенных на день челленджей (entries с norm).
   // Нужна, чтобы красить столбик по выполнению и считать долю закрытых дней.
   const byDayNorm = new Map(app.history.map((d) => [startOfDay(d.date), d.entries.reduce((s, e) => s + (e.norm || 0), 0)]));
+  // Разбивка reps по упражнениям за день — для фильтра Weekly volume.
+  const byDayEx = new Map();
+  for (const d of app.history) {
+    const key = startOfDay(d.date), acc = byDayEx.get(key) || {};
+    for (const e of d.entries) for (const [ex, n] of Object.entries(e.byEx || {})) acc[ex] = (acc[ex] || 0) + n;
+    byDayEx.set(key, acc);
+  }
   const today0 = startOfDay(Date.now());
   const series = (n) => { const out = []; for (let back = n - 1; back >= 0; back--) out.push(byDay.get(today0 - back * DAY) || 0); return out; };
 
-  // Недельный объём
-  const padded = series(28);
-  const weeks = [0, 1, 2, 3].map((w) => padded.slice(w * 7, w * 7 + 7).reduce((a, b) => a + b, 0));
+  // Упражнения за 30 дней — опции фильтра (показываем, только если их больше одного).
+  const exSet = new Set();
+  for (let back = 29; back >= 0; back--) { const acc = byDayEx.get(today0 - back * DAY); if (acc) for (const ex of Object.keys(acc)) if (acc[ex] > 0) exSet.add(ex); }
+  const exList = [...exSet].sort((a, b) => EX_ORDER.indexOf(a) - EX_ORDER.indexOf(b));
+  const filterEx = exList.includes(statExFilter) ? statExFilter : "all";
+
+  // Недельный объём: инсайты считаем по всему объёму, график — по выбранному фильтру.
+  const paddedAll = series(28);
+  const weeksAll = [0, 1, 2, 3].map((w) => paddedAll.slice(w * 7, w * 7 + 7).reduce((a, b) => a + b, 0));
+  const repsForDay = (date) => filterEx === "all" ? (byDay.get(date) || 0) : ((byDayEx.get(date) || {})[filterEx] || 0);
+  const weekWindow = []; for (let back = 27; back >= 0; back--) weekWindow.push(repsForDay(today0 - back * DAY));
+  const weeks = [0, 1, 2, 3].map((w) => weekWindow.slice(w * 7, w * 7 + 7).reduce((a, b) => a + b, 0));
 
   // Активность по дням: reps, дневная норма и флаг «день закрыт» (норма выполнена).
   const days = [];
@@ -1613,7 +1638,7 @@ function StatsTab() {
 
   // Выводы: превращаем цифры в мотивацию вместо голых графиков.
   const loc = store.lang === "ru" ? "ru-RU" : "en-US";
-  const thisWeek = weeks[3], lastWeek = weeks[2];
+  const thisWeek = weeksAll[3], lastWeek = weeksAll[2];
   const allTotals = [...byDay.values()];
   const bestDay = allTotals.length ? Math.max(...allTotals) : 0;
   const todayTotal = byDay.get(today0) || 0;
@@ -1650,8 +1675,10 @@ function StatsTab() {
     ${metric(completion != null ? completion + "%" : "—", t("Completion"), "#fff")}
     ${metric(String(streak), t("Streak"), "var(--accent)")}</div>`;
 
+  const exShort = (ex) => ex === "all" ? t("All") : Exercise.displayName(ex);
+  const filterUI = exList.length > 1 ? `<div class="stat-filter">${["all", ...exList].map((ex) => `<button data-act="statEx" data-ex="${ex}" class="${filterEx === ex ? "active" : ""}">${esc(exShort(ex))}</button>`).join("")}</div>` : "";
   const weeklyCard = `<div class="card" style="padding:16px;display:flex;flex-direction:column;gap:4px">
-    ${dot("var(--money)", t("Weekly volume"))}
+    <div class="between" style="gap:10px">${dot("var(--money)", t("Weekly volume"))}${filterUI}</div>
     <div class="form-footer">${t("Total reps over the last 4 weeks.")}</div>
     ${weeklyChart(weeks)}</div>`;
   const dailyCard = `<div class="card" style="padding:16px;display:flex;flex-direction:column;gap:4px">
@@ -2944,7 +2971,7 @@ function parseVal(v) {
 
 // Действия «на месте» (селект/степпер/тогл) — элемент не исчезает, пульс переносится
 // патчем render; задержку pressFinish на них не вешаем, чтобы отклик был мгновенным.
-const INSTANT_CMDS = new Set(["inc", "dec", "seg", "toggle", "toggleStore", "react", "goalChoice", "presetDuration", "bugPick", "shareBg", "toggleLang", "unlockPhotos"]);
+const INSTANT_CMDS = new Set(["inc", "dec", "seg", "statEx", "toggle", "toggleStore", "react", "goalChoice", "presetDuration", "bugPick", "shareBg", "toggleLang", "unlockPhotos"]);
 root.addEventListener("click", async (e) => {
   const el = e.target.closest("[data-act]");
   if (!el) return;
@@ -3057,6 +3084,7 @@ root.addEventListener("click", async (e) => {
     if (sk != null) { store[sk] = val; storeHook(sk); } else ui.form[key] = val;
     render(); return;
   }
+  if (cmd === "statEx") { statExFilter = el.dataset.ex; render(); return; }
   if (cmd === "toggle") {
     const key = el.dataset.key;
     if (key === "isPublic" && !ui.form[key] && isGuest()) { openAuthGate("publicCreate"); return; }
