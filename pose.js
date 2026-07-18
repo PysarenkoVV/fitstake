@@ -358,7 +358,13 @@ class PoseSession {
       try {
         const res = this._landmarker.detectForVideo(video, ts);
         if (res && res.landmarks && res.landmarks.length) landmarks = res.landmarks[0];
-      } catch {}
+        this._detectFails = 0;
+      } catch {
+        // Инстанс мог «умереть» (потеря GPU/WebGL-контекста после фона на iOS) —
+        // после серии сбоев пересоздаём landmarker, иначе скелет пропадёт навсегда.
+        this._detectFails = (this._detectFails || 0) + 1;
+        if (this._detectFails % 90 === 0 && !this._recovering) this._recoverLandmarker();
+      }
 
       if (landmarks) {
         for (const [name, idx] of Object.entries(LM)) {
@@ -514,6 +520,34 @@ class PoseSession {
   }
 
   isRecording() { return !!this._recording; }
+
+  // Пересоздать landmarker после серии сбоев detectForVideo (контекст-лосс).
+  async _recoverLandmarker() {
+    this._recovering = true;
+    try {
+      landmarkerPromise = null; // сбросить общий кэш → создать свежий инстанс
+      const lm = await getLandmarker();
+      if (this._running) { this._landmarker = lm; this._detectFails = 0; }
+    } catch {} finally { this._recovering = false; }
+  }
+
+  videoTrack() { return this._stream ? this._stream.getVideoTracks()[0] : null; }
+
+  // Перезапуск камеры после возврата из фона (iOS «замораживает» трек в фоне).
+  async restartCamera() {
+    if (!this._running || !this._video) return false;
+    let fresh;
+    try {
+      fresh = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "user", width: { ideal: 1280 }, height: { ideal: 720 } }, audio: false });
+    } catch { return false; }
+    if (!this._running) { fresh.getTracks().forEach((t) => t.stop()); return false; }
+    const old = this._stream;
+    this._stream = fresh;
+    if (old) old.getTracks().forEach((t) => t.stop());
+    this._video.srcObject = fresh;
+    await this._video.play().catch(() => {});
+    return true;
+  }
 
   stop() {
     this._running = false;

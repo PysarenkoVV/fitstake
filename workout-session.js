@@ -78,6 +78,24 @@ async function openSession(challengeId, startExercise) {
   sess.setActive(active);
   liveSession = { sess, overlay };
 
+  // Возврат из фона: iOS замораживает камеру в фоне — если трек умер, перезапускаем поток,
+  // иначе экран остаётся чёрным/застывшим без подсказки.
+  async function onVisible() {
+    if (document.hidden || !liveSession || liveSession.sess !== sess) return;
+    const tk = sess.videoTrack();
+    const dead = !tk || tk.readyState === "ended" || tk.muted || video.paused || !video.videoWidth;
+    if (!dead) return;
+    hintEl.style.display = ""; hintEl.textContent = t("Reconnecting camera…");
+    if (video.paused) { try { await video.play(); } catch {} }
+    const tk2 = sess.videoTrack();
+    if (!tk2 || tk2.readyState === "ended" || tk2.muted) await sess.restartCamera();
+  }
+  // Единый teardown — снимает слушатель (без утечки), стопает камеру, убирает оверлей.
+  function destroySession() {
+    document.removeEventListener("visibilitychange", onVisible);
+    sess.stop(); overlay.remove(); liveSession = null;
+  }
+
   // Индикатор загрузки: перекрывает экран, пока открывается камера и грузится MediaPipe.
   const loader = document.createElement("div");
   loader.style.cssText = "position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;z-index:20;background:rgba(0,0,0,.55)";
@@ -87,11 +105,10 @@ async function openSession(challengeId, startExercise) {
   try {
     await sess.start(video, canvas);
     loader.remove();
+    document.addEventListener("visibilitychange", onVisible);
   } catch (err) {
     // Ошибка камеры/модели: завершаем сессию, чистим и предлагаем повтор — приложение не виснет.
-    sess.stop();
-    overlay.remove();
-    liveSession = null;
+    destroySession();
     showCameraError(cameraError(err), challengeId, startExercise);
     return;
   }
@@ -279,7 +296,10 @@ async function openSession(challengeId, startExercise) {
           wsfxMain(event);
           haptic(event === "rep" ? 12 : [0, 40, 40, 90]);
           if (justReached) flashPlate(t("%@ completed", Exercise.displayName(g.exercise)));
-          if (isDemo && allReached && !demoFinishing) {
+          // Демо авто-финишим только если НЕ идёт запись: авто-финиш — без жеста
+          // пользователя, а шеринг видео в Safari требует жеста. С записью пусть
+          // человек сам жмёт «Finish» (жест сохранится → видео отдастся).
+          if (isDemo && allReached && !demoFinishing && !sess.isRecording()) {
             demoFinishing = true;
             setTimeout(() => { if (liveSession && liveSession.sess === sess) endSession(true); }, 700);
           }
@@ -367,18 +387,18 @@ async function openSession(challengeId, startExercise) {
     if (sess.isRecording()) { try { await sess.toggleRecording(); } catch (e) { wsfx("recError"); } }
     if (save) {
       if (isDemo) {
-        sess.stop(); overlay.remove(); liveSession = null;
+        destroySession();
         openDemoComplete(Object.values(counts).reduce((sum, n) => sum + n, 0));
         return;
       }
       let closed;
       try { closed = addReps(c, counts, sessionStats); }
       catch (e) { finishing = false; toast(t("Couldn't save. Try again.")); return; } // разблокируем — можно повторить
-      sess.stop(); overlay.remove(); liveSession = null;
+      destroySession();
       render();
       if (closed) { C.isFinished(c) ? openChallengeComplete(c) : openDayComplete(c); }
     } else {
-      sess.stop(); overlay.remove(); liveSession = null;
+      destroySession();
     }
   }
 

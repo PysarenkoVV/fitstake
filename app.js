@@ -4,7 +4,7 @@
 "use strict";
 
 // Версия оболочки — держать в синхроне с CACHE в sw.js; уходит в баг-репорты.
-const APP_VERSION = "v77";
+const APP_VERSION = "v78";
 // Последняя JS-ошибка — прикладываем к баг-репорту, чтобы сразу видеть причину.
 let lastError = "";
 window.addEventListener("error", (e) => {
@@ -102,6 +102,7 @@ const RU = {
   "Not now": "Не сейчас",
   "Demo complete — join a challenge to save progress.": "Демо завершено — вступи в челлендж, чтобы сохранять прогресс.",
   "Step into frame": "Встань в кадр",
+  "Reconnecting camera…": "Переподключаем камеру…",
   "Body found — hold still": "Тело найдено — не двигайся",
   "Ready — start moving": "Готово — начинай движение",
   "Lower your chest": "Опусти грудь ниже",
