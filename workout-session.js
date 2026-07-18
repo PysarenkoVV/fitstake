@@ -12,7 +12,10 @@ async function openSession(challengeId, startExercise) {
   if ((!isDemo && !c) || liveSession) return;
   const goals = isDemo
     ? [{ exercise: startExercise || "pushups", target: 5, start: 0 }]
-    : c.goals.map((g) => ({ exercise: g.exercise, target: C.norm(c, g), start: C.myToday(c, g.exercise) }));
+    // goal — счётчик к общей цели (start = уже набрано за челлендж); streak — к дневной норме.
+    : c.goals.map((g) => C.isGoal(c)
+      ? { exercise: g.exercise, target: g.target || 0, start: (c.myTotalByExercise || {})[g.exercise] || 0 }
+      : { exercise: g.exercise, target: C.norm(c, g), start: C.myToday(c, g.exercise) });
 
   const overlay = document.createElement("div");
   overlay.className = "session";

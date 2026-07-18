@@ -4,7 +4,7 @@
 "use strict";
 
 // Версия оболочки — держать в синхроне с CACHE в sw.js; уходит в баг-репорты.
-const APP_VERSION = "v82";
+const APP_VERSION = "v83";
 // Последняя JS-ошибка — прикладываем к баг-репорту, чтобы сразу видеть причину.
 let lastError = "";
 window.addEventListener("error", (e) => {
@@ -307,6 +307,16 @@ const RU = {
   "Buy coins": "Купить коины", "coins": "коинов", "Coins purchased": "Пополнение баланса", "+%lld coins": "+%lld коинов",
   "Follow": "Подписаться", "Following": "Вы подписаны", "Unfollow": "Отписаться",
   "Challenges joined": "Участвует в челленджах", "No active challenges": "Нет активных челленджей",
+  "Active": "Активные", "Pending": "Ожидание",
+  "Challenge type": "Тип челленджа", "Daily minimum reps": "Минимум в день", "Goal": "Цель",
+  "Hit a total rep target": "Набрать цель повторов", "Custom": "Свой", "Who can join": "Кто участвует",
+  "Solo": "Соло", "Just you": "Только ты", "Invite by link": "Вход по ссылке", "Anyone joins": "Все могут войти",
+  "Players to gather": "Сколько собрать", "Stake & rules": "Ставка и правила", "Days": "Дней", "d": "д",
+  "Create a new challenge to get started!": "Создай челлендж, чтобы начать!",
+  "Nothing pending": "Нет ожидающих",
+  "Private and public challenges waiting to start show up here.": "Здесь появляются приватные и публичные челленджи, ждущие старта.",
+  "No finished challenges yet": "Пока нет завершённых",
+  "Completed challenges will show up here.": "Здесь появятся завершённые челленджи.",
   "Total reps": "Всего повторений", "Following %lld": "Подписок: %lld", "Followers %lld": "Подписчиков: %lld",
   "Notifications": "Уведомления", "No notifications yet": "Уведомлений пока нет",
   "%@ completed %@ in %@": "%@ закрыл упражнение «%@» в «%@»",
@@ -405,10 +415,24 @@ const C = {
   doneTodayCount: (c) => C.active(c).filter((p) => p.doneToday).length,
   myToday: (c, ex) => c.myTodayReps[ex] || 0,
   myTodayTotal: (c) => c.goals.reduce((s, g) => s + C.myToday(c, g.exercise), 0),
-  norm: (c, g, day) => g.repsPerDay + c.progression.step * progIncrements(c.progression, day ?? c.currentDay),
+  isGoal: (c) => c.type === "goal",
+  // norm — целевое значение упражнения: goal — общая цель на челлендж; streak — дневная норма (+ прогрессия).
+  norm: (c, g, day) => c.type === "goal" ? (g.target || 0) : (g.repsPerDay + c.progression.step * progIncrements(c.progression, day ?? c.currentDay)),
+  // Прогресс упражнения к его цели: goal — всего за челлендж; streak — сегодня.
+  exProgress: (c, g) => c.type === "goal" ? ((c.myTotalByExercise || {})[g.exercise] || 0) : C.myToday(c, g.exercise),
   repsNorm: (c, day) => c.goals.reduce((s, g) => s + C.norm(c, g, day), 0),
-  isTodayDone: (c) => c.goals.every((g) => C.myToday(c, g.exercise) >= C.norm(c, g)),
-  isFinished: (c) => c.currentDay >= c.durationDays && C.isTodayDone(c),
+  // «Готово»: streak — сегодняшняя норма закрыта; goal — общая цель достигнута.
+  isTodayDone: (c) => c.goals.every((g) => C.exProgress(c, g) >= C.norm(c, g)),
+  // Финиш: goal — как только цель достигнута (в любой день); streak — дожил до конца, закрыв последний день.
+  isFinished: (c) => c.type === "goal" ? C.isTodayDone(c) : (c.currentDay >= c.durationDays && C.isTodayDone(c)),
+  // pending — ещё не стартовал (startAt пуст или в будущем); completed — прожиты все дни;
+  // иначе active. Используется вкладками Challenges (Active/Pending/Completed).
+  status: (c) => {
+    const s = challengeStartEpoch(c);
+    if (s == null || startOfDay(Date.now()) < s) return "pending";
+    // goal завершается достижением цели (в любой день); streak — по календарю.
+    return (c.isCompleted || challengeEnded(c) || (C.isGoal(c) && C.isFinished(c))) ? "completed" : "active";
+  },
   actionText: (c) => (c.goals.length > 1 ? t("Do today's combo") : Exercise.actionText(c.goals[0].exercise)),
   exerciseNames: (c) => c.goals.map((g) => Exercise.displayName(g.exercise)).join(" + "),
   goalsText: (c) => c.goals.map((g) => `${Exercise.displayName(g.exercise)} ${C.norm(c, g)}`).join(" + "),
@@ -450,7 +474,8 @@ function mockParticipants(total, eliminated, othersDoneToday, includeMe, repsPer
 
 function newChallenge(o) {
   return Object.assign({
-    id: uid(), missPolicy: "oneTotal", progression: { step: 0, period: "day" },
+    id: uid(), type: "streak", access: "solo", minPlayers: 0, startAt: null,
+    missPolicy: "oneTotal", progression: { step: 0, period: "day" },
     myTodayReps: {}, myTotalReps: 0, myTotalByExercise: {}, workoutStatsByDay: {}, startWeight: null, startMaxReps: null,
     beforePhoto: null, afterPhoto: null, isCompleted: false,
   }, o);
@@ -504,7 +529,7 @@ function mockChallenges() {
       id: "main",
       title: "150 Push-ups + 50 Squats",
       goals: [{ exercise: "pushups", repsPerDay: 150 }, { exercise: "squats", repsPerDay: 50 }],
-      durationDays: 30, buyIn: 100, isPublic: true,
+      durationDays: 30, buyIn: 100, isPublic: true, access: "public",
       currentDay: Sync.enabled ? currentDayFromStart(30) : 12,
       yesterdayDropouts: Sync.enabled ? 0 : 1,
       participants: Sync.enabled ? [] : mockParticipants(15, 1, 6, true, 200),
@@ -522,7 +547,21 @@ function startOfDay(d) { const x = new Date(d); x.setHours(0, 0, 0, 0); return x
 // ==========================================================================
 function challengeStartKey(c) {
   if (c.id === "main") return SHARED_START;
-  return c.startedAt ? dateKey(c.startedAt) : null;
+  // startAt == null → челлендж ещё не стартовал (pending): private ждёт создателя,
+  // public — набора участников. startedAt читаем как легаси-фолбэк на время миграции.
+  if (c.startAt != null) return dateKey(c.startAt);
+  return c.startedAt != null ? dateKey(c.startedAt) : null;
+}
+function challengeStartEpoch(c) {
+  const key = challengeStartKey(c);
+  return key ? new Date(key + "T00:00:00").getTime() : null;
+}
+// Номер текущего дня от старта; pending-челлендж (ещё не стартовал) остаётся на дне 1.
+function computeCurrentDay(c) {
+  if (c.id === "main" && Sync.enabled) return currentDayFromStart(c.durationDays);
+  const s = challengeStartEpoch(c);
+  if (s == null) return 1;
+  return Math.min(Math.max(Math.floor((startOfDay(Date.now()) - s) / DAY) + 1, 1), c.durationDays);
 }
 function dayEpoch(startKey, day) { return new Date(startKey + "T00:00:00").getTime() + (day - 1) * DAY; }
 function dayClosed(c, day, dayData) {
@@ -544,10 +583,12 @@ function allowedMisses(policy, throughDays) {
   return 1; // oneTotal и дефолт
 }
 function eliminatedByMisses(c, days) {
+  if (c.type === "goal") return false; // у goal нет дневной нормы и выбывания
   return missedDays(c, days) > allowedMisses(c.missPolicy, c.currentDay - 1);
 }
 // Серия закрытых дней подряд от сегодня назад; незакрытое «сегодня» серию не рвёт.
 function streakOf(c, days) {
+  if (c.type === "goal") return 0; // у goal нет дневной серии
   const startKey = challengeStartKey(c);
   if (!startKey) return 0;
   let streak = 0;
@@ -677,15 +718,18 @@ function applyPublicChallenges(today) {
     const m = rec.meta;
     if (!c) {
       c = newChallenge({ id, title: m.title, goals: Object.values(m.goals || {}), durationDays: m.durationDays,
-        buyIn: m.buyIn, isPublic: true, ownerId: m.ownerId, missPolicy: m.missPolicy, progression: { step: m.progressionStep || 0, period: m.progressionPeriod || "day" },
-        startedAt: m.createdAt, currentDay: Math.min(Math.floor((startOfDay(Date.now()) - startOfDay(m.createdAt)) / DAY) + 1, m.durationDays),
+        buyIn: m.buyIn, isPublic: true, type: m.type || "streak", access: m.access || "public", minPlayers: m.minPlayers || 0,
+        ownerId: m.ownerId, missPolicy: m.missPolicy, progression: { step: m.progressionStep || 0, period: m.progressionPeriod || "day" },
+        startAt: startOfDay(m.createdAt), currentDay: Math.min(Math.floor((startOfDay(Date.now()) - startOfDay(m.createdAt)) / DAY) + 1, m.durationDays),
         yesterdayDropouts: 0, participants: [], myTodayReps: {}, myTotalReps: 0 });
       app.challenges.push(c);
     }
     c.participants = Object.entries(rec.participants || {}).map(([pid, p]) => {
-      const days = p.days || {}, day = days[today] || {};
+      const days = p.days || {}, day = days[today] || {}, totals = totalsByExercise(days);
+      // goal — «готово» по общей сумме к цели; streak — по сегодняшней норме.
+      const done = c.goals.every((g) => (C.isGoal(c) ? (totals[g.exercise] || 0) : (day[g.exercise] || 0)) >= C.norm(c, g));
       return { id: pid, name: p.name || "?", isMe: pid === Sync.uid, state: eliminatedByMisses(c, days) ? "eliminated" : "active",
-        doneToday: c.goals.every((g) => (day[g.exercise] || 0) >= C.norm(c, g)), todayReps: Object.values(day).reduce((a, b) => a + b, 0), _days: days, _total: p.total || 0, _streak: streakOf(c, days) };
+        doneToday: done, todayReps: Object.values(day).reduce((a, b) => a + b, 0), _days: days, _total: p.total || 0, _streak: streakOf(c, days) };
     });
     const me = C.me(c);
     if (me) { c.myTodayReps = Object.assign({}, me._days[today] || {}); c.myTotalReps = me._total; c.myTotalByExercise = totalsByExercise(me._days); }
@@ -730,7 +774,15 @@ function saveApp() {
   app.balance = saved.balance != null ? saved.balance : app.balance;
   app.transactions = saved.transactions || app.transactions;
   app.challenges = saved.challenges;
-  app.challenges.forEach((c) => { if (!c.myTotalByExercise) c.myTotalByExercise = {}; if (!c.workoutStatsByDay) c.workoutStatsByDay = {}; });
+  app.challenges.forEach((c) => {
+    if (!c.myTotalByExercise) c.myTotalByExercise = {};
+    if (!c.workoutStatsByDay) c.workoutStatsByDay = {};
+    // Миграция полей типа/доступа/старта: старые сейвы их не знают, но все они уже стартовали.
+    if (c.type == null) c.type = "streak";
+    if (c.minPlayers == null) c.minPlayers = 0;
+    if (c.access == null) c.access = c.id === "main" ? "public" : (c.isPublic ? "private" : "solo");
+    if (c.startAt === undefined) c.startAt = c.id === "main" ? null : (c.startedAt != null ? startOfDay(c.startedAt) : startOfDay(Date.now()));
+  });
   app.history = saved.history || [];
   app.measurements = saved.measurements || [];
   app.totalReps = saved.totalReps != null ? saved.totalReps : (saved.totalPushups || 0); // миграция старого ключа
@@ -755,15 +807,11 @@ function saveApp() {
 function rolloverIfNeeded() {
   const now = dateKey();
   if (app.dayKey === now) return false;
-  const from = new Date(app.dayKey + "T00:00:00").getTime();
-  const diff = Math.max(1, Math.round((startOfDay(Date.now()) - from) / DAY));
   app.dayKey = now;
   for (const c of app.challenges) {
     c.myTodayReps = {};
     for (const p of c.participants) { p.doneToday = false; p.todayReps = 0; }
-    if (c.id === "main" && Sync.enabled) c.currentDay = currentDayFromStart(c.durationDays);
-    else if (c.startedAt) c.currentDay = Math.min(Math.floor((startOfDay(Date.now()) - startOfDay(c.startedAt)) / DAY) + 1, c.durationDays);
-    else c.currentDay = Math.min(c.currentDay + diff, c.durationDays);
+    c.currentDay = computeCurrentDay(c);
   }
   applySync(); // с Firebase «сегодня» пересоберётся из данных нового дня
   saveApp();
@@ -815,10 +863,11 @@ function joinChallenge(ch, weight, maxReps, beforePhoto) {
 function createChallenge(o) {
   if (!spend(o.buyIn, o.title)) return false;
   const id = o.id || ("ch_" + (Sync.uid || "local") + "_" + Date.now().toString(36));
-  app.challenges.unshift(newChallenge(Object.assign({ id, ownerId: o.isPublic ? Sync.uid : null, currentDay: 1, yesterdayDropouts: 0, startedAt: startOfDay(Date.now()), participants: [{ id: Sync.uid || uid(), name: store["profile.name"] || "", isMe: true, state: "active", doneToday: false, todayReps: 0 }] }, o)));
+  app.challenges.unshift(newChallenge(Object.assign({ id, ownerId: o.isPublic ? Sync.uid : null, currentDay: 1, yesterdayDropouts: 0, startAt: startOfDay(Date.now()), participants: [{ id: Sync.uid || uid(), name: store["profile.name"] || "", isMe: true, state: "active", doneToday: false, todayReps: 0 }] }, o)));
   localStorage.setItem("fs.paid." + id, "1");
   ui.createdChallengeId = id;
   if (o.isPublic && Sync.enabled) Sync.createChallenge(id, { title: o.title, goals: o.goals, durationDays: o.durationDays, buyIn: o.buyIn,
+    type: o.type || "streak", access: o.access || "public", minPlayers: o.minPlayers || 0,
     missPolicy: o.missPolicy, progressionStep: o.progression.step, progressionPeriod: o.progression.period }, store["profile.name"]).then((ok) => { if (!ok) toast(t("Couldn't publish challenge")); });
   return true;
 }
@@ -842,7 +891,7 @@ function addReps(ch, counts, sessionStats) {
   const me = C.me(ch);
   if (!me) return false;
   const wasDone = C.isTodayDone(ch);
-  const completedBefore = new Set(ch.goals.filter((g) => (ch.myTodayReps[g.exercise] || 0) >= C.norm(ch, g)).map((g) => g.exercise));
+  const completedBefore = new Set(ch.goals.filter((g) => C.exProgress(ch, g) >= C.norm(ch, g)).map((g) => g.exercise));
   app.totalReps += total;
   logEntry(ch.title, C.repsNorm(ch), total, counts);
   for (const [ex, reps] of Object.entries(counts)) if (reps > 0) {
@@ -854,6 +903,7 @@ function addReps(ch, counts, sessionStats) {
   ch.myTotalReps += total;
   me.todayReps = C.myTodayTotal(ch);
   if (C.isTodayDone(ch)) me.doneToday = true;
+  if (C.isGoal(ch) && C.isFinished(ch)) ch.isCompleted = true; // цель достигнута → челлендж завершён
   const closed = !wasDone && C.isTodayDone(ch);
   if (!wasDone && sessionStats && sessionStats.elapsedMs > 0) {
     ch.workoutStatsByDay = ch.workoutStatsByDay || {};
@@ -1025,6 +1075,8 @@ function render() {
     html = `<div class="screen" id="scroller">${{ yours: YoursTab, challenges: ChallengesTab, stats: StatsTab, profile: ProfileTab }[ui.tab]()}</div>`;
   }
   html += TabBar();
+  // FAB «Новый челлендж» — фиксирован над таб-баром, только на списке челленджей (не под шитами/деталью).
+  if (ui.tab === "challenges" && !ui.detailId && !ui.sheet && !ui.full) html += `<button class="fab" data-act="create">${icon("plus")}<span>${t("New challenge")}</span></button>`;
   if (!ui.detailId && !ui.sheet && !ui.full) html += pwaHint();
   if (ui.sheet) html += ui.sheet();
   if (ui.full) html += ui.full();
@@ -1146,7 +1198,8 @@ function ChallengeCard(c, withPlay) {
   const joined = C.isJoined(c);
   const doneBorder = joined && C.isTodayDone(c) ? "done" : "";
   const todayRows = c.goals.map((g) => {
-    const reps = C.myToday(c, g.exercise), norm = C.norm(c, g), done = reps >= norm;
+    // goal — прогресс к общей цели; streak — к дневной норме.
+    const reps = C.exProgress(c, g), norm = C.norm(c, g), done = reps >= norm;
     return `<div style="display:flex;flex-direction:column;gap:5px">
       <div class="between" style="align-items:baseline">
         ${lbl(Exercise.displayName(g.exercise), "tracking-1")}
@@ -1186,12 +1239,13 @@ function ChallengeCard(c, withPlay) {
 // ==========================================================================
 function YoursTab() {
   const mine = app.challenges.filter(C.isJoined);
-  const active = mine.filter((c) => !challengeEnded(c));
+  const active = mine.filter((c) => !challengeEnded(c) && !c.isCompleted);
   const nextUp = active.find((c) => !C.isTodayDone(c));
 
-  // Блок «Сегодня» — главный вопрос пользователя: что сделать сейчас. Агрегат по активным.
-  const todayReps = active.reduce((s, c) => s + C.myTodayTotal(c), 0);
-  const todayNorm = active.reduce((s, c) => s + C.repsNorm(c), 0);
+  // Блок «Сегодня» — дневная норма только у streak-челленджей; goal-цели (общий счёт) в сумму не входят.
+  const streakActive = active.filter((c) => !C.isGoal(c));
+  const todayReps = streakActive.reduce((s, c) => s + C.myTodayTotal(c), 0);
+  const todayNorm = streakActive.reduce((s, c) => s + C.repsNorm(c), 0);
   const remaining = Math.max(0, todayNorm - todayReps);
   const streak = mine.length ? Math.max(0, ...mine.map((c) => myStreak(c))) : 0;
   const msLeft = startOfDay(Date.now()) + DAY - Date.now();
@@ -1339,10 +1393,31 @@ function NotificationsSheet() {
 function ChallengesTab() {
   const syncState = Sync.enabled && !Sync.state.ready ? `<div class="card card-soft center" style="padding:14px"><span class="secondary">${t("Loading public challenges…")}</span></div>`
     : Sync.state.error ? `<div class="card center" style="padding:14px;border-color:var(--red)"><span>${t("Couldn't load public challenges. Check connection.")}</span></div>` : "";
-  return screenHeader(t("Challenges")) + `<div class="stack">
-    ${syncState}
-    ${app.challenges.map((c) => ChallengeCard(c, false)).join("")}
-    <button class="action-btn" data-act="create">${icon("plus")}${t("Create Challenge")}</button>
+
+  // Раскладываем челленджи по статусу; внутренние табы показывают по одной корзине.
+  const buckets = { active: [], pending: [], completed: [] };
+  for (const c of app.challenges) buckets[C.status(c)].push(c);
+  const tabKey = buckets[ui.challengeTab] ? ui.challengeTab : "active";
+  const tabs = [["active", t("Active")], ["pending", t("Pending")], ["completed", t("Completed")]];
+  const tabsUI = `<div class="challenge-tabs">${tabs.map(([k, name]) => {
+    const n = buckets[k].length, showCount = k !== "active" && n > 0;
+    return `<button data-act="challengeTab:${k}" class="${tabKey === k ? "active" : ""}">${esc(name)}${showCount ? `<span class="challenge-tab-count">${n}</span>` : ""}</button>`;
+  }).join("")}</div>`;
+
+  const list = buckets[tabKey];
+  const body = list.length ? list.map((c) => ChallengeCard(c, false)).join("") : challengeEmpty(tabKey);
+  return screenHeader(t("Challenges")) + `<div class="stack">${syncState}${tabsUI}${body}</div>`;
+}
+function challengeEmpty(tabKey) {
+  const copy = {
+    active: [t("No active challenges"), t("Create a new challenge to get started!")],
+    pending: [t("Nothing pending"), t("Private and public challenges waiting to start show up here.")],
+    completed: [t("No finished challenges yet"), t("Completed challenges will show up here.")],
+  }[tabKey];
+  return `<div class="card center challenge-empty">
+    <div class="challenge-empty-emoji">🏋️</div>
+    <div class="challenge-empty-title">${esc(copy[0])}</div>
+    <div class="secondary">${esc(copy[1])}</div>
   </div>`;
 }
 
@@ -1418,16 +1493,17 @@ function finaleCard(c) {
 }
 function todayCard(c) {
   const done = C.isTodayDone(c);
+  const heading = C.isGoal(c) ? t("Progress") : t("Today"); // goal — общий прогресс к цели
   let inner;
   if (c.goals.length === 1) {
-    const g = c.goals[0], reps = C.myToday(c, g.exercise), norm = C.norm(c, g), d = reps >= norm;
-    inner = `<div class="between" style="align-items:baseline">${lbl(t("Today"), "tracking-1")}<span class="money ${d ? "c-money" : "c-white"}" style="font-size:24px">${reps} / ${norm}</span></div>${bar(reps / norm, d)}`;
+    const g = c.goals[0], reps = C.exProgress(c, g), norm = C.norm(c, g), d = reps >= norm;
+    inner = `<div class="between" style="align-items:baseline">${lbl(heading, "tracking-1")}<span class="money ${d ? "c-money" : "c-white"}" style="font-size:24px">${reps} / ${norm}</span></div>${bar(reps / norm, d)}`;
   } else {
     const rings = c.goals.map((g) => {
-      const reps = C.myToday(c, g.exercise), norm = C.norm(c, g), d = reps >= norm;
+      const reps = C.exProgress(c, g), norm = C.norm(c, g), d = reps >= norm;
       return progressRing(c.id, g, reps, norm, d);
     }).join("");
-    inner = lbl(t("Today"), "tracking-1") + `<div style="display:flex;gap:8px;align-items:flex-start;padding-top:4px">${rings}</div>`;
+    inner = lbl(heading, "tracking-1") + `<div style="display:flex;gap:8px;align-items:flex-start;padding-top:4px">${rings}</div>`;
   }
   return `<div class="card ${done ? "done" : ""}" style="padding:16px;display:flex;flex-direction:column;gap:10px">${inner}</div>`;
 }
@@ -1451,7 +1527,7 @@ function StartPicker() {
   const c = app.challenges.find((x) => x.id === ui.form.challengeId);
   if (!c) return "";
   const rows = c.goals.map((g) => {
-    const reps = C.myToday(c, g.exercise), norm = C.norm(c, g), done = reps >= norm;
+    const reps = C.exProgress(c, g), norm = C.norm(c, g), done = reps >= norm;
     return `<button class="picker-row" data-act="play:${c.id}:${g.exercise}">
       <span class="row gap12"><span style="display:flex;color:var(--accent)">${exIcon(g.exercise)}</span><span style="font-weight:600;font-size:16px">${esc(Exercise.displayName(g.exercise))}</span></span>
       <span class="row gap12"><span class="money ${done ? "c-money" : "secondary"}" style="font-size:15px">${reps} / ${norm}</span><span style="color:var(--accent);display:flex">${iconF("play")}</span></span>
@@ -2170,14 +2246,88 @@ function CreateWizard() {
   </div></div>`;
 }
 
+// Одностраничная форма создания (референс Repito): все секции на одном прокручиваемом экране.
+const CREATE_DUR_CHIPS = [3, 7, 14, 30];
+const CREATE_REP_CHIPS = [50, 100, 200, 500];
+function CreateScreen() {
+  const f = ui.form, sel = selectedExercises(f);
+  const section = (label, content) => `<section class="create-section"><div class="create-section-label">${esc(label)}</div>${content}</section>`;
+  const pick = (act, on, emoji, title, sub, ic) => `<button class="create-pick ${on ? "selected" : ""}" data-act="${act}">
+    ${emoji ? `<span class="create-pick-emoji">${emoji}</span>` : ""}${ic ? `<span class="create-pick-ic">${exIcon(ic)}</span>` : ""}
+    <span class="create-pick-title">${esc(title)}</span>${sub ? `<span class="create-pick-sub">${esc(sub)}</span>` : ""}</button>`;
+  // Чипы значений: активный — если совпал; «Свой» открывает степпер (флаг custom_<key>).
+  const chips = (key, values, current, suffix) => {
+    const custom = !!f["custom_" + key];
+    return `<div class="create-chips">
+      ${values.map((v) => `<button class="create-chip ${!custom && +current === v ? "selected" : ""}" data-act="createChip:${key}:${v}">${v}${suffix || ""}</button>`).join("")}
+      <button class="create-chip ${custom ? "selected" : ""}" data-act="createCustom:${key}">${custom ? esc(String(current)) : t("Custom")}</button></div>`;
+  };
+
+  const typeSection = section(t("Challenge type"), `<div class="create-grid-2">
+    ${pick(`seg" data-key="type" data-val="streak`, f.type === "streak", "🔥", t("Streak"), t("Daily minimum reps"))}
+    ${pick(`seg" data-key="type" data-val="goal`, f.type === "goal", "🎯", t("Goal"), t("Hit a total rep target"))}</div>`);
+
+  const exSection = section(t("Exercise"), `<div class="create-grid-2">
+    ${CREATE_EX.map((ex) => pick(`toggle" data-key="sel_${ex}`, f["sel_" + ex], null, Exercise.displayName(ex), null, ex)).join("")}</div>`);
+
+  const durSection = section(t("Duration"), chips("duration", CREATE_DUR_CHIPS, f.duration, t("d"))
+    + (f.custom_duration ? fieldStepper(t("Days"), "duration", 1, 365, 1) : ""));
+
+  const repLabel = f.type === "goal" ? t("Total reps") : t("Daily minimum reps");
+  const repSection = sel.length ? section(repLabel, sel.map((ex) => `<div class="create-rep-row">
+    ${sel.length > 1 ? `<div class="create-rep-name">${esc(Exercise.displayName(ex))}</div>` : ""}
+    ${chips(ex, CREATE_REP_CHIPS, f[ex])}
+    ${f["custom_" + ex] ? fieldStepper(Exercise.displayName(ex), ex, 5, 5000, 5) : ""}</div>`).join("")) : "";
+
+  const accessSection = section(t("Who can join"), `<div class="create-grid-3">
+    ${pick(`seg" data-key="access" data-val="solo`, f.access === "solo", "🧍", t("Solo"), t("Just you"))}
+    ${pick(`seg" data-key="access" data-val="private`, f.access === "private", "🔗", t("Private"), t("Invite by link"))}
+    ${pick(`seg" data-key="access" data-val="public`, f.access === "public", "🌐", t("Public"), t("Anyone joins"))}</div>
+    ${f.access === "public" ? `<div class="create-subfield">${fieldStepper(t("Players to gather"), "minPlayers", 2, 50, 1)}</div>` : ""}`);
+
+  const missBlock = `<section class="create-rule-block"><div class="create-rule-heading"><div class="create-rule-title">${t("Missed days")}</div><div class="form-footer">${t("Missed days decide how many unfinished days you can have before you leave the challenge and lose your stake.")}</div></div>
+    <div class="miss-options">${[
+      ["never", t("No protection"), t("Miss one day and you're out.")],
+      ["oneTotal", t("One safety day"), t("You can miss once during the whole challenge.")],
+      ["onePerTwoWeeks", t("Recurring protection"), t("You can miss once in every 14 days.")],
+    ].map(([v, title, sub]) => `<button class="miss-option ${f.miss === v ? "selected" : ""}" data-act="seg" data-key="miss" data-val="${v}"><span><strong>${esc(title)}</strong><small>${esc(sub)}</small></span>${f.miss === v ? iconF("checkCircle") : icon("plusCircle")}</button>`).join("")}</div></section>`;
+  const progBlock = `<section class="create-rule-block"><div class="settings-row create-rule-toggle"><span id="lbl-progOn"><strong>${t("Progressive overload")}</strong><small>${t("Increase your daily target gradually as you get stronger.")}</small></span><button data-act="toggle" data-key="progOn" role="switch" aria-checked="${f.progOn}" aria-labelledby="lbl-progOn" class="toggle ${f.progOn ? "on" : ""}"></button></div>
+    ${f.progOn ? fieldStepper(t("Increase by"), "progStep", 1, 50, 1) + `<div class="segmented">${[["day", t("per day")], ["week", t("per week")]].map(([v, n]) => `<button data-act="seg" data-key="progPeriod" data-val="${v}" class="${f.progPeriod === v ? "active" : ""}">${esc(n)}</button>`).join("")}</div><div class="progression-result"><span>${t("Final daily target")}</span><strong>${esc(progressionEndText(f))}</strong></div>` : `<div class="form-footer">${t("No increase — the daily target stays the same.")}</div>`}</section>`;
+
+  const stakeSection = section(t("Stake & rules"), `
+    <div class="form-section"><div class="form-label">${t("Stake amount")}</div><div class="row gap8"><span class="secondary money" style="font-size:24px">${COIN_SYM}</span><input class="field money" type="number" inputmode="numeric" data-model="buyIn" value="${f.buyIn}" style="font-size:24px"></div></div>
+    <div class="form-section"><label class="form-label" for="create-title">${t("Challenge name")}</label><input id="create-title" class="field" data-model="title" value="${esc(f.title)}" placeholder="${esc(defaultTitle(f))}" maxlength="40"></div>
+    ${f.type === "streak" ? missBlock + progBlock : ""}`);
+
+  return `<div class="fullscreen"><div class="create-wizard">
+    <div class="row gap12 create-wizard-topbar">
+      <button data-act="closeFull" aria-label="${t("Close")}" style="width:32px;height:32px;display:flex;align-items:center;justify-content:center;color:#fff">${icon("xmark")}</button>
+      <div class="create-wizard-heading">${t("New challenge")}</div>
+    </div>
+    <div class="create-wizard-body create-form">${typeSection}${exSection}${durSection}${repSection}${accessSection}${stakeSection}</div>
+    <div class="create-wizard-footer"><button class="action-btn" data-act="saveChallenge">${iconF("checkCircle")}${t("Create challenge")}</button></div>
+  </div></div>`;
+}
+
 // Собрать goals из выбранных упражнений и создать челлендж. false — если нечем оплатить/ничего не выбрано.
 function saveChallengeForm() {
   if (!ui.form) return false; // второй тап после того как первый уже создал челлендж и обнулил форму
   const f = ui.form, sel = selectedExercises(f);
   if (!sel.length) { toast(t("Pick at least one exercise")); return false; }
-  const clamp = (n) => Math.min(Math.max(n, 1), 500);
-  const goals = sel.map((e) => ({ exercise: e, repsPerDay: clamp(f[e]) }));
-  const ok = createChallenge({ title: f.title.trim() || defaultTitle(f), goals, durationDays: Math.min(Math.max(f.duration, 1), 365), buyIn: Math.max(f.buyIn, 0), isPublic: f.isPublic, missPolicy: f.miss, progression: f.progOn ? { step: f.progStep, period: f.progPeriod } : { step: 0, period: "day" } });
+  const clampV = (n) => Math.min(Math.max(+n || 0, 1), 5000);
+  // streak — дневная норма (≤500); goal — цель повторов всего (≤5000).
+  const goals = sel.map((e) => f.type === "goal" ? { exercise: e, target: clampV(f[e]) } : { exercise: e, repsPerDay: Math.min(clampV(f[e]), 500) });
+  const access = f.access || "solo";
+  const isPublic = access !== "solo";
+  // Пока все стартуют сразу (startAt = сегодня). Механику pending/старта для private/public
+  // добавим отдельно; тогда startAt для них станет null до решения создателя/сбора участников.
+  const ok = createChallenge({
+    title: f.title.trim() || defaultTitle(f), goals, type: f.type || "streak", access,
+    minPlayers: access === "public" ? Math.min(Math.max(f.minPlayers, 2), 50) : 0,
+    startAt: startOfDay(Date.now()),
+    durationDays: Math.min(Math.max(f.duration, 1), 365), buyIn: Math.max(f.buyIn, 0), isPublic, missPolicy: f.miss,
+    progression: f.type === "streak" && f.progOn ? { step: f.progStep, period: f.progPeriod } : { step: 0, period: "day" },
+  });
   if (!ok) { toast(t("Not enough coins")); return false; }
   return true;
 }
@@ -2830,9 +2980,10 @@ async function shareChallengePoster(data) {
 // Открытие/закрытие модалок и поздравлений
 // ==========================================================================
 function newCreateForm(over) {
-  return Object.assign({ step: 0, title: "", sel_pushups: false, sel_squats: false, sel_pullups: false, sel_dips: false,
-    pushups: store.dailyGoal, squats: store.dailyGoal, pullups: 20, dips: 30,
-    duration: 30, buyIn: 50, isPublic: !isGuest(), miss: "oneTotal", progOn: false, progStep: 5, progPeriod: "day" }, over || {});
+  return Object.assign({ step: 0, type: "streak", access: "solo", minPlayers: 5,
+    title: "", sel_pushups: true, sel_squats: false, sel_pullups: false, sel_dips: false,
+    pushups: store.dailyGoal || 50, squats: store.dailyGoal || 50, pullups: 20, dips: 30,
+    duration: 30, buyIn: 0, isPublic: !isGuest(), miss: "oneTotal", progOn: false, progStep: 5, progPeriod: "day" }, over || {});
 }
 // Быстрые шаблоны перед мастером — сокращают путь создания. over — предзаполнение формы.
 const CREATE_TEMPLATES = [
@@ -2884,7 +3035,7 @@ function PresetQuickSetup() {
     </div>
   </div></div>`;
 }
-function openCreate() { ui.sheet = TemplatesSheet; render(); }
+function openCreate() { ui.form = newCreateForm(); ui.full = CreateScreen; render(); window.scrollTo(0, 0); }
 function openJoin(id) { ui.form = { challengeId: id, weight: store["profile.weightKg"], maxReps: store["profile.maxReps"], photo: null }; ui.sheet = JoinSheet; render(); }
 function openMeasure() { ui.form = { weight: store["profile.weightKg"], maxReps: store["profile.maxReps"] }; ui.sheet = MeasureSheet; render(); }
 function openStartPicker(id) { ui.form = { challengeId: id }; ui.sheet = StartPicker; render(); }
@@ -2971,7 +3122,7 @@ function parseVal(v) {
 
 // Действия «на месте» (селект/степпер/тогл) — элемент не исчезает, пульс переносится
 // патчем render; задержку pressFinish на них не вешаем, чтобы отклик был мгновенным.
-const INSTANT_CMDS = new Set(["inc", "dec", "seg", "statEx", "toggle", "toggleStore", "react", "goalChoice", "presetDuration", "bugPick", "shareBg", "toggleLang", "unlockPhotos"]);
+const INSTANT_CMDS = new Set(["inc", "dec", "seg", "statEx", "challengeTab", "createChip", "createCustom", "toggle", "toggleStore", "react", "goalChoice", "presetDuration", "bugPick", "shareBg", "toggleLang", "unlockPhotos"]);
 root.addEventListener("click", async (e) => {
   const el = e.target.closest("[data-act]");
   if (!el) return;
@@ -3003,6 +3154,7 @@ root.addEventListener("click", async (e) => {
     case "startPick": openStartPicker(arg); return;
     case "findChallenge": go("challenges"); return;
     case "create": openCreate(); return;
+    case "challengeTab": ui.challengeTab = arg; render(); return;
     case "openAccountGate": openAuthGate("account"); return;
     case "closeAuthGate": closeAuthGate(); return;
     case "useTemplate": {
@@ -3121,11 +3273,19 @@ root.addEventListener("click", async (e) => {
     else if (f.step > 0) { f.step--; navRender(); } else { ui.full = null; ui.form = null; navRender(); }
     return;
   }
+  if (cmd === "createChip") { const key = act.split(":")[1]; ui.form[key] = +act.split(":")[2]; ui.form["custom_" + key] = false; render(); return; }
+  if (cmd === "createCustom") { ui.form["custom_" + arg] = true; render(); return; }
   if (cmd === "saveChallenge") {
     if (!ui.form) return; // второй тап: первый уже создал челлендж и обнулил форму
-    if (ui.form.isPublic && isGuest()) { openAuthGate("publicCreate"); return; }
-    const wasPublic = ui.form.isPublic;
-    if (saveChallengeForm()) { ui.form = null; if (wasPublic) { ui.full = ChallengeCreatedFull; render(); } else { ui.full = null; go("yours"); } }
+    const access = ui.form.access || "solo", synced = access !== "solo";
+    if (synced && isGuest()) { openAuthGate("publicCreate"); return; }
+    if (saveChallengeForm()) {
+      ui.form = null;
+      ui.challengeTab = "active";
+      // Синканные (private/public) — показываем экран с инвайтом; solo — сразу к списку.
+      if (synced) { ui.full = ChallengeCreatedFull; render(); }
+      else { ui.full = null; go("challenges"); }
+    }
     return;
   }
   if (cmd === "shareCreated") { shareInvite(); return; }

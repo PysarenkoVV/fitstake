@@ -35,7 +35,7 @@ test("creator publishes and another account joins a real challenge", async ({ br
   await prepare(creator, "QA Creator");
   await authenticateTestSession(creator, "QA Creator");
   await creator.getByRole("button", { name: "Challenges", exact: true }).click();
-  await creator.getByRole("button", { name: "Create Challenge", exact: true }).click();
+  await creator.getByRole("button", { name: "New challenge", exact: true }).click();
   await creator.getByRole("button", { name: "Create from scratch", exact: true }).click();
   await creator.getByRole("button", { name: "Continue", exact: true }).click();
   await creator.getByRole("button", { name: /^2 weeks/ }).click();

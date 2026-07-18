@@ -9,47 +9,45 @@ test.beforeEach(async ({ page }) => {
   await page.goto("/");
 });
 
-async function openDurationStep(page) {
+async function openForm(page) {
   await page.getByRole("button", { name: "Challenges", exact: true }).click();
-  await page.getByRole("button", { name: "Create Challenge", exact: true }).click();
-  await page.getByRole("button", { name: "Create from scratch", exact: true }).click();
-  await page.getByRole("button", { name: "Continue", exact: true }).click();
+  await page.getByRole("button", { name: "New challenge", exact: true }).click();
+  await expect(page.locator(".create-form")).toBeVisible();
 }
 
-test("duration presets stay selected and steppers remain numeric", async ({ page }) => {
-  await openDurationStep(page);
-  const twoMonths = page.getByRole("button", { name: /^2 months/ });
-  await twoMonths.click();
-  await expect(twoMonths).toHaveClass(/selected/);
-  await expect(page.getByRole("spinbutton", { name: "Duration (days)" })).toHaveValue("60");
+test("duration chips select and custom reveals a numeric stepper", async ({ page }) => {
+  await openForm(page);
+  const form = page.locator(".create-form");
+  const dur = form.locator(".create-section", { hasText: "DURATION" });
+  const chip14 = dur.getByRole("button", { name: "14d", exact: true });
+  await chip14.click();
+  await expect(chip14).toHaveClass(/selected/);
 
+  await dur.getByRole("button", { name: "Custom", exact: true }).click();
+  const days = page.getByRole("spinbutton", { name: "Days" });
+  await expect(days).toHaveValue("14");
   await page.getByRole("button", { name: "+", exact: true }).click();
-  await expect(page.getByRole("spinbutton", { name: "Duration (days)" })).toHaveValue("61");
-  await page.getByRole("button", { name: "−", exact: true }).click();
-  await expect(page.getByRole("spinbutton", { name: "Duration (days)" })).toHaveValue("60");
+  await expect(days).toHaveValue("15");
 });
 
-test("rules explain consequences and progression shows final target", async ({ page }) => {
-  await openDurationStep(page);
-  await page.getByRole("button", { name: "Continue", exact: true }).click();
+test("streak rules explain consequences and progression shows final target", async ({ page }) => {
+  await openForm(page);
   await expect(page.getByText(/before you leave the challenge and lose your stake/)).toBeVisible();
   await page.getByRole("switch", { name: /Progressive overload/ }).click();
   await expect(page.getByText("Final daily target")).toBeVisible();
-  await expect(page.getByText(/Push-ups 195/)).toBeVisible();
 });
 
-test("review has one clear primary action", async ({ page }) => {
-  await openDurationStep(page);
-  await page.getByRole("button", { name: "Continue", exact: true }).click();
-  await page.getByRole("button", { name: "Continue", exact: true }).click();
-  await expect(page.getByText("Review challenge", { exact: true })).toBeVisible();
+test("goal type hides streak rules and switches the reps label to a total", async ({ page }) => {
+  await openForm(page);
+  const sectionLabels = page.locator(".create-section-label");
+  await expect(sectionLabels.filter({ hasText: /^Daily minimum reps$/ })).toBeVisible();
+  await expect(page.getByText(/before you leave the challenge and lose your stake/)).toBeVisible();
+
+  await page.locator(".create-pick", { hasText: "Goal" }).click();
+  await expect(sectionLabels.filter({ hasText: /^Total reps$/ })).toBeVisible();
+  // У goal нет защиты от пропусков/прогрессии.
+  await expect(page.getByText(/before you leave the challenge and lose your stake/)).toHaveCount(0);
   await expect(page.getByRole("button", { name: "Create challenge", exact: true })).toHaveCount(1);
-  await expect(page.getByRole("button", { name: /Save & share/ })).toHaveCount(0);
-  const layout = await page.locator(".create-review").evaluate((review) => {
-    const cards = Array.from(review.querySelectorAll(".create-review-card")).map((card) => card.getBoundingClientRect());
-    return { overflow: review.scrollWidth > review.clientWidth, overlap: cards.some((card, index) => index > 0 && card.top < cards[index - 1].bottom) };
-  });
-  expect(layout).toEqual({ overflow: false, overlap: false });
 });
 
 test("account screen exposes email and Google entry points", async ({ page }) => {
