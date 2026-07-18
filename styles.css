@@ -157,6 +157,7 @@ img { max-width: 100%; }
   text-align: left;
 }
 .challenge-card-action { display: flex; justify-content: flex-end; padding: 0 20px 20px; }
+.challenge-pending-actions { display: flex; flex-direction: column; gap: 8px; padding: 0 20px 20px; }
 
 /* ---- Внутренние табы вкладки Challenges ---- */
 /* 4 чипа: на узком экране ряд скроллится горизонтально, без переноса. */

@@ -259,6 +259,22 @@ window.Sync = (() => {
     }));
   }
 
+  // Участник public-челленджа нажал «Готов!» — метка времени готовности.
+  function setReady(id) {
+    return new Promise((resolve) => ready(() => {
+      F.set(F.ref(db, "fitstake/challenges/" + id + "/participants/" + uid + "/ready"), Date.now())
+        .then(() => resolve(true)).catch(() => resolve(false));
+    }));
+  }
+
+  // Создатель private-челленджа задал дату старта (сегодня/завтра). Пишет только владелец.
+  function setStartAt(id, ts) {
+    return new Promise((resolve) => ready(() => {
+      F.set(F.ref(db, "fitstake/challenges/" + id + "/startAt"), ts)
+        .then(() => resolve(true)).catch(() => resolve(false));
+    }));
+  }
+
   function reportChallenge(id, dateKey, perExercise, total) {
     ready(() => {
       const upd = { total };
@@ -303,7 +319,7 @@ window.Sync = (() => {
   }
 
   return {
-    enabled, state, init, registerUser, join, report, createChallenge, joinChallenge, leaveChallenge, reportChallenge, setFollowing, publishActivity, setReaction, reportBug, signIn, signUp, signInGoogle, signOutUser,
+    enabled, state, init, registerUser, join, report, createChallenge, joinChallenge, leaveChallenge, reportChallenge, setReady, setStartAt, setFollowing, publishActivity, setReaction, reportBug, signIn, signUp, signInGoogle, signOutUser,
     get uid() { return uid; },
     get email() { return accountEmail; },
     get isAnonymous() { return isAnon; },

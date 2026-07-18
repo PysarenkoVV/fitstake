@@ -4,7 +4,7 @@
 "use strict";
 
 // Версия оболочки — держать в синхроне с CACHE в sw.js; уходит в баг-репорты.
-const APP_VERSION = "v84";
+const APP_VERSION = "v85";
 // Последняя JS-ошибка — прикладываем к баг-репорту, чтобы сразу видеть причину.
 let lastError = "";
 window.addEventListener("error", (e) => {
@@ -240,7 +240,13 @@ const RU = {
   "Invite friends": "Пригласить друзей", "Link copied": "Ссылка скопирована",
   "Your name": "Твоё имя", "Friends will see it in the leaderboard.": "Друзья увидят его в таблице лидеров.",
   "Join my challenge — 150 push-ups + 50 squats a day!": "Залетай в мой челлендж — 150 отжиманий и 50 приседаний в день!",
-  "In the app: %lld": "В приложении: %lld", "today": "сегодня", "yesterday": "вчера",
+  "In the app: %lld": "В приложении: %lld", "today": "сегодня", "yesterday": "вчера", "tomorrow": "завтра",
+  "Ready!": "Готов!", "Start today": "Начать сегодня", "Start tomorrow": "Начать завтра", "Start solo!": "Начать соло!",
+  "%lld players": "Игроков: %lld", "Gathered %lld / %lld · %lld ready": "Собрано %lld / %lld · готовы %lld",
+  "Waiting for everyone to gather and get ready…": "Ждём, пока соберутся все и нажмут «Готов!»…",
+  "Waiting for the creator to start…": "Ждём, пока создатель запустит челлендж…",
+  "Couldn't start challenge": "Не удалось запустить челлендж", "Couldn't mark ready": "Не удалось отметить готовность",
+  "“%@” starts %@": "«%@» стартует %@",
   "Pull-ups": "Подтягивания", "Dips": "Брусья",
   "Do today's pull-ups": "Подтягивания за сегодня", "Do today's dips": "Брусья за сегодня",
   "You didn't finish this one.": "В этот раз ты не дошёл.", "Finishers": "Дошли",
@@ -710,6 +716,20 @@ function applySync() {
   applyPublicChallenges(today);
 }
 
+// Старт remote-челленджа: private задаёт создатель (узел startAt); public стартует
+// автоматически на следующий день после того, как собралось ≥ minPlayers и все нажали
+// «Готов!». null = ещё Pending (стартовать нельзя).
+function remoteStartAt(rec, m) {
+  if (m.access === "private") return typeof rec.startAt === "number" ? rec.startAt : null;
+  if (m.access === "public") {
+    const parts = Object.values(rec.participants || {}), minP = m.minPlayers || 0;
+    if (minP >= 2 && parts.length >= minP && parts.every((p) => typeof p.ready === "number")) {
+      return startOfDay(Math.max(...parts.map((p) => p.ready))) + DAY;
+    }
+    return null;
+  }
+  return startOfDay(m.createdAt);
+}
 function applyPublicChallenges(today) {
   const remote = Sync.state.challenges;
   if (!remote) return;
@@ -720,20 +740,28 @@ function applyPublicChallenges(today) {
     // Приватные показываем только участникам и пришедшим по инвайт-ссылке — не всем подряд.
     const amMember = !!(rec.participants && Sync.uid && rec.participants[Sync.uid]);
     if (!c && m.access === "private" && !amMember && id !== JOIN_ID) continue;
+    const start = remoteStartAt(rec, m); // null = ещё Pending
     if (!c) {
       c = newChallenge({ id, title: m.title, goals: Object.values(m.goals || {}), durationDays: m.durationDays,
         buyIn: m.buyIn, isPublic: true, type: m.type || "streak", access: m.access || "public", minPlayers: m.minPlayers || 0,
         ownerId: m.ownerId, missPolicy: m.missPolicy, progression: { step: m.progressionStep || 0, period: m.progressionPeriod || "day" },
-        startAt: startOfDay(m.createdAt), currentDay: Math.min(Math.floor((startOfDay(Date.now()) - startOfDay(m.createdAt)) / DAY) + 1, m.durationDays),
-        yesterdayDropouts: 0, participants: [], myTodayReps: {}, myTotalReps: 0 });
+        startAt: start, currentDay: 1, yesterdayDropouts: 0, participants: [], myTodayReps: {}, myTotalReps: 0 });
       app.challenges.push(c);
+    } else if (start != null) {
+      c.startAt = start; // старт мог измениться: создатель нажал «Начать» / собрались участники
+    } else if (!(c.access === "private" && c.ownerId === Sync.uid && c.startAt != null)) {
+      // Не сбрасываем в Pending старт, который владелец только что выставил локально
+      // (Firebase ещё не подтвердил запись startAt).
+      c.startAt = null;
     }
+    c.currentDay = computeCurrentDay(c);
     c.participants = Object.entries(rec.participants || {}).map(([pid, p]) => {
       const days = p.days || {}, day = days[today] || {}, totals = totalsByExercise(days);
       // goal — «готово» по общей сумме к цели; streak — по сегодняшней норме.
       const done = c.goals.every((g) => (C.isGoal(c) ? (totals[g.exercise] || 0) : (day[g.exercise] || 0)) >= C.norm(c, g));
       return { id: pid, name: p.name || "?", isMe: pid === Sync.uid, state: eliminatedByMisses(c, days) ? "eliminated" : "active",
-        doneToday: done, todayReps: Object.values(day).reduce((a, b) => a + b, 0), _days: days, _total: p.total || 0, _streak: streakOf(c, days) };
+        doneToday: done, todayReps: Object.values(day).reduce((a, b) => a + b, 0), _days: days, _total: p.total || 0, _streak: streakOf(c, days),
+        _ready: typeof p.ready === "number" ? p.ready : null };
     });
     const me = C.me(c);
     if (me) { c.myTodayReps = Object.assign({}, me._days[today] || {}); c.myTotalReps = me._total; c.myTotalByExercise = totalsByExercise(me._days); }
@@ -886,6 +914,43 @@ function leaveChallenge(id) {
   localStorage.removeItem("fs.paid." + id);
   saveApp();
   track("challenge_left", { challenge_id: id });
+}
+
+// Создатель private-челленджа запускает его (сегодня/завтра/соло). Пишем дату старта в Firebase
+// (владелец), обновляем локально и уведомляем участников. Челлендж уходит из Pending.
+function startChallengeNow(id, ts) {
+  const c = app.challenges.find((x) => x.id === id);
+  if (!c || c.ownerId == null || c.ownerId !== Sync.uid) return;
+  c.startAt = ts;
+  c.currentDay = computeCurrentDay(c);
+  if (Sync.enabled) Sync.setStartAt(id, ts).then((ok) => { if (!ok) toast(t("Couldn't start challenge")); });
+  publishStartActivity(c, ts);
+  ui.challengeTab = ts <= startOfDay(Date.now()) ? "active" : "pending";
+  saveApp();
+  render();
+  track("challenge_started", { challenge_id: id, when: ts <= startOfDay(Date.now()) ? "today" : "tomorrow" });
+}
+
+// Участник public-челленджа нажал «Готов!». Если моим действием сбор завершился
+// (собрано ≥ minPlayers и все готовы) — я публикую уведомление о старте.
+function markReady(id) {
+  const c = app.challenges.find((x) => x.id === id);
+  if (!c) return;
+  const me = C.me(c);
+  if (me) me._ready = Date.now();
+  if (Sync.enabled) Sync.setReady(id).then((ok) => { if (!ok) toast(t("Couldn't mark ready")); });
+  const readyCount = c.participants.filter((p) => p._ready).length;
+  if (c.access === "public" && c.participants.length >= c.minPlayers && readyCount >= c.participants.length) {
+    publishStartActivity(c, startOfDay(Date.now()) + DAY);
+  }
+  render();
+}
+
+// Уведомление участникам, что челлендж стартует. dateKey старта → «сегодня/завтра» при показе.
+function publishStartActivity(c, ts) {
+  if (!Sync.enabled) return;
+  Sync.publishActivity({ challengeId: c.id, challengeTitle: c.title, type: "start",
+    actorName: store["profile.name"] || "Player", dateKey: dateKey(ts) });
 }
 
 // Плюсует подход; возвращает true, если дневная норма закрылась впервые.
@@ -1238,6 +1303,45 @@ function ChallengeCard(c, withPlay) {
   </button>${playBtn ? `<div class="challenge-card-action">${playBtn}</div>` : ""}</div>`;
 }
 
+// Карточка ещё не стартовавшего челленджа (Pending): private ждёт создателя,
+// public — набора участников. Кнопки зависят от роли и типа доступа.
+function PendingCard(c) {
+  const isOwner = c.ownerId != null && c.ownerId === Sync.uid;
+  const players = c.participants.length;
+  const me = C.me(c);
+  const readyCount = c.participants.filter((p) => p._ready).length;
+  let statusLine, actions;
+  if (c.access === "public") {
+    statusLine = t("Gathered %lld / %lld · %lld ready", players, c.minPlayers, readyCount);
+    actions = me && !me._ready
+      ? `<button class="action-btn" data-act="setReady:${c.id}">${iconF("checkCircle")}${t("Ready!")}</button>`
+      : `<div class="secondary center" style="font-size:13px">${t("Waiting for everyone to gather and get ready…")}</div>`;
+  } else {
+    statusLine = t("%lld players", players);
+    if (isOwner && players > 1) {
+      actions = `<div class="row gap8"><button class="action-btn" data-act="startToday:${c.id}" style="flex:1">${t("Start today")}</button><button class="action-btn plain" data-act="startTomorrow:${c.id}" style="flex:1">${t("Start tomorrow")}</button></div>`;
+    } else if (isOwner) {
+      actions = `<button class="action-btn" data-act="startSolo:${c.id}">${iconF("flame")}${t("Start solo!")}</button>`;
+    } else {
+      actions = `<div class="secondary center" style="font-size:13px">${t("Waiting for the creator to start…")}</div>`;
+    }
+  }
+  return `<div class="card challenge-card">
+    <button class="challenge-card-main" data-act="open:${c.id}">
+      <div class="between" style="align-items:flex-start">
+        <div style="font-size:20px;font-weight:700">${esc(c.title)}</div>
+        <div class="row gap6">${badge(c.access === "public" ? t("Public") : t("Private"), c.access === "public" ? "var(--text-secondary)" : "var(--purple)")}</div>
+      </div>
+      <div class="between"><span class="secondary">${esc(C.goalsText(c))}</span><span class="secondary">${t("%lld days", c.durationDays)}</span></div>
+      <div class="secondary" style="font-size:13px">${esc(statusLine)}</div>
+    </button>
+    <div class="challenge-pending-actions">
+      <button class="action-btn plain" data-act="invitePending:${c.id}">${icon("share")}${t("Invite friends")}</button>
+      ${actions}
+    </div>
+  </div>`;
+}
+
 // ==========================================================================
 // Вкладка «Твои»
 // ==========================================================================
@@ -1374,6 +1478,8 @@ function NotificationsSheet() {
   const rows = events.map((e) => {
     const message = e.type === "day"
       ? t("%@ completed today's challenge in %@", e.actorName || "?", e.challengeTitle || "?")
+      : e.type === "start"
+      ? t("“%@” starts %@", e.challengeTitle || "?", e.dateKey === dateKey() ? t("today") : t("tomorrow"))
       : t("%@ completed %@ in %@", e.actorName || "?", Exercise.displayName(e.exercise), e.challengeTitle || "?");
     const reactions = (Sync.state.reactions && Sync.state.reactions[e.id]) || {};
     const reactionButtons = ["🔥", "💪", "👏"].map((emoji) => {
@@ -1383,7 +1489,7 @@ function NotificationsSheet() {
     }).join("");
     return `<div class="activity-row">
       <button class="entry-row activity-main" data-act="notification:${e.challengeId}">
-        <div class="avatar" style="background:rgba(77,194,128,.14);color:var(--money)">${icon(e.type === "day" ? "check" : "bolt")}</div>
+        <div class="avatar" style="background:rgba(77,194,128,.14);color:var(--money)">${icon(e.type === "day" ? "check" : e.type === "start" ? "flame" : "bolt")}</div>
         <span style="flex:1"><span style="display:block;font-size:14px;line-height:1.35">${esc(message)}</span><span class="secondary" style="display:block;font-size:12px;margin-top:4px">${relativeActivityTime(e.ts)}</span></span>
       </button><div class="reaction-row">${reactionButtons}</div>
     </div>`;
@@ -1413,7 +1519,8 @@ function ChallengesTab() {
   }).join("")}</div>`;
 
   const list = buckets[tabKey];
-  const body = list.length ? list.map((c) => ChallengeCard(c, false)).join("") : challengeEmpty(tabKey);
+  const card = tabKey === "pending" ? PendingCard : (c) => ChallengeCard(c, false);
+  const body = list.length ? list.map(card).join("") : challengeEmpty(tabKey);
   return screenHeader(t("Challenges")) + `<div class="stack">${syncState}${tabsUI}${body}</div>`;
 }
 function challengeEmpty(tabKey) {
@@ -2328,12 +2435,11 @@ function saveChallengeForm() {
   const goals = sel.map((e) => f.type === "goal" ? { exercise: e, target: clampV(f[e]) } : { exercise: e, repsPerDay: Math.min(clampV(f[e]), 500) });
   const access = f.access || "solo";
   const isPublic = access !== "solo";
-  // Пока все стартуют сразу (startAt = сегодня). Механику pending/старта для private/public
-  // добавим отдельно; тогда startAt для них станет null до решения создателя/сбора участников.
+  // solo стартует сразу; private ждёт кнопки создателя, public — набора участников (startAt=null → Pending).
   const ok = createChallenge({
     title: f.title.trim() || defaultTitle(f), goals, type: f.type || "streak", access,
     minPlayers: access === "public" ? Math.min(Math.max(f.minPlayers, 2), 50) : 0,
-    startAt: startOfDay(Date.now()),
+    startAt: access === "solo" ? startOfDay(Date.now()) : null,
     durationDays: Math.min(Math.max(f.duration, 1), 365), buyIn: Math.max(f.buyIn, 0), isPublic, missPolicy: f.miss,
     progression: f.type === "streak" && f.progOn ? { step: f.progStep, period: f.progPeriod } : { step: 0, period: "day" },
   });
@@ -3224,6 +3330,10 @@ root.addEventListener("click", async (e) => {
       render(); return;
     }
     case "showResult": openChallengeComplete(app.challenges.find((c) => c.id === arg)); return;
+    case "startToday": case "startSolo": startChallengeNow(arg, startOfDay(Date.now())); return;
+    case "startTomorrow": startChallengeNow(arg, startOfDay(Date.now()) + DAY); return;
+    case "setReady": markReady(arg); return;
+    case "invitePending": shareInvite(arg); return;
     case "askLeave": openLeave(arg); return;
     case "confirmLeave": leaveChallenge(arg); ui.sheet = null; ui.form = null; ui.detailId = null; render(); return;
     case "openBug": openBug(); return;
@@ -3290,7 +3400,8 @@ root.addEventListener("click", async (e) => {
     if (synced && isGuest()) { openAuthGate("publicCreate"); return; }
     if (saveChallengeForm()) {
       ui.form = null;
-      ui.challengeTab = "active";
+      // solo стартует сразу (Active); private/public ещё не стартовали (Pending).
+      ui.challengeTab = synced ? "pending" : "active";
       // Синканные (private/public) — показываем экран с инвайтом; solo — сразу к списку.
       if (synced) { ui.full = ChallengeCreatedFull; render(); }
       else { ui.full = null; go("challenges"); }
@@ -3733,8 +3844,8 @@ document.addEventListener("keydown", (e) => {
 // ==========================================================================
 // Приглашение друзей
 // ==========================================================================
-async function shareInvite() {
-  const c = (ui.createdChallengeId && app.challenges.find((x) => x.id === ui.createdChallengeId)) || (ui.detailId && app.challenges.find((x) => x.id === ui.detailId)) || app.challenges.find(C.isJoined) || app.challenges[0];
+async function shareInvite(id) {
+  const c = (id && app.challenges.find((x) => x.id === id)) || (ui.createdChallengeId && app.challenges.find((x) => x.id === ui.createdChallengeId)) || (ui.detailId && app.challenges.find((x) => x.id === ui.detailId)) || app.challenges.find(C.isJoined) || app.challenges[0];
   if (!c) return;
   const url = "https://pysarenkovv.github.io/fitstake/?join=" + encodeURIComponent(c.id);
   track("invite_shared", { challenge_id: c.id });
