@@ -4,7 +4,7 @@
 "use strict";
 
 // Версия оболочки — держать в синхроне с CACHE в sw.js; уходит в баг-репорты.
-const APP_VERSION = "v83";
+const APP_VERSION = "v84";
 // Последняя JS-ошибка — прикладываем к баг-репорту, чтобы сразу видеть причину.
 let lastError = "";
 window.addEventListener("error", (e) => {
@@ -307,7 +307,8 @@ const RU = {
   "Buy coins": "Купить коины", "coins": "коинов", "Coins purchased": "Пополнение баланса", "+%lld coins": "+%lld коинов",
   "Follow": "Подписаться", "Following": "Вы подписаны", "Unfollow": "Отписаться",
   "Challenges joined": "Участвует в челленджах", "No active challenges": "Нет активных челленджей",
-  "Active": "Активные", "Pending": "Ожидание",
+  "Active": "Активные", "Pending": "Ожидание", "Browse": "Обзор",
+  "No public challenges yet": "Пока нет публичных", "Public challenges you can join show up here.": "Здесь появляются публичные челленджи, к которым можно присоединиться.",
   "Challenge type": "Тип челленджа", "Daily minimum reps": "Минимум в день", "Goal": "Цель",
   "Hit a total rep target": "Набрать цель повторов", "Custom": "Свой", "Who can join": "Кто участвует",
   "Solo": "Соло", "Just you": "Только ты", "Invite by link": "Вход по ссылке", "Anyone joins": "Все могут войти",
@@ -716,6 +717,9 @@ function applyPublicChallenges(today) {
     if (!rec.meta) continue;
     let c = app.challenges.find((x) => x.id === id);
     const m = rec.meta;
+    // Приватные показываем только участникам и пришедшим по инвайт-ссылке — не всем подряд.
+    const amMember = !!(rec.participants && Sync.uid && rec.participants[Sync.uid]);
+    if (!c && m.access === "private" && !amMember && id !== JOIN_ID) continue;
     if (!c) {
       c = newChallenge({ id, title: m.title, goals: Object.values(m.goals || {}), durationDays: m.durationDays,
         buyIn: m.buyIn, isPublic: true, type: m.type || "streak", access: m.access || "public", minPlayers: m.minPlayers || 0,
@@ -1394,11 +1398,15 @@ function ChallengesTab() {
   const syncState = Sync.enabled && !Sync.state.ready ? `<div class="card card-soft center" style="padding:14px"><span class="secondary">${t("Loading public challenges…")}</span></div>`
     : Sync.state.error ? `<div class="card center" style="padding:14px;border-color:var(--red)"><span>${t("Couldn't load public challenges. Check connection.")}</span></div>` : "";
 
-  // Раскладываем челленджи по статусу; внутренние табы показывают по одной корзине.
-  const buckets = { active: [], pending: [], completed: [] };
-  for (const c of app.challenges) buckets[C.status(c)].push(c);
+  // Раскладываем по членству: принятые мной — по статусу (Active/Pending/Completed),
+  // а публичные, где меня нет и можно вступить — в Browse (дискавери).
+  const buckets = { active: [], pending: [], completed: [], browse: [] };
+  for (const c of app.challenges) {
+    if (C.isJoined(c)) buckets[C.status(c)].push(c);
+    else if (c.access === "public" && C.status(c) !== "completed") buckets.browse.push(c);
+  }
   const tabKey = buckets[ui.challengeTab] ? ui.challengeTab : "active";
-  const tabs = [["active", t("Active")], ["pending", t("Pending")], ["completed", t("Completed")]];
+  const tabs = [["active", t("Active")], ["pending", t("Pending")], ["completed", t("Completed")], ["browse", t("Browse")]];
   const tabsUI = `<div class="challenge-tabs">${tabs.map(([k, name]) => {
     const n = buckets[k].length, showCount = k !== "active" && n > 0;
     return `<button data-act="challengeTab:${k}" class="${tabKey === k ? "active" : ""}">${esc(name)}${showCount ? `<span class="challenge-tab-count">${n}</span>` : ""}</button>`;
@@ -1413,6 +1421,7 @@ function challengeEmpty(tabKey) {
     active: [t("No active challenges"), t("Create a new challenge to get started!")],
     pending: [t("Nothing pending"), t("Private and public challenges waiting to start show up here.")],
     completed: [t("No finished challenges yet"), t("Completed challenges will show up here.")],
+    browse: [t("No public challenges yet"), t("Public challenges you can join show up here.")],
   }[tabKey];
   return `<div class="card center challenge-empty">
     <div class="challenge-empty-emoji">🏋️</div>
