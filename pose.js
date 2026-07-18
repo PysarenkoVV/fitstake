@@ -17,10 +17,14 @@ const BONES = [
 const EX = {
   // Отжимания: кисти на полу — НИЖЕ плеч. Гейт отсекает сгибы рук, когда они подняты
   // (в комбо присед с поднятыми руками иначе засчитывался как ложное отжимание).
+  // angle3d: угол локтя по world-координатам (3D). В 2D-проекции при съёмке под
+  // углом или узкой постановке рук (локти назад, к камере) угол почти не меняется
+  // и повтор не засчитывался.
   pushups: {
     angleJoints: (s) => ({ a: s + "Shoulder", vertex: s + "Elbow", b: s + "Wrist" }),
     bodyJoints: ["leftShoulder", "rightShoulder"],
     wristAbove: false,
+    angle3d: true,
   },
   // Приседания: сгиб колена сам по себе надёжен (стоя его не подделать), а анти-чит
   // корпуса при съёмке снизу сжимает ход таза и ложно резал реальные приседы —
@@ -100,6 +104,7 @@ class RepCounter {
     this.maxAnchorDrift = cfg.maxAnchorDrift != null ? cfg.maxAnchorDrift : 0.7;
     this.relativeBodyTravel = !!cfg.relativeBodyTravel;
     this.requireBothSides = !!cfg.requireBothSides;
+    this.use3d = !!cfg.angle3d;
   }
 
   process(points, size, countingEnabled = true, now = performance.now()) {
@@ -249,7 +254,9 @@ class RepCounter {
 
   _bendAngle(s, points, size) {
     const j = EX[this.exercise].angleJoints(s);
-    return angleAt(px(points[j.vertex], size), px(points[j.a], size), px(points[j.b], size));
+    const v = points[j.vertex], a = points[j.a], b = points[j.b];
+    if (this.use3d && v.world && a.world && b.world) return angleAt3(v.world, a.world, b.world);
+    return angleAt(px(v, size), px(a, size), px(b, size));
   }
 }
 
@@ -259,6 +266,14 @@ function angleAt(vertex, a, b) {
   const v1 = { x: a.x - vertex.x, y: a.y - vertex.y }, v2 = { x: b.x - vertex.x, y: b.y - vertex.y };
   const dot = v1.x * v2.x + v1.y * v2.y;
   const len = Math.hypot(v1.x, v1.y) * Math.hypot(v2.x, v2.y);
+  if (len <= 0) return 180;
+  return Math.acos(Math.max(-1, Math.min(1, dot / len))) * 180 / Math.PI;
+}
+function angleAt3(vertex, a, b) {
+  const v1 = { x: a.x - vertex.x, y: a.y - vertex.y, z: a.z - vertex.z };
+  const v2 = { x: b.x - vertex.x, y: b.y - vertex.y, z: b.z - vertex.z };
+  const dot = v1.x * v2.x + v1.y * v2.y + v1.z * v2.z;
+  const len = Math.hypot(v1.x, v1.y, v1.z) * Math.hypot(v2.x, v2.y, v2.z);
   if (len <= 0) return 180;
   return Math.acos(Math.max(-1, Math.min(1, dot / len))) * 180 / Math.PI;
 }
@@ -354,10 +369,13 @@ class PoseSession {
       let ts = performance.now();
       if (ts <= this._lastTs) ts = this._lastTs + 1;
       this._lastTs = ts;
-      let landmarks = null;
+      let landmarks = null, world = null;
       try {
         const res = this._landmarker.detectForVideo(video, ts);
-        if (res && res.landmarks && res.landmarks.length) landmarks = res.landmarks[0];
+        if (res && res.landmarks && res.landmarks.length) {
+          landmarks = res.landmarks[0];
+          world = res.worldLandmarks && res.worldLandmarks[0] || null;
+        }
         this._detectFails = 0;
       } catch {
         // Инстанс мог «умереть» (потеря GPU/WebGL-контекста после фона на iOS) —
@@ -369,7 +387,8 @@ class PoseSession {
       if (landmarks) {
         for (const [name, idx] of Object.entries(LM)) {
           const p = landmarks[idx];
-          points[name] = { x: p.x, y: p.y, confidence: p.visibility != null ? p.visibility : 1 };
+          const w = world && world[idx];
+          points[name] = { x: p.x, y: p.y, confidence: p.visibility != null ? p.visibility : 1, world: w ? { x: w.x, y: w.y, z: w.z } : null };
         }
         points.neck = mid(points.leftShoulder, points.rightShoulder);
         points.root = mid(points.leftHip, points.rightHip);

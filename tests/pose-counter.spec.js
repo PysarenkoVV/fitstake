@@ -57,6 +57,43 @@ test("dips require full extension and ignore angle jitter without vertical trave
   expect(result).toEqual({ beforeExtension: 0, afterExtension: 1, afterJitter: 1 });
 });
 
+test("push-ups at an angle to the camera count via the 3D elbow angle", async ({ page }) => {
+  const result = await page.evaluate(() => {
+    // Локти направлены к камере: в 2D плечо-локоть-кисть почти коллинеарны (~180°)
+    // и вниз, и вверх — повтор виден только по world-координатам (3D-сгиб ~56°).
+    const mk = (withWorld) => {
+      const W = (x, y, z) => (withWorld ? { x, y, z } : null);
+      const up = {
+        leftShoulder: { x: .40, y: .40, confidence: 1, world: W(-0.2, -0.30, 0) },
+        rightShoulder: { x: .60, y: .40, confidence: 1, world: W(0.2, -0.30, 0) },
+        leftElbow: { x: .40, y: .55, confidence: 1, world: W(-0.2, 0, 0) },
+        rightElbow: { x: .60, y: .55, confidence: 1, world: W(0.2, 0, 0) },
+        leftWrist: { x: .40, y: .70, confidence: 1, world: W(-0.2, 0.25, 0) },
+        rightWrist: { x: .60, y: .70, confidence: 1, world: W(0.2, 0.25, 0) },
+      };
+      const down = {
+        leftShoulder: { x: .40, y: .60, confidence: 1, world: W(-0.2, -0.05, 0) },
+        rightShoulder: { x: .60, y: .60, confidence: 1, world: W(0.2, -0.05, 0) },
+        leftElbow: { x: .40, y: .65, confidence: 1, world: W(-0.2, 0, 0.25) },
+        rightElbow: { x: .60, y: .65, confidence: 1, world: W(0.2, 0, 0.25) },
+        leftWrist: { x: .40, y: .70, confidence: 1, world: W(-0.2, 0.25, 0) },
+        rightWrist: { x: .60, y: .70, confidence: 1, world: W(0.2, 0.25, 0) },
+      };
+      return { up, down };
+    };
+    const run = (withWorld) => {
+      const { up, down } = mk(withWorld);
+      const counter = new window.RepCounter("pushups");
+      let now = 0;
+      const feed = (points, frames) => { for (let i = 0; i < frames; i++) counter.process(points, { width: 1000, height: 1000 }, true, now += 50); };
+      feed(up, 4); feed(down, 6); feed(up, 6);
+      return counter.count;
+    };
+    return { with3d: run(true), flat2d: run(false) };
+  });
+  expect(result).toEqual({ with3d: 1, flat2d: 0 });
+});
+
 test("recorded workout frame includes exercise, target, challenge, and progress", async ({ page }) => {
   const frame = await page.evaluate(() => {
     const size = { width: 720, height: 1280 };
