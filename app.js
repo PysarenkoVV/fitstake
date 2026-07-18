@@ -4,7 +4,7 @@
 "use strict";
 
 // Версия оболочки — держать в синхроне с CACHE в sw.js; уходит в баг-репорты.
-const APP_VERSION = "v79";
+const APP_VERSION = "v80";
 // Последняя JS-ошибка — прикладываем к баг-репорту, чтобы сразу видеть причину.
 let lastError = "";
 window.addEventListener("error", (e) => {
@@ -210,6 +210,7 @@ const RU = {
   "I did mine": "Я своё сделал", "Now it's your turn": "Теперь твоя очередь",
   "Potential reward": "Возможная награда",
   "Above goal": "Сверх нормы", "Best day": "Лучший день", "Today's place": "Место сегодня", "Streak": "Серия",
+  "Reps · 30 days": "Повторы · 30 дней", "Completion": "Выполнено",
   "%lld of %lld": "%lld из %lld",
   "reps": "повторов", "Exercises": "Упражнения", "Your turn": "Твой ход",
   "Body & measurements": "Тело и замеры", "Wallet": "Кошелёк", "Privacy & data": "Приватность и данные",
@@ -1592,6 +1593,9 @@ function StatsTab() {
 
   // Суммы по календарным дням: в истории бывают пропуски, слайс «по записям» сдвигал графики
   const byDay = new Map(app.history.map((d) => [startOfDay(d.date), d.entries.reduce((s, e) => s + e.reps, 0)]));
+  // Дневная норма — сумма норм назначенных на день челленджей (entries с norm).
+  // Нужна, чтобы красить столбик по выполнению и считать долю закрытых дней.
+  const byDayNorm = new Map(app.history.map((d) => [startOfDay(d.date), d.entries.reduce((s, e) => s + (e.norm || 0), 0)]));
   const today0 = startOfDay(Date.now());
   const series = (n) => { const out = []; for (let back = n - 1; back >= 0; back--) out.push(byDay.get(today0 - back * DAY) || 0); return out; };
 
@@ -1599,8 +1603,13 @@ function StatsTab() {
   const padded = series(28);
   const weeks = [0, 1, 2, 3].map((w) => padded.slice(w * 7, w * 7 + 7).reduce((a, b) => a + b, 0));
 
-  // Активность по дням
-  const days = series(30).map((reps, i) => ({ date: today0 - (29 - i) * DAY, reps }));
+  // Активность по дням: reps, дневная норма и флаг «день закрыт» (норма выполнена).
+  const days = [];
+  for (let back = 29; back >= 0; back--) {
+    const date = today0 - back * DAY;
+    const reps = byDay.get(date) || 0, norm = byDayNorm.get(date) || 0;
+    days.push({ date, reps, norm, done: norm > 0 && reps >= norm });
+  }
 
   // Выводы: превращаем цифры в мотивацию вместо голых графиков.
   const loc = store.lang === "ru" ? "ru-RU" : "en-US";
@@ -1629,6 +1638,18 @@ function StatsTab() {
     ${insights.map((s) => `<div class="row gap8" style="align-items:flex-start"><span style="color:var(--accent);font-weight:800">•</span><span style="font-size:14px;font-weight:500">${esc(s)}</span></div>`).join("")}
   </div>` : "";
 
+  // Быстрые метрики над графиками: суммарный объём за 30 дней, доля закрытых дней, серия.
+  const monthReps = days.reduce((s, d) => s + d.reps, 0);
+  const activeDays = days.filter((d) => d.norm > 0);
+  const completion = activeDays.length ? Math.round(activeDays.filter((d) => d.done).length / activeDays.length * 100) : null;
+  const metric = (value, label, color) => `<div class="card" style="padding:14px 12px;display:flex;flex-direction:column;gap:3px">
+    <div class="money" style="font-size:23px;line-height:1;color:${color}">${esc(value)}</div>
+    <div class="label" style="font-size:10px;letter-spacing:.5px">${esc(label)}</div></div>`;
+  const metricsCard = `<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px">
+    ${metric(fmt(monthReps), t("Reps · 30 days"), "var(--money)")}
+    ${metric(completion != null ? completion + "%" : "—", t("Completion"), "#fff")}
+    ${metric(String(streak), t("Streak"), "var(--accent)")}</div>`;
+
   const weeklyCard = `<div class="card" style="padding:16px;display:flex;flex-direction:column;gap:4px">
     ${dot("var(--money)", t("Weekly volume"))}
     <div class="form-footer">${t("Total reps over the last 4 weeks.")}</div>
@@ -1636,7 +1657,7 @@ function StatsTab() {
   const dailyCard = `<div class="card" style="padding:16px;display:flex;flex-direction:column;gap:4px">
     ${dot("var(--accent)", t("Daily activity — 30 days"))}
     <div class="form-footer">${t("Each bar is one day.")}</div>
-    ${dailyChart(days)}</div>`;
+    ${dailyChart(days, loc)}</div>`;
 
   // Журнал
   const today = startOfDay(Date.now());
@@ -1657,30 +1678,65 @@ function StatsTab() {
   }
   const journalCard = `<div class="card" style="padding:16px;display:flex;flex-direction:column;gap:10px">${journal}</div>`;
 
-  return screenHeader(t("Progress")) + `<div class="stack">${insightsCard}${weeklyCard}${dailyCard}${journalCard}</div>`;
+  return screenHeader(t("Progress")) + `<div class="stack">${metricsCard}${insightsCard}${weeklyCard}${dailyCard}${journalCard}</div>`;
+}
+// Округление верхней отметки оси Y до «круглого» значения (1/2/5 × 10ⁿ),
+// чтобы подписи сетки читались как 0 / 400 / 800, а не 0 / 417 / 835.
+function niceCeil(v) {
+  if (v <= 0) return 1;
+  const pow = Math.pow(10, Math.floor(Math.log10(v)));
+  const n = v / pow, step = n <= 1 ? 1 : n <= 2 ? 2 : n <= 5 ? 5 : 10;
+  return step * pow;
 }
 function weeklyChart(weeks) {
-  const W = 300, H = 150, pad = 20, max = Math.max(...weeks, 1);
-  const xs = weeks.map((_, i) => pad + i * ((W - pad * 2) / 3));
-  const ys = weeks.map((v) => H - 12 - (v / max) * (H - 30));
+  const W = 320, H = 184, padL = 34, padR = 18, padT = 24, padB = 22;
+  const plotW = W - padL - padR, plotH = H - padT - padB;
+  const max = niceCeil(Math.max(...weeks, 1));
+  const xs = weeks.map((_, i) => padL + i * (plotW / 3));
+  const yFor = (v) => padT + plotH * (1 - v / max);
+  const ys = weeks.map(yFor);
   const line = xs.map((x, i) => `${i ? "L" : "M"}${x.toFixed(1)},${ys[i].toFixed(1)}`).join(" ");
-  const area = `${line} L${xs[xs.length - 1]},${H} L${xs[0]},${H} Z`;
-  return `<svg class="chart" viewBox="0 0 ${W} ${H + 20}" preserveAspectRatio="none">
-    <defs><linearGradient id="wg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#4dc280" stop-opacity="0.35"/><stop offset="1" stop-color="#4dc280" stop-opacity="0"/></linearGradient></defs>
+  const area = `${line} L${xs[xs.length - 1].toFixed(1)},${(padT + plotH).toFixed(1)} L${xs[0].toFixed(1)},${(padT + plotH).toFixed(1)} Z`;
+  const grid = [0, max / 2, max].map((v) => {
+    const y = yFor(v);
+    return `<line x1="${padL}" y1="${y.toFixed(1)}" x2="${W - padR}" y2="${y.toFixed(1)}" stroke="rgba(255,255,255,.07)" stroke-width="1"/>
+      <text x="${padL - 6}" y="${(y + 3).toFixed(1)}" fill="rgba(255,255,255,.4)" font-size="9" font-family="ui-monospace,monospace" text-anchor="end">${fmt(Math.round(v))}</text>`;
+  }).join("");
+  return `<svg class="chart" viewBox="0 0 ${W} ${H}">
+    <defs><linearGradient id="wg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#4dc280" stop-opacity="0.32"/><stop offset="1" stop-color="#4dc280" stop-opacity="0"/></linearGradient></defs>
+    ${grid}
     <path d="${area}" fill="url(#wg)"/>
-    <path d="${line}" fill="none" stroke="#4dc280" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
-    ${xs.map((x, i) => `<text x="${x}" y="${H + 14}" fill="rgba(255,255,255,.55)" font-size="10" font-family="monospace" text-anchor="middle">${t("Week %lld", i + 1)}</text>`).join("")}
+    <path d="${line}" fill="none" stroke="#4dc280" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+    ${xs.map((x, i) => `<circle cx="${x.toFixed(1)}" cy="${ys[i].toFixed(1)}" r="3.4" fill="#4dc280" stroke="#141414" stroke-width="2"/>`).join("")}
+    ${xs.map((x, i) => weeks[i] > 0 ? `<text x="${x.toFixed(1)}" y="${(ys[i] - 9).toFixed(1)}" fill="#fff" font-size="10" font-weight="700" font-family="ui-monospace,monospace" text-anchor="middle">${fmt(weeks[i])}</text>` : "").join("")}
+    ${xs.map((x, i) => `<text x="${x.toFixed(1)}" y="${(H - 6).toFixed(1)}" fill="rgba(255,255,255,.55)" font-size="10" font-family="ui-monospace,monospace" text-anchor="middle">${t("Week %lld", i + 1)}</text>`).join("")}
   </svg>`;
 }
-function dailyChart(days) {
-  const W = 300, H = 150, pad = 6, max = Math.max(...days.map((d) => d.reps), 1);
-  const bw = (W - pad * 2) / days.length;
-  return `<svg class="chart" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none">
-    <defs><linearGradient id="dg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ff5e1f"/><stop offset="1" stop-color="#ff5e1f" stop-opacity="0.2"/></linearGradient></defs>
-    ${days.map((d, i) => {
-      const h = (d.reps / max) * (H - 10);
-      return `<rect x="${(pad + i * bw + bw * 0.2).toFixed(1)}" y="${(H - h).toFixed(1)}" width="${(bw * 0.6).toFixed(1)}" height="${h.toFixed(1)}" rx="2" fill="url(#dg)"/>`;
-    }).join("")}
+function dailyChart(days, loc) {
+  const W = 320, H = 150, padL = 6, padR = 6, padT = 8, padB = 22;
+  const plotW = W - padL - padR, plotH = H - padT - padB, baseY = padT + plotH;
+  const max = Math.max(...days.map((d) => d.reps), 1);
+  const bw = plotW / days.length;
+  const bars = days.map((d, i) => {
+    const x = (padL + i * bw + bw * 0.16).toFixed(1), w = (bw * 0.68).toFixed(1);
+    // Пустой день — тонкая серая метка у оси: видно шкалу времени, которую надо заполнить.
+    if (d.reps <= 0) return `<rect x="${x}" y="${(baseY - 3).toFixed(1)}" width="${w}" height="3" rx="1.5" fill="rgba(255,255,255,.1)"/>`;
+    const h = Math.max(4, (d.reps / max) * plotH);
+    // Норма закрыта — яркий столбик; была активность, но недобор — приглушённый.
+    const fill = d.done ? "url(#dg)" : "rgba(255,94,31,.34)";
+    return `<rect x="${x}" y="${(baseY - h).toFixed(1)}" width="${w}" height="${h.toFixed(1)}" rx="2" fill="${fill}"/>`;
+  }).join("");
+  const dstr = (ms) => new Date(ms).toLocaleDateString(loc, { day: "numeric", month: "short" });
+  const ticks = [[0, "start"], [Math.floor(days.length / 2), "middle"], [days.length - 1, "end"]];
+  const dates = ticks.map(([i, anchor]) => {
+    const cx = padL + i * bw + bw / 2;
+    const x = anchor === "start" ? padL : anchor === "end" ? W - padR : cx;
+    return `<text x="${x.toFixed(1)}" y="${(H - 6).toFixed(1)}" fill="rgba(255,255,255,.5)" font-size="9.5" font-family="ui-monospace,monospace" text-anchor="${anchor}">${esc(dstr(days[i].date))}</text>`;
+  }).join("");
+  return `<svg class="chart" viewBox="0 0 ${W} ${H}">
+    <defs><linearGradient id="dg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ff5e1f"/><stop offset="1" stop-color="#ff5e1f" stop-opacity="0.3"/></linearGradient></defs>
+    ${bars}
+    ${dates}
   </svg>`;
 }
 
