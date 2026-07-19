@@ -58,20 +58,20 @@ html, body {
   -webkit-overflow-scrolling: touch;
 }
 
-/* Фон под стекло: почти-чёрный + два статичных световых пятна, чтобы блюру было что размывать. */
+/* Фон под стекло: почти-чёрный + два статичных световых пятна.
+   Пятна — radial-gradient, НЕ filter:blur — блюр на iOS растеризуется заново после
+   View Transition и «выпрыгивал» с секундной задержкой при смене вкладок. */
 html { background: #070707; }
 body { min-height: 100dvh; background: transparent; }
 body::before, body::after {
   content: "";
   position: fixed;
-  border-radius: 50%;
-  filter: blur(90px);
+  width: 110vw; height: 110vw;
   pointer-events: none;
   z-index: -1;
-  transform: translateZ(0);
 }
-body::before { width: 62vw; height: 62vw; top: -14vw; right: -18vw; background: rgba(255, 94, 31, 0.13); }
-body::after { width: 56vw; height: 56vw; bottom: -12vw; left: -16vw; background: rgba(77, 194, 128, 0.09); }
+body::before { top: -38vw; right: -42vw; background: radial-gradient(closest-side, rgba(255, 94, 31, 0.12), transparent 72%); }
+body::after { bottom: -39vw; left: -43vw; background: radial-gradient(closest-side, rgba(77, 194, 128, 0.085), transparent 72%); }
 
 #app { min-height: 100dvh; position: relative; isolation: isolate; }
 
