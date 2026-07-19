@@ -18,6 +18,12 @@ async function toPhysicalStep(page) {
   await expect(page.getByText("Your physical profile")).toBeVisible();
 }
 
+async function toExercisesStep(page) {
+  await toPhysicalStep(page);
+  await page.getByRole("button", { name: "Continue", exact: true }).click();
+  await expect(page.getByText("Your exercises")).toBeVisible();
+}
+
 test("physical profile step: gender cards, slider drag and stepper buttons", async ({ page }) => {
   await toPhysicalStep(page);
   await expect(page.getByText(/Step 2 of/)).toBeVisible();
@@ -37,20 +43,38 @@ test("physical profile step: gender cards, slider drag and stepper buttons", asy
   await expect(page.locator('[data-val-for="profile.age"]')).toHaveText("26");
 
   await page.getByRole("button", { name: "Continue", exact: true }).click();
-  await expect(page.getByText("Which exercise do you want to start with?")).toBeVisible();
+  await expect(page.getByText("Your exercises")).toBeVisible();
 });
 
-test("full onboarding walk still reaches the app after step renumbering", async ({ page }) => {
-  await toPhysicalStep(page);
-  const next = page.getByRole("button", { name: "Continue", exact: true });
-  await next.click(); // параметры → упражнение
-  await expect(page.getByText("Which exercise do you want to start with?")).toBeVisible();
-  await next.click(); // → уровень
+test("exercises step: multi-select reveals a per-exercise reps slider", async ({ page }) => {
+  await toExercisesStep(page);
+  // Четыре карточки упражнений; отжимания выбраны по умолчанию → один ползунок.
+  await expect(page.locator(".onb-ex")).toHaveCount(4);
+  await expect(page.locator(".physio-slider")).toHaveCount(1);
+
+  // Выбираем ещё одно упражнение → появляется второй ползунок.
+  await page.getByRole("button", { name: "Squats", exact: true }).click();
+  await expect(page.locator(".physio-slider")).toHaveCount(2);
+  expect(await page.evaluate(() => JSON.parse(localStorage.getItem("fs.profile.sel_squats")))).toBe(true);
+
+  // Тянем ползунок максимума отжиманий.
+  const reps = page.locator('[data-slider="profile.reps.pushups"]');
+  await reps.fill("90");
+  await expect(page.locator('[data-val-for="profile.reps.pushups"]')).toHaveText("90");
+  expect(await page.evaluate(() => JSON.parse(localStorage.getItem("fs.profile.reps.pushups")))).toBe(90);
+
+  await page.getByRole("button", { name: "Continue", exact: true }).click();
   await expect(page.getByText("Your fitness level")).toBeVisible();
-  await next.click(); // → максимум за подход
-  await expect(page.locator(".wheel")).toBeVisible();
+});
+
+test("full onboarding walk still reaches the app after merging steps", async ({ page }) => {
+  await toExercisesStep(page);
+  const next = page.getByRole("button", { name: "Continue", exact: true });
+  await next.click(); // упражнения → уровень (отжимания выбраны по умолчанию)
+  await expect(page.getByText("Your fitness level")).toBeVisible();
   await next.click(); // → дневная норма
   await expect(page.getByText("reps per day")).toBeVisible();
+  await expect(page.locator(".wheel")).toHaveCount(0); // колесо удалено
   await next.click(); // → вход (Sync включён в тестовом окружении)
   await page.getByRole("button", { name: "Continue as guest", exact: true }).click();
   await expect(page.getByRole("button", { name: "Challenges", exact: true })).toBeVisible();

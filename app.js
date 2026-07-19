@@ -4,7 +4,7 @@
 "use strict";
 
 // Версия оболочки — держать в синхроне с CACHE в sw.js; уходит в баг-репорты.
-const APP_VERSION = "v86";
+const APP_VERSION = "v87";
 // Последняя JS-ошибка — прикладываем к баг-репорту, чтобы сразу видеть причину.
 let lastError = "";
 window.addEventListener("error", (e) => {
@@ -171,7 +171,7 @@ const RU = {
   "Exercise": "Упражнение", "Exercise journal": "Дневной журнал", "Extra reps": "Экстра-повторы", "Female": "Женский",
   "Find a challenge": "Найти челлендж", "Finish": "Завершить", "Finish: day %lld": "Финиш: день %lld",
   "Finished: %lld": "Пройдено: %lld", "Fitness level": "Физуха", "Gender": "Пол", "Get started": "Начать",
-  "Goal reached!": "Цель выполнена!", "Height": "Рост", "Honestly — the daily goal is built from this.": "Честно — из этого посчитаем дневную норму.",
+  "Goal reached!": "Цель выполнена!", "Height": "Рост",
   "How many push-ups can you do in one set?": "Сколько отжиманий делаешь за один подход?",
   "I barely train": "Почти не тренируюсь", "Increase by: %lld reps": "Прирост: %lld повторов",
   "Join for": "Вступить за", "kg": "кг", "Leaderboard": "Таблица итогов", "Let's go": "Погнали",
@@ -229,6 +229,8 @@ const RU = {
   "Your age": "Твой возраст", "Your Challenges": "Твои челленджи", "Your daily goal": "Твоя дневная норма",
   "Your data": "Твои данные", "Your fitness level": "Твоя физуха", "Your gender": "Твой пол", "Your height": "Твой рост",
   "Your physical profile": "Твои параметры", "yrs": "лет",
+  "Your exercises": "Твои упражнения", "Pick what you train and set your one-set max.": "Отметь, что тренируешь, и укажи максимум за подход.",
+  "%@ level → %lld working sets per exercise.": "Уровень %@ → %lld рабочих сета на упражнение.",
   "This information is used to personalize your first week workout program. You can edit it later from your profile page.": "Эти данные помогут собрать программу первой недели под тебя. Их можно изменить позже в профиле.",
   "Your starting point — at the finish you'll see how far you've come.": "Твоя точка отсчёта — на финише увидишь, как далеко ушёл.",
   "Your weight": "Твой вес", "Your whole body must be in frame": "В кадре должно быть всё тело целиком", "Yours": "Твои",
@@ -289,10 +291,7 @@ const RU = {
   "30-day Push-up Challenge": "Отжимания: 30 дней", "50 push-ups a day for a month": "50 отжиманий в день месяц",
   "100 Squats Daily": "100 приседаний в день", "30 days · 100 a day": "30 дней · 100 в день",
   "Pull-up Progression": "Подтягивания: прогрессия", "Grows a bit every week": "Растёт каждую неделю",
-  "How many %@ can you do in one set?": "Сколько %@ ты делаешь за один подход?",
   "Easier": "Легче", "Recommended": "Рекомендовано", "Harder": "Интенсивнее",
-  "Your max is %lld reps. %@ level → %lld working sets.": "Твой максимум — %lld повторений. Уровень %@ → %lld рабочих подхода.",
-  "Enter manually": "Ввести вручную",
   "So your progress is saved and syncs across your devices": "Чтобы прогресс сохранялся и синхронизировался между устройствами",
   "Continue with Google": "Продолжить с Google", "or": "или",
   "Allow popups and try again": "Разреши всплывающие окна и попробуй снова",
@@ -350,6 +349,9 @@ function t(key, ...args) {
 const DEFAULTS = {
   onboarded: false, "profile.name": "", "profile.gender": "male", "profile.age": 25, "profile.heightCm": 178,
   "profile.weightKg": 75, "profile.level": "regular", "profile.maxReps": 15, "profile.startExercise": "pushups", dailyGoal: 50,
+  // Мульти-выбор упражнений онбординга + максимум за подход на каждое.
+  "profile.sel_pushups": true, "profile.sel_squats": false, "profile.sel_pullups": false, "profile.sel_dips": false,
+  "profile.reps.pushups": 15, "profile.reps.squats": 15, "profile.reps.pullups": 15, "profile.reps.dips": 15,
   workoutSounds: true, interfaceSounds: true, lang: (navigator.language || "en").startsWith("ru") ? "ru" : "en",
 };
 const store = new Proxy({}, {
@@ -1033,24 +1035,10 @@ function goalForChoice(level, maxReps, choice) {
   const f = choice === "easier" ? 0.7 : choice === "harder" ? 1.3 : 1;
   return Math.min(Math.max(Math.round(base * f / 10) * 10, 10), 300);
 }
-// Зафиксировать введённое вручную число из колеса (если сейчас режим ввода) и выйти из него.
-function commitWheelIfEditing() {
-  if (ui.wheelEdit == null) return;
-  const el = document.getElementById("wheel-input");
-  if (el) {
-    const key = el.dataset.wheelkey, min = +el.dataset.min, max = +el.dataset.max;
-    let v = parseInt(el.value, 10);
-    if (isNaN(v)) v = store[key];
-    store[key] = Math.min(Math.max(v, min), max);
-    storeHook(key);
-  }
-  ui.wheelEdit = null;
-}
-
 // ==========================================================================
 // UI-состояние и рендер (см. app-ui.js — экраны ниже в этом же файле)
 // ==========================================================================
-const ui = { screen: "onboarding", tab: "yours", detailId: null, sheet: null, full: null, onbStep: 0, form: null, wheelEdit: null, profileSection: null };
+const ui = { screen: "onboarding", tab: "yours", detailId: null, sheet: null, full: null, onbStep: 0, form: null, profileSection: null };
 
 function isGuest() { return !Sync.enabled || Sync.isAnonymous || !Sync.email; }
 
@@ -2164,12 +2152,12 @@ function resumeAuthIntent() {
 // ==========================================================================
 // Онбординг
 // ==========================================================================
-// Короткий онбординг: имя → параметры тела → упражнение → уровень → тест-максимум → норма → вход.
+// Короткий онбординг: имя → параметры тела → упражнения+максимумы → уровень → норма → вход.
 const SYNC_ON = !!(window.Sync && window.Sync.enabled);
-const LAST_STEP = SYNC_ON ? 7 : 6;
+const LAST_STEP = SYNC_ON ? 6 : 5;
 const STEP = {
-  name: 1, physical: 2, startExercise: 3, fitness: 4, maxReps: 5, goal: 6,
-  auth: SYNC_ON ? 7 : -1,
+  name: 1, physical: 2, exercises: 3, fitness: 4, goal: 5,
+  auth: SYNC_ON ? 6 : -1,
 };
 // Шаг «Твои параметры»: пол карточками, возраст/рост/вес ползунками с кнопками −/+.
 // Драг обновляет значение и заливку без render() (ветка data-slider в input-слушателе).
@@ -2199,8 +2187,41 @@ function OnbPhysical() {
     <div class="form-footer">${t("This information is used to personalize your first week workout program. You can edit it later from your profile page.")}</div>`;
 }
 
+// Основное упражнение = первое выбранное (по порядку EX_ORDER); от него зависят
+// profile.maxReps/startExercise и стартовый замер.
+function primaryExercise() { return EX_ORDER.find((ex) => store["profile.sel_" + ex]) || "pushups"; }
+const REP_RANGE = [1, 120];
+// Дневная цель по одному упражнению: максимум × рабочие сета, с коэффициентом нагрузки.
+function exerciseTarget(level, reps, choice) {
+  const factor = choice === "easier" ? 0.7 : choice === "harder" ? 1.3 : 1;
+  return Math.max(10, Math.round((recommendedDailyReps(level, reps) * factor) / 10) * 10);
+}
+
+// Экран «Твои упражнения»: мульти-выбор до 4 упражнений; у каждого выбранного —
+// ползунок максимума за подход. Ползунок — сиблинг кнопки-тумблера (иначе тап по
+// нему переключал бы выбор).
+function OnbExercises() {
+  const [min, max] = REP_RANGE;
+  return EX_ORDER.map((ex) => {
+    const on = store["profile.sel_" + ex], key = "profile.reps." + ex, v = store[key];
+    const pct = (((v - min) / (max - min)) * 100).toFixed(1);
+    const head = `<button class="onb-ex-head" data-act="toggleStore" data-key="profile.sel_${ex}" aria-pressed="${on}">
+      <span class="onb-ex-icon">${exIcon(ex)}</span>
+      <span class="onb-ex-name">${esc(Exercise.displayName(ex))}</span>
+      <span class="onb-ex-check" style="color:${on ? "var(--accent)" : "var(--text-secondary)"}">${on ? iconF("checkCircle") : icon("plusCircleLine")}</span></button>`;
+    const slider = on ? `<div class="onb-ex-slider">
+      <div class="between"><span class="label secondary" style="font-size:13px">${t("Max reps in one set")}</span>
+        <span><span class="physio-num" data-val-for="${key}">${v}</span> <span class="physio-unit">${t("reps")}</span></span></div>
+      <div class="physio-ctrl">
+        <button data-act="dec" data-store="${key}" data-min="${min}" data-max="${max}" aria-label="−">−</button>
+        <input type="range" class="physio-slider" data-slider="${key}" min="${min}" max="${max}" step="1" value="${v}" style="--fill:${pct}%" aria-label="${esc(Exercise.displayName(ex))}">
+        <button data-act="inc" data-store="${key}" data-min="${min}" data-max="${max}" aria-label="+">+</button></div></div>` : "";
+    return `<div class="onb-ex card ${on ? "selected" : ""}">${head}${slider}</div>`;
+  }).join("");
+}
+
 function Onboarding() {
-  const step = ui.onbStep, level = store["profile.level"], maxReps = store["profile.maxReps"], startEx = store["profile.startExercise"];
+  const step = ui.onbStep, level = store["profile.level"];
 
   const optionCard = (title, subtitle, selected, act) =>
     `<button class="card ${selected ? "selected" : ""}" data-act="${act}" style="padding:16px;width:100%;display:flex;align-items:center;gap:10px;text-align:left">
@@ -2210,21 +2231,6 @@ function Onboarding() {
   const question = (title, subtitle, content) => `<div class="create-question">
     <div class="display" style="font-size:30px">${esc(title)}</div>${subtitle ? `<div class="form-footer">${esc(subtitle)}</div>` : ""}
     <div class="create-question-content">${content}</div></div>`;
-  const wheel = (key, min, max, fmtFn) => {
-    // Ручной ввод: тап по «123» открывает поле с клавиатурой.
-    if (ui.wheelEdit === key) {
-      return `<div class="wheel-wrap">
-        <input class="field wheel-input" id="wheel-input" type="number" inputmode="numeric" aria-label="${t("Max reps in one set")}" min="${min}" max="${max}" value="${store[key]}" data-wheelkey="${key}" data-min="${min}" data-max="${max}">
-        <button class="action-btn" data-act="wheelDone" style="margin-top:14px">${t("Done")}</button>
-      </div>`;
-    }
-    let opts = "";
-    for (let v = min; v <= max; v++) opts += `<div class="opt ${v === store[key] ? "active" : ""}" data-val="${v}">${esc(fmtFn(v))}</div>`;
-    return `<div class="wheel-wrap">
-      <div class="wheel" data-wheel="${key}" data-min="${min}" data-max="${max}"><div class="pad"></div>${opts}<div class="pad"></div></div>
-      <button class="wheel-edit-btn" data-act="wheelEdit:${key}" aria-label="${t("Enter manually")}">123</button>
-    </div>`;
-  };
 
   let content;
   if (step === 0) content = `<div class="center" style="height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px">
@@ -2236,23 +2242,24 @@ function Onboarding() {
   else if (step === STEP.name) content = question(t("Your name"), t("Friends will see it in the leaderboard."),
     `<input class="field" id="onb-name" value="${esc(store["profile.name"] || "")}" placeholder="${esc(t("Your name"))}" aria-label="${esc(t("Your name"))}" maxlength="20" autocomplete="name">`);
   else if (step === STEP.physical) content = question(t("Your physical profile"), null, OnbPhysical());
-  else if (step === STEP.startExercise) content = question(t("Which exercise do you want to start with?"), null, EX_ORDER.map((ex) => optionCard(Exercise.displayName(ex), null, startEx === ex, `onbSet:profile.startExercise:${ex}`)).join(""));
+  else if (step === STEP.exercises) content = question(t("Your exercises"), t("Pick what you train and set your one-set max."), OnbExercises());
   else if (step === STEP.fitness) content = question(t("Your fitness level"), null, Level.all.map((l) => optionCard(Level.name(l), Level.subtitle(l), level === l, `onbSet:profile.level:${l}`)).join(""));
-  else if (step === STEP.maxReps) content = question(t("How many %@ can you do in one set?", Exercise.displayName(startEx)), t("Honestly — the daily goal is built from this."), wheel("profile.maxReps", 1, 120, (v) => String(v)));
-  // Итоговый шаг: дневная норма с объяснением и выбором нагрузки.
+  // Итоговый шаг: дневная норма = сумма по выбранным упражнениям (каждое на 3–4 сета).
   else {
     const choice = store.goalChoice || "recommended";
-    const goalC = goalForChoice(level, maxReps, choice);
+    const sel = EX_ORDER.filter((ex) => store["profile.sel_" + ex]);
+    const targetFor = (ex) => exerciseTarget(level, store["profile.reps." + ex], choice);
+    const total = sel.reduce((s, ex) => s + targetFor(ex), 0);
     const segBtn = (val, label) => `<button data-act="goalChoice:${val}" class="${choice === val ? "active" : ""}">${esc(label)}</button>`;
     content = `<div class="center" style="height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px">
     ${lbl(t("Your daily goal"), "tracking-15")}
-    <div class="money" style="font-size:72px">${goalC}</div>
+    <div class="money" style="font-size:72px">${total}</div>
     ${lbl(t("reps per day"), "tracking-1")}
     <div class="segmented" style="margin-top:14px;width:100%">${segBtn("easier", t("Easier"))}${segBtn("recommended", t("Recommended"))}${segBtn("harder", t("Harder"))}</div>
-    <div class="form-footer" style="margin-top:12px;text-align:center;max-width:320px">${t("Your max is %lld reps. %@ level → %lld working sets.", maxReps, Level.name(level), Level.sets(level))}</div>
+    <div class="form-footer" style="margin-top:12px;text-align:center;max-width:320px">${t("%@ level → %lld working sets per exercise.", Level.name(level), Level.sets(level))}</div>
     <div class="card" style="padding:16px;width:100%;display:flex;flex-direction:column;gap:10px;margin-top:16px">
-      ${[[t("Exercise"), Exercise.displayName(startEx)], [t("Max reps in one set"), maxReps], [t("Fitness level"), Level.name(level)]]
-        .map(([k, v]) => `<div class="between">${lbl(k)}<span style="font-weight:600;font-size:15px">${esc(v)}</span></div>`).join("")}
+      ${sel.map((ex) => `<div class="between"><span class="row gap8" style="align-items:center"><span style="color:var(--text-secondary);display:flex">${exIcon(ex)}</span>${lbl(Exercise.displayName(ex))}</span><span style="font-weight:600;font-size:15px">${targetFor(ex)}</span></div>`).join("")}
+      <div class="between">${lbl(t("Fitness level"))}<span style="font-weight:600;font-size:15px">${esc(Level.name(level))}</span></div>
     </div></div>`;
   }
 
@@ -3571,14 +3578,21 @@ root.addEventListener("click", async (e) => {
   }
 
   // Онбординг
-  if (cmd === "onbBack") { commitWheelIfEditing(); if (ui.onbStep > 0) { ui.onbStep--; render(); } return; }
+  if (cmd === "onbBack") { if (ui.onbStep > 0) { ui.onbStep--; render(); } return; }
   if (cmd === "onbNext") {
-    commitWheelIfEditing();
     if (ui.onbStep === STEP.name) {
       const inp = document.getElementById("onb-name");
       const name = inp ? inp.value.trim() : "";
       if (!name) { toast(t("Your name")); return; }
       store["profile.name"] = name;
+    }
+    // Основное упражнение (первое выбранное) кормит дневную норму и стартовый замер.
+    if (ui.onbStep === STEP.exercises) {
+      const primary = EX_ORDER.find((ex) => store["profile.sel_" + ex]);
+      if (!primary) { toast(t("Pick at least one exercise")); return; }
+      store["profile.startExercise"] = primary;
+      store["profile.maxReps"] = store["profile.reps." + primary];
+      storeHook("profile.maxReps");
     }
     // LAST_STEP — итоговый экран дневной нормы; кнопка «Погнали» завершает онбординг.
     if (ui.onbStep === LAST_STEP) { finishOnboarding(); }
@@ -3587,8 +3601,6 @@ root.addEventListener("click", async (e) => {
   }
   if (cmd === "onbSet") { store[arg] = act.split(":")[2]; render(); return; }
   if (cmd === "goalChoice") { store.goalChoice = arg; render(); return; }
-  if (cmd === "wheelEdit") { ui.wheelEdit = arg; render(); return; }
-  if (cmd === "wheelDone") { commitWheelIfEditing(); render(); return; }
   // Пропустить создание аккаунта — временно входим без входа (флаг гасит обязательный возврат).
   if (cmd === "skipAuth") { store.skippedAuth = true; finishOnboarding(); return; }
 });
@@ -3605,7 +3617,7 @@ root.addEventListener("input", (e) => {
   // Ползунки онбординга: обновляем цифру и заливку напрямую, без render() —
   // полная перерисовка innerHTML оборвала бы жест перетаскивания.
   if (el.dataset.slider != null) {
-    const k = el.dataset.slider, [min, max] = RANGES[k];
+    const k = el.dataset.slider, [min, max] = RANGES[k] || [+el.min, +el.max];
     const v = Math.min(Math.max(Math.round(+el.value), min), max);
     el.style.setProperty("--fill", (((v - min) / (max - min)) * 100).toFixed(1) + "%");
     const num = document.querySelector(`[data-val-for="${k}"]`);
@@ -3655,23 +3667,6 @@ function afterRender() {
   afterRender._fullOpen = !!_full;
   // Count-up цифр — только при первом появлении экрана (не на каждой перерисовке).
   if (_fullJustOpened) _full.querySelectorAll("[data-countup]").forEach(animateCountUp);
-
-  document.querySelectorAll(".wheel").forEach((w) => {
-    const key = w.dataset.wheel, min = +w.dataset.min, max = +w.dataset.max;
-    w.scrollTop = (store[key] - min) * 44;
-    let timer, lastVal = store[key];
-    w.addEventListener("scroll", () => {
-      const val = Math.min(Math.max(min + Math.round(w.scrollTop / 44), min), max);
-      if (val !== lastVal) { sfx("tick"); haptic(6); lastVal = val; } // звук + вибро при смене числа
-      w.querySelectorAll(".opt").forEach((o) => o.classList.toggle("active", +o.dataset.val === val));
-      clearTimeout(timer);
-      timer = setTimeout(() => { store[key] = val; }, 120);
-    }, { passive: true });
-  });
-
-  // Ручной ввод в колесе — сразу фокус и выделение для замены.
-  const wi = document.getElementById("wheel-input");
-  if (wi) { wi.focus(); wi.select(); }
 
   bindSharePhotoDrag();
   bindScrollFollow();
@@ -3870,7 +3865,6 @@ document.addEventListener("pointercancel", pressCancel, { capture: true, passive
 
 // Escape закрывает открытый лист — тот же выход, что и тап по фону.
 document.addEventListener("keydown", (e) => {
-  if (e.target.id === "wheel-input" && e.key === "Enter") { commitWheelIfEditing(); render(); return; }
   if (e.key === "Escape" && ui.sheet) { closeSheet(); }
   if (e.key === "Tab" && ui.sheet) {
     const sheet = document.querySelector(".sheet");

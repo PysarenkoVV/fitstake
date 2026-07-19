@@ -467,43 +467,6 @@ button:is(:active, .pressed):not(:disabled) { transform: scale(0.97); filter: br
 .form-footer { font-size: 13px; color: var(--text-secondary); }
 .settings-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; min-height: 34px; }
 
-/* колесо выбора (онбординг) */
-.wheel {
-  height: 220px;
-  width: 100%;
-  overflow-y: scroll;
-  overflow-x: hidden;
-  touch-action: pan-y;
-  overscroll-behavior: contain;
-  scroll-snap-type: y mandatory;
-  -webkit-overflow-scrolling: touch;
-  mask-image: linear-gradient(transparent, #000 30%, #000 70%, transparent);
-  text-align: center;
-}
-.wheel .opt { width: 100%; }
-.wheel .pad { height: 88px; }
-.wheel .opt {
-  height: 44px;
-  scroll-snap-align: center;
-  display: flex; align-items: center; justify-content: center;
-  font-family: var(--mono); font-weight: 800; font-size: 22px;
-  color: rgba(255, 255, 255, 0.35);
-}
-.wheel .opt.active { color: #fff; transform: scale(1.15); }
-/* Ручной ввод числа в колесе */
-.wheel-wrap { position: relative; width: 100%; display: flex; flex-direction: column; align-items: center; }
-.wheel-edit-btn {
-  position: absolute; top: 50%; right: 6px; transform: translateY(-50%);
-  height: 34px; padding: 0 12px; border-radius: 10px;
-  background: var(--white-08); color: var(--text-secondary);
-  font-family: var(--mono); font-size: 13px; font-weight: 800; letter-spacing: 1px;
-}
-.wheel-input {
-  width: 100%; text-align: center;
-  font-family: var(--mono); font-weight: 800; font-size: 44px;
-  height: 96px; padding: 0;
-}
-
 /* Онбординг: физический профиль (пол + ползунки возраст/рост/вес) */
 .gender-row { display: flex; gap: 8px; }
 .gender-card { flex: 1; padding: 14px 8px; display: flex; flex-direction: column; align-items: center; gap: 8px; }
@@ -545,6 +508,18 @@ button:is(:active, .pressed):not(:disabled) { transform: scale(0.97); filter: br
 .physio-slider::-moz-range-track { height: 6px; border-radius: 3px; background: var(--white-08); }
 .physio-slider::-moz-range-progress { height: 6px; border-radius: 3px; background: var(--row-accent); }
 .physio-slider::-moz-range-thumb { width: 26px; height: 26px; border: none; border-radius: 50%; background: #fff; box-shadow: 0 1px 6px rgba(0, 0, 0, 0.45); }
+
+/* Онбординг: выбор упражнений (карточка + раскрывающийся ползунок максимума) */
+.onb-ex { padding: 0; margin-bottom: 10px; overflow: hidden; }
+.onb-ex-head {
+  width: 100%; min-height: 56px; padding: 12px 16px;
+  display: flex; align-items: center; gap: 12px; text-align: left;
+}
+.onb-ex-icon { display: flex; color: var(--text-secondary); }
+.onb-ex.selected .onb-ex-icon { color: #fff; }
+.onb-ex-name { flex: 1; font-size: 17px; font-weight: 700; }
+.onb-ex-check { display: flex; }
+.onb-ex-slider { padding: 0 16px 14px; display: flex; flex-direction: column; gap: 4px; border-top: 1px solid var(--border); padding-top: 12px; }
 
 /* ---- Сессия камеры ---- */
 .session { position: fixed; inset: 0; background: #000; z-index: 100; overflow: hidden; }
