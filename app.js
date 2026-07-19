@@ -4,7 +4,7 @@
 "use strict";
 
 // Версия оболочки — держать в синхроне с CACHE в sw.js; уходит в баг-репорты.
-const APP_VERSION = "v85";
+const APP_VERSION = "v86";
 // Последняя JS-ошибка — прикладываем к баг-репорту, чтобы сразу видеть причину.
 let lastError = "";
 window.addEventListener("error", (e) => {
@@ -44,6 +44,8 @@ const PATHS = {
   plusCircle: '<circle cx="12" cy="12" r="10"/><path d="M12 8v8M8 12h8" stroke="#0a0a0a"/>',
   plusCircleLine: '<circle cx="12" cy="12" r="10"/><path d="M12 8v8M8 12h8"/>', // контурный: круг и плюс currentColor (для кнопок)
   calendar: '<rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 9h18M8 3v4M16 3v4"/>',
+  ruler: '<rect x="2" y="9" width="20" height="7" rx="1.5"/><path d="M6.5 9v3M11 9v4M15.5 9v3M20 9v4"/>',
+  scale: '<rect x="4" y="4" width="16" height="16" rx="3"/><path d="M8.8 10.2a4.5 4.5 0 016.4 0M12 12l2-2.5"/>',
   dollar: '<circle cx="12" cy="12" r="10"/><path d="M12 7v10M14.5 9.2c-.4-1-1.4-1.4-2.5-1.4-1.4 0-2.5.7-2.5 1.9 0 2.7 5 1.3 5 4 0 1.3-1.2 2-2.5 2-1.2 0-2.2-.5-2.6-1.5" stroke="#0a0a0a"/>',
   bolt: '<path d="M13 2L4 14h6l-1 8 9-12h-6z"/>',
   trend: '<path d="M3 17l6-6 4 4 8-8M15 7h6v6"/>',
@@ -226,6 +228,8 @@ const RU = {
   "You're not in any challenge yet. Join one and put some coins on the line.": "Ты пока не в игре. Вступи в челлендж и поставь коины на кон.",
   "Your age": "Твой возраст", "Your Challenges": "Твои челленджи", "Your daily goal": "Твоя дневная норма",
   "Your data": "Твои данные", "Your fitness level": "Твоя физуха", "Your gender": "Твой пол", "Your height": "Твой рост",
+  "Your physical profile": "Твои параметры", "yrs": "лет",
+  "This information is used to personalize your first week workout program. You can edit it later from your profile page.": "Эти данные помогут собрать программу первой недели под тебя. Их можно изменить позже в профиле.",
   "Your starting point — at the finish you'll see how far you've come.": "Твоя точка отсчёта — на финише увидишь, как далеко ушёл.",
   "Your weight": "Твой вес", "Your whole body must be in frame": "В кадре должно быть всё тело целиком", "Yours": "Твои",
   "Language": "Язык", "Edit": "Изменить", "Increase by": "Прирост",
@@ -2160,14 +2164,41 @@ function resumeAuthIntent() {
 // ==========================================================================
 // Онбординг
 // ==========================================================================
-// Короткий онбординг: имя → упражнение → уровень → тест-максимум → норма → вход.
-// Пол/возраст/рост/вес не влияют на норму и запрашиваются позже в Body & measurements.
+// Короткий онбординг: имя → параметры тела → упражнение → уровень → тест-максимум → норма → вход.
 const SYNC_ON = !!(window.Sync && window.Sync.enabled);
-const LAST_STEP = SYNC_ON ? 6 : 5;
+const LAST_STEP = SYNC_ON ? 7 : 6;
 const STEP = {
-  name: 1, startExercise: 2, fitness: 3, maxReps: 4, goal: 5,
-  auth: SYNC_ON ? 6 : -1,
+  name: 1, physical: 2, startExercise: 3, fitness: 4, maxReps: 5, goal: 6,
+  auth: SYNC_ON ? 7 : -1,
 };
+// Шаг «Твои параметры»: пол карточками, возраст/рост/вес ползунками с кнопками −/+.
+// Драг обновляет значение и заливку без render() (ветка data-slider в input-слушателе).
+function OnbPhysical() {
+  const gender = store["profile.gender"];
+  const genderCard = (g) => `<button class="card gender-card ${gender === g ? "selected" : ""}" data-act="onbSet:profile.gender:${g}">
+    <span style="color:${gender === g ? "var(--accent)" : "var(--text-secondary)"};display:flex">${icon("person")}</span>
+    <span class="gender-card-name">${esc(Gender.name(g))}</span></button>`;
+  const row = (ic, label, key, unit) => {
+    const [min, max] = RANGES[key], v = store[key];
+    const pct = (((v - min) / (max - min)) * 100).toFixed(1);
+    return `<div class="physio-row">
+      <div class="between">
+        <span class="row gap8" style="color:var(--text-secondary)">${icon(ic)}${lbl(label, "tracking-1")}</span>
+        <span><span class="physio-num" data-val-for="${key}">${v}</span>${unit ? ` <span class="physio-unit">${esc(unit)}</span>` : ""}</span>
+      </div>
+      <div class="physio-ctrl">
+        <button data-act="dec" data-store="${key}" data-min="${min}" data-max="${max}" aria-label="−">−</button>
+        <input type="range" class="physio-slider" data-slider="${key}" min="${min}" max="${max}" step="1" value="${v}" style="--fill:${pct}%" aria-label="${esc(label)}">
+        <button data-act="inc" data-store="${key}" data-min="${min}" data-max="${max}" aria-label="+">+</button>
+      </div></div>`;
+  };
+  return `<div class="gender-row">${Gender.all.map(genderCard).join("")}</div>
+    ${row("calendar", t("Age"), "profile.age", t("yrs"))}
+    ${row("ruler", t("Height"), "profile.heightCm", t("cm"))}
+    ${row("scale", t("Weight"), "profile.weightKg", t("kg"))}
+    <div class="form-footer">${t("This information is used to personalize your first week workout program. You can edit it later from your profile page.")}</div>`;
+}
+
 function Onboarding() {
   const step = ui.onbStep, level = store["profile.level"], maxReps = store["profile.maxReps"], startEx = store["profile.startExercise"];
 
@@ -2204,6 +2235,7 @@ function Onboarding() {
   else if (step === STEP.auth) content = question(t("Create your account"), t("So your progress is saved and syncs across your devices."), authForm());
   else if (step === STEP.name) content = question(t("Your name"), t("Friends will see it in the leaderboard."),
     `<input class="field" id="onb-name" value="${esc(store["profile.name"] || "")}" placeholder="${esc(t("Your name"))}" aria-label="${esc(t("Your name"))}" maxlength="20" autocomplete="name">`);
+  else if (step === STEP.physical) content = question(t("Your physical profile"), null, OnbPhysical());
   else if (step === STEP.startExercise) content = question(t("Which exercise do you want to start with?"), null, EX_ORDER.map((ex) => optionCard(Exercise.displayName(ex), null, startEx === ex, `onbSet:profile.startExercise:${ex}`)).join(""));
   else if (step === STEP.fitness) content = question(t("Your fitness level"), null, Level.all.map((l) => optionCard(Level.name(l), Level.subtitle(l), level === l, `onbSet:profile.level:${l}`)).join(""));
   else if (step === STEP.maxReps) content = question(t("How many %@ can you do in one set?", Exercise.displayName(startEx)), t("Honestly — the daily goal is built from this."), wheel("profile.maxReps", 1, 120, (v) => String(v)));
@@ -3561,15 +3593,26 @@ root.addEventListener("click", async (e) => {
   if (cmd === "skipAuth") { store.skippedAuth = true; finishOnboarding(); return; }
 });
 
-// Звук при фокусе на поле ввода.
+// Звук при фокусе на поле ввода (кроме ползунков — у них свой тик).
 root.addEventListener("focusin", (e) => {
-  if (e.target.matches && e.target.matches("input, textarea")) sfx("input");
+  if (e.target.matches && e.target.matches('input:not([type="range"]), textarea')) sfx("input");
 });
 
 root.addEventListener("input", (e) => {
   const el = e.target;
   if (el.id === "profile-name") { profileNameDraft = el.value; return; }
   if (el.id === "bug-note") { if (ui.bug) ui.bug.note = el.value; return; }
+  // Ползунки онбординга: обновляем цифру и заливку напрямую, без render() —
+  // полная перерисовка innerHTML оборвала бы жест перетаскивания.
+  if (el.dataset.slider != null) {
+    const k = el.dataset.slider, [min, max] = RANGES[k];
+    const v = Math.min(Math.max(Math.round(+el.value), min), max);
+    el.style.setProperty("--fill", (((v - min) / (max - min)) * 100).toFixed(1) + "%");
+    const num = document.querySelector(`[data-val-for="${k}"]`);
+    if (num && num.textContent !== String(v)) { num.textContent = v; sfx("tick"); haptic(6); }
+    store[k] = v;
+    return;
+  }
   if (el.dataset.model != null) {
     const k = el.dataset.model;
     ui.form[k] = el.type === "number" || el.type === "range" ? (+el.value || 0) : el.value;
