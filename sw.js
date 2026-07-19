@@ -1,13 +1,13 @@
 // FitStake PWA — сеть первична, кэш как офлайн-запас оболочки.
-const CACHE = "fitstake-v87";
+const CACHE = "fitstake-v88";
 const SHELL = [
   ".",
   "index.html",
-  "styles.css?v=87",
-  "app.js?v=87",
-  "pose.js?v=87",
-  "sync.js?v=87",
-  "workout-session.js?v=87",
+  "styles.css?v=88",
+  "app.js?v=88",
+  "pose.js?v=88",
+  "sync.js?v=88",
+  "workout-session.js?v=88",
   "firebase-config.js",
   "manifest.json",
   "icons/icon-192.png",

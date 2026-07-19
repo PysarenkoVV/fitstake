@@ -36,7 +36,7 @@ async function openSession(challengeId, startExercise) {
     <div class="sess-rest" id="sess-rest" hidden>
       <div class="sess-rest-counter" id="sess-rest-counter"></div>
       <div class="sess-rest-timer">
-        <svg viewBox="0 0 220 220" aria-hidden="true"><circle class="rest-track" cx="110" cy="110" r="96"></circle><circle class="rest-progress" id="sess-rest-progress" cx="110" cy="110" r="96"></circle></svg>
+        <svg viewBox="0 0 220 220" aria-hidden="true"><defs><linearGradient id="sess-done-grad" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#67e6a8"></stop><stop offset="1" stop-color="#2f9d63"></stop></linearGradient></defs><circle class="rest-track" cx="110" cy="110" r="96"></circle><circle class="rest-progress" id="sess-rest-progress" cx="110" cy="110" r="96"></circle></svg>
         <div class="sess-rest-clock"><span>${t("Rest")}</span><strong id="sess-rest-time">01:30</strong></div>
         <div class="sess-complete-clock"><span class="sess-complete-check">${icon("check")}</span><strong>${t("Day complete")}</strong><b id="sess-complete-total"></b></div>
       </div>
