@@ -108,7 +108,7 @@ test("day share editor offers a 9:16 story with photo and gradient backgrounds",
   await expect.poll(() => page.evaluate(() => window.__storyExport)).toEqual({ width: 1080, height: 1920, type: "image/jpeg" });
   await page.getByRole("button", { name: "Back", exact: true }).click();
   await expect(page.getByText("Share your day", { exact: true })).toHaveCount(0);
-  await expect(page.getByRole("heading", { name: "Today", exact: true })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Home", exact: true })).toBeVisible();
 });
 
 test("completed day highlights the result before sharing", async ({ page }) => {

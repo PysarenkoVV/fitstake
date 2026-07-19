@@ -23,6 +23,6 @@ test("двойной тап по «Create challenge» не роняет обра
 
   // Форма закрылась (челлендж создан), приложение живо, необработанных исключений нет.
   await expect(page.getByRole("button", { name: "Create challenge", exact: true })).toHaveCount(0);
-  await expect(page.getByRole("button", { name: "Today", exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Home", exact: true })).toBeVisible();
   expect(errors).toEqual([]);
 });

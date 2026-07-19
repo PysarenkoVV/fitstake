@@ -4,7 +4,7 @@
 "use strict";
 
 // Версия оболочки — держать в синхроне с CACHE в sw.js; уходит в баг-репорты.
-const APP_VERSION = "v88";
+const APP_VERSION = "v89";
 // Последняя JS-ошибка — прикладываем к баг-репорту, чтобы сразу видеть причину.
 let lastError = "";
 window.addEventListener("error", (e) => {
@@ -44,6 +44,7 @@ const PATHS = {
   plusCircle: '<circle cx="12" cy="12" r="10"/><path d="M12 8v8M8 12h8" stroke="#0a0a0a"/>',
   plusCircleLine: '<circle cx="12" cy="12" r="10"/><path d="M12 8v8M8 12h8"/>', // контурный: круг и плюс currentColor (для кнопок)
   calendar: '<rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 9h18M8 3v4M16 3v4"/>',
+  home: '<path d="M4 11.2 12 5l8 6.2"/><path d="M6.5 10.2V19h11v-8.8"/>',
   ruler: '<rect x="2" y="9" width="20" height="7" rx="1.5"/><path d="M6.5 9v3M11 9v4M15.5 9v3M20 9v4"/>',
   scale: '<rect x="4" y="4" width="16" height="16" rx="3"/><path d="M8.8 10.2a4.5 4.5 0 016.4 0M12 12l2-2.5"/>',
   dollar: '<circle cx="12" cy="12" r="10"/><path d="M12 7v10M14.5 9.2c-.4-1-1.4-1.4-2.5-1.4-1.4 0-2.5.7-2.5 1.9 0 2.7 5 1.3 5 4 0 1.3-1.2 2-2.5 2-1.2 0-2.2-.5-2.6-1.5" stroke="#0a0a0a"/>',
@@ -236,6 +237,7 @@ const RU = {
   "Your weight": "Твой вес", "Your whole body must be in frame": "В кадре должно быть всё тело целиком", "Yours": "Твои",
   "Language": "Язык", "Edit": "Изменить", "Increase by": "Прирост",
   "Progress": "Прогресс", "Settings": "Настройки", "Continue workout": "Продолжить тренировку",
+  "Home": "Главная", "Friends feed": "Лента друзей", "When friends complete their day — it shows up here.": "Когда друзья закрывают день — это появится здесь.",
   "All done for today": "На сегодня всё", "%lld left": "осталось %lld", "%lldh %lldm": "%lldч %lldм",
   "Insights": "Выводы", "This week +%lld% more reps": "На этой неделе на %lld% больше повторов",
   "This week %lld% fewer reps": "На этой неделе на %lld% меньше повторов",
@@ -1247,7 +1249,7 @@ function langToggle() {
 }
 
 function TabBar() {
-  const tabs = [["yours", t("Today"), "calendar"], ["challenges", t("Challenges"), "flame"], ["stats", t("Progress"), "chartBar"], ["profile", t("Profile"), "person"]];
+  const tabs = [["yours", t("Home"), "home"], ["challenges", t("Challenges"), "flame"], ["stats", t("Progress"), "chartBar"], ["profile", t("Profile"), "person"]];
   return `<nav class="tabbar">${tabs.map(([k, name, ic]) =>
     `<button data-act="tab:${k}" class="${ui.tab === k && !ui.detailId ? "active" : ""}">${icon(ic)}<span>${esc(name)}</span></button>`).join("")}</nav>`;
 }
@@ -1369,31 +1371,22 @@ function YoursTab() {
       : `<button class="action-btn" data-act="play:${nextUp.id}" style="margin-top:4px">${iconF("play")}${t("Continue workout")}</button>`}
   </div>` : "";
 
-  const by = exerciseBreakdown();
-  const exKeys = EX_ORDER.concat(Object.keys(by).filter((k) => !EX_ORDER.includes(k)));
-  const exLabel = (ex) => ex === "other" ? t("Earlier reps") : Exercise.displayName(ex);
-  const exRow = (ex) => { const n = by[ex] || 0; return `<div class="between" style="align-items:baseline">
-    <span style="font-size:15px;${n ? "" : "color:var(--text-secondary)"}">${esc(exLabel(ex))}</span>
-    <span class="money" style="font-size:15px;${n ? "font-weight:700" : "color:var(--text-secondary)"}">${n}</span></div>`; };
-  const statsCard = `<div class="card" style="padding:24px 16px 18px;display:flex;flex-direction:column;gap:6px">
-    <div style="text-align:center;display:flex;flex-direction:column;gap:4px">
-      ${lbl(t("All-time"), "tracking-15")}
-      <div class="money" style="font-size:44px">${app.totalReps}</div>
-      ${lbl(t("Total reps"))}
-    </div>
-    <hr class="hr">
-    <div style="display:flex;flex-direction:column;gap:12px">${exKeys.map(exRow).join("")}</div>
-  </div>`;
   const empty = `<div class="card center" style="padding:24px;display:flex;flex-direction:column;align-items:center;gap:14px">
     ${icon("flame", "")}
     <div class="secondary" style="font-weight:500">${t("You're not in any challenge yet. Join one and put some coins on the line.")}</div>
     <button class="action-btn" data-act="findChallenge">${icon("search")}${t("Find a challenge")}</button>
     <button class="text-btn" data-act="demo">${t("Try a demo workout")}</button>
   </div>`;
-  return screenHeader(t("Today")) + `<div class="stack">
-    ${todayHero}
-    ${mine.length ? mine.map((c) => ChallengeCard(c, true)).join("") : empty}
-    ${mine.length ? statsCard : ""}
+
+  // Лента друзей: пульс активности по общим челленджам (сам список челленджей — во вкладке Challenges).
+  const feedEvents = Sync.enabled ? sharedActivity().slice(0, 8) : [];
+  const feed = feedEvents.length
+    ? `${lbl(t("Friends feed"), "tracking-1")}<div class="stack" style="gap:6px">${activityFeedRows(feedEvents)}</div>`
+    : mine.length ? `<div class="card card-soft center secondary" style="padding:20px;font-weight:500">${t("When friends complete their day — it shows up here.")}</div>` : "";
+
+  return screenHeader(t("Home")) + `<div class="stack">
+    ${active.length ? todayHero : (mine.length ? "" : empty)}
+    ${feed}
     <button class="action-btn plain" data-act="invite">${icon("share")}${t("Invite friends")}</button>
     ${friendsSummary()}
   </div>`;
@@ -1465,9 +1458,9 @@ function relativeActivityTime(ts) {
   if (mins < 24 * 60) return t("%lld h ago", Math.floor(mins / 60));
   return new Date(ts).toLocaleDateString(store.lang === "ru" ? "ru-RU" : "en-US", { day: "numeric", month: "short" });
 }
-function NotificationsSheet() {
-  const events = sharedActivity();
-  const rows = events.map((e) => {
+// Строки ленты активности друзей — общий рендер для Хоума и листа уведомлений.
+function activityFeedRows(events) {
+  return events.map((e) => {
     const message = e.type === "day"
       ? t("%@ completed today's challenge in %@", e.actorName || "?", e.challengeTitle || "?")
       : e.type === "start"
@@ -1486,6 +1479,9 @@ function NotificationsSheet() {
       </button><div class="reaction-row">${reactionButtons}</div>
     </div>`;
   }).join("");
+}
+function NotificationsSheet() {
+  const rows = activityFeedRows(sharedActivity());
   return sheetShell(t("Notifications"), rows || `<div class="card card-soft center secondary" style="padding:24px">${t("No notifications yet")}</div>`, true);
 }
 
@@ -1776,9 +1772,28 @@ function StatsTab() {
   const joined = app.challenges.filter(C.isJoined);
   const dot = (color, title) => `<div class="row gap8"><span class="chart-dot" style="background:${color}"></span><span class="label" style="font-size:11px;letter-spacing:1px">${esc(title)}</span></div>`;
 
+  // All-time: всего повторов + разбивка по упражнениям (переехало с бывшей вкладки «Today»).
+  // Не зависит от истории графиков — показываем всегда, даже до первой тренировки.
+  const by = exerciseBreakdown();
+  const exKeys = EX_ORDER.concat(Object.keys(by).filter((k) => !EX_ORDER.includes(k)));
+  const exLabel = (ex) => ex === "other" ? t("Earlier reps") : Exercise.displayName(ex);
+  const exRow = (ex) => { const n = by[ex] || 0; return `<div class="between" style="align-items:baseline">
+    <span style="font-size:15px;${n ? "" : "color:var(--text-secondary)"}">${esc(exLabel(ex))}</span>
+    <span class="money" style="font-size:15px;${n ? "font-weight:700" : "color:var(--text-secondary)"}">${n}</span></div>`; };
+  const allTimeCard = `<div class="card" style="padding:24px 16px 18px;display:flex;flex-direction:column;gap:6px">
+    <div style="text-align:center;display:flex;flex-direction:column;gap:4px">
+      ${lbl(t("All-time"), "tracking-15")}
+      <div class="money" style="font-size:44px">${app.totalReps}</div>
+      ${lbl(t("Total reps"))}
+    </div>
+    <hr class="hr">
+    <div style="display:flex;flex-direction:column;gap:12px">${exKeys.map(exRow).join("")}</div>
+  </div>`;
+
   // Пустое состояние: пока нет ни одной завершённой тренировки — объясняем, как получить данные.
   const hasData = app.history.some((d) => d.entries && d.entries.length);
   if (!hasData) return screenHeader(t("Progress")) + `<div class="stack">
+    ${allTimeCard}
     <div class="card center" style="padding:36px 22px;display:flex;flex-direction:column;align-items:center;gap:14px">
       <span style="color:var(--accent);display:flex">${icon("trend")}</span>
       <div class="secondary" style="font-weight:500;text-align:center;max-width:280px;font-size:15px">${t("Complete your first workout and your weekly trend will appear here.")}</div>
@@ -1889,7 +1904,7 @@ function StatsTab() {
   }
   const journalCard = `<div class="card" style="padding:16px;display:flex;flex-direction:column;gap:10px">${journal}</div>`;
 
-  return screenHeader(t("Progress")) + `<div class="stack">${metricsCard}${insightsCard}${weeklyCard}${dailyCard}${journalCard}</div>`;
+  return screenHeader(t("Progress")) + `<div class="stack">${metricsCard}${allTimeCard}${insightsCard}${weeklyCard}${dailyCard}${journalCard}</div>`;
 }
 // Округление верхней отметки оси Y до «круглого» значения (1/2/5 × 10ⁿ),
 // чтобы подписи сетки читались как 0 / 400 / 800, а не 0 / 417 / 835.
