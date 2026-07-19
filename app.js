@@ -4,7 +4,7 @@
 "use strict";
 
 // Версия оболочки — держать в синхроне с CACHE в sw.js; уходит в баг-репорты.
-const APP_VERSION = "v89";
+const APP_VERSION = "v90";
 // Последняя JS-ошибка — прикладываем к баг-репорту, чтобы сразу видеть причину.
 let lastError = "";
 window.addEventListener("error", (e) => {
@@ -1239,6 +1239,7 @@ function screenHeader(title) {
   const unread = unreadActivityCount();
   return `<div class="screen-head">
     <div class="between" style="gap:12px"><h1 class="screen-title">${esc(title)}</h1><div class="row gap8">
+      <button class="header-icon-btn" data-act="openBug" aria-label="${t("Report a problem")}">${icon("bug")}</button>
       <button class="header-icon-btn" data-act="openNotifications" aria-label="${t("Notifications")}">${icon("bell")}${unread ? `<span class="notification-count">${Math.min(unread, 9)}${unread > 9 ? "+" : ""}</span>` : ""}</button>
       ${langToggle()}</div></div>
   </div>`;
@@ -1500,7 +1501,7 @@ function ChallengesTab() {
     else if (c.access === "public" && C.status(c) !== "completed") buckets.browse.push(c);
   }
   const tabKey = buckets[ui.challengeTab] ? ui.challengeTab : "active";
-  const tabs = [["active", t("Active")], ["pending", t("Pending")], ["completed", t("Completed")], ["browse", t("Browse")]];
+  const tabs = [["active", t("Active")], ["pending", t("Pending")], ["browse", t("Browse")], ["completed", t("Completed")]];
   const tabsUI = `<div class="challenge-tabs">${tabs.map(([k, name]) => {
     const n = buckets[k].length, showCount = k !== "active" && n > 0;
     return `<button data-act="challengeTab:${k}" class="${tabKey === k ? "active" : ""}">${esc(name)}${showCount ? `<span class="challenge-tab-count">${n}</span>` : ""}</button>`;
