@@ -4,7 +4,7 @@
 "use strict";
 
 // Версия оболочки — держать в синхроне с CACHE в sw.js; уходит в баг-репорты.
-const APP_VERSION = "v92";
+const APP_VERSION = "v93";
 // Последняя JS-ошибка — прикладываем к баг-репорту, чтобы сразу видеть причину.
 let lastError = "";
 window.addEventListener("error", (e) => {
@@ -261,6 +261,9 @@ const RU = {
   "A new season starts soon.": "Скоро новый сезон.", "Completed": "Завершён",
   "Day streak": "Дней подряд", "%lld-day streak": "%lld дней подряд",
   "Closed": "Закрыт", "Missed": "Пропущен", "Upcoming": "Впереди", "Out": "Выбыл",
+  "Failed": "Провален", "Challenge failed": "Челлендж провален",
+  "You missed more days than the protection allows.": "Пропущено больше дней, чем разрешает защита.",
+  "It will move to Completed in a couple of days.": "Через пару дней он переедет в «Завершённые».",
   "Account": "Аккаунт", "Email": "Почта", "Password": "Пароль", "Log out": "Выйти",
   "Log in": "Войти", "Sign up": "Зарегистрироваться", "Signed in": "Вход выполнен", "Signing in…": "Вход…", "Skip for now": "Пропустить пока",
   "Sign in to sync progress across your devices": "Войди, чтобы прогресс сохранялся на всех устройствах",
@@ -445,6 +448,7 @@ const C = {
   status: (c) => {
     const s = challengeStartEpoch(c);
     if (s == null || startOfDay(Date.now()) < s) return "pending";
+    if (failLingerOver(c)) return "completed"; // провал отвисел «серым» — в архив
     // goal завершается достижением цели (в любой день); streak — по календарю.
     return (c.isCompleted || challengeEnded(c) || (C.isGoal(c) && C.isFinished(c))) ? "completed" : "active";
   },
@@ -615,6 +619,42 @@ function streakOf(c, days) {
   }
   return streak;
 }
+// ---- Провал: пропущено больше дней, чем разрешает защита от пропусков ----
+const FAIL_LINGER_MS = 2 * DAY; // столько провал висит «серым» в Active, потом — в Completed
+// Провалил ли я streak-челлендж. Синк-челленджи считает applySync из Firebase
+// (state="eliminated"); локальные — по workoutStatsByDay (completedAt = день закрыт).
+function myFailed(c) {
+  if (c.type === "goal") return false; // у goal нет дневной нормы и выбывания
+  if (c.id === "main" && !Sync.enabled) return false; // демо-мок с фейковой историей не проваливаем
+  const me = C.me(c);
+  if (!me) return false;
+  if (me.state === "eliminated") return true;
+  if (Sync.enabled && c.isPublic) return false; // синк: по данным сервера я не выбыл
+  const startKey = challengeStartKey(c);
+  if (!startKey) return false; // ещё не стартовал
+  let missed = 0;
+  for (let day = 1; day < c.currentDay; day++) {
+    const stats = (c.workoutStatsByDay || {})[dateKey(dayEpoch(startKey, day))];
+    if (!stats || !stats.completedAt) missed++;
+  }
+  return missed > allowedMisses(c.missPolicy, c.currentDay - 1);
+}
+// Фиксируем момент провала (от него считаются «серые» два дня) и переводим себя
+// в выбывшие — лидерборд и банк дальше считаются как для выбывшего.
+function markFailures() {
+  let changed = false;
+  for (const c of app.challenges) {
+    if (!myFailed(c)) continue;
+    const me = C.me(c);
+    if (me.state !== "eliminated") { me.state = "eliminated"; changed = true; }
+    if (!app.failedAt[c.id]) { app.failedAt[c.id] = Date.now(); changed = true; }
+  }
+  if (changed) saveApp();
+}
+function failLingerOver(c) {
+  const ts = app.failedAt[c.id];
+  return ts != null && Date.now() - ts >= FAIL_LINGER_MS;
+}
 // Челлендж завершён по календарю: прожиты все дни от старта.
 function challengeEnded(c) {
   const startKey = challengeStartKey(c);
@@ -665,6 +705,7 @@ const app = {
   totalReps: Sync.enabled ? 0 : 1760,
   repsByExercise: {}, // сумма повторов за всё время по типам упражнений
   leftMain: false,
+  failedAt: {}, // challengeId → когда обнаружен провал (отсчёт «серых» дней до архива)
 };
 // Фиксированный порядок упражнений; новые типы появляются после существующих.
 const EX_ORDER = ["pushups", "squats", "pullups", "dips"];
@@ -722,6 +763,7 @@ function applySync() {
     }
   }
   applyPublicChallenges(today);
+  markFailures(); // сервер мог насчитать выбывание — фиксируем момент провала
 }
 
 // Старт remote-челленджа: private задаёт создатель (узел startAt); public стартует
@@ -785,7 +827,7 @@ function totalsByExercise(days) {
 const SAVE_KEY = "fs.state";
 function snapshotApp() {
   return { balance: app.balance, transactions: app.transactions, challenges: app.challenges,
-    history: app.history, measurements: app.measurements, totalReps: app.totalReps, repsByExercise: app.repsByExercise, dayKey: app.dayKey, leftMain: app.leftMain };
+    history: app.history, measurements: app.measurements, totalReps: app.totalReps, repsByExercise: app.repsByExercise, dayKey: app.dayKey, leftMain: app.leftMain, failedAt: app.failedAt };
 }
 let saveTimer = null;
 let lastSavedState = null;
@@ -829,6 +871,7 @@ function saveApp() {
   app.repsByExercise = saved.repsByExercise || {};
   app.dayKey = saved.dayKey || dateKey();
   app.leftMain = saved.leftMain || false;
+  app.failedAt = saved.failedAt || {};
   // Конфигурация общего челленджа всегда из кода — старое сохранение не должно блокировать обновления.
   const tpl = mockChallenges()[0];
   const main = app.challenges.find((c) => c.id === "main");
@@ -838,6 +881,7 @@ function saveApp() {
     if (Sync.enabled) main.currentDay = currentDayFromStart(main.durationDays);
   }
 })();
+markFailures(); // пропуски могли накопиться, пока приложение было закрыто
 {
   const w = store["profile.weightKg"], m = store["profile.maxReps"];
   if (store.onboarded && w > 0 && m > 0 && !app.measurements.length) app.measurements = [{ id: uid(), date: Date.now(), weight: w, maxReps: m }];
@@ -854,6 +898,7 @@ function rolloverIfNeeded() {
     c.currentDay = computeCurrentDay(c);
   }
   applySync(); // с Firebase «сегодня» пересоберётся из данных нового дня
+  markFailures(); // новый день мог добавить пропуск сверх защиты
   saveApp();
   return true;
 }
@@ -1260,6 +1305,7 @@ function TabBar() {
 // ==========================================================================
 function ChallengeCard(c, withPlay) {
   const joined = C.isJoined(c);
+  const failed = joined && myFailed(c);
   const doneBorder = joined && C.isTodayDone(c) ? "done" : "";
   const todayRows = c.goals.map((g) => {
     // goal — прогресс к общей цели; streak — к дневной норме.
@@ -1283,19 +1329,19 @@ function ChallengeCard(c, withPlay) {
       <div style="text-align:right"><div>${lbl(t("You'd win"), "tracking-1")}</div><div class="money" style="font-size:20px">${coin(C.payout(c))}</div></div>
     </div>`;
 
-  const canPlay = joined && !C.isTodayDone(c) && !challengeEnded(c);
+  const canPlay = joined && !failed && !C.isTodayDone(c) && !challengeEnded(c);
   const playBtn = canPlay ? (withPlay
     ? `<button class="card-play" data-act="play:${c.id}" style="width:44px;height:44px;border-radius:50%;background:var(--accent);color:#000;display:flex;align-items:center;justify-content:center">${iconF("play")}</button>`
     : `<span style="width:44px;height:44px;border-radius:50%;background:var(--accent);color:#000;display:flex;align-items:center;justify-content:center">${iconF("play")}</span>`) : "";
 
-  return `<div class="card challenge-card ${doneBorder}"><button class="challenge-card-main" data-act="open:${c.id}">
+  return `<div class="card challenge-card ${doneBorder}${failed ? " failed" : ""}"><button class="challenge-card-main" data-act="open:${c.id}">
     <div class="between" style="align-items:flex-start">
       <div style="font-size:20px;font-weight:700">${esc(c.title)}</div>
-      <div class="row gap6">${c.ownerId === Sync.uid ? badge(t("Creator"), "var(--accent)") : joined && c.isPublic ? badge(t("Joined"), "var(--money)") : ""}${joined ? streakPill(myStreak(c)) : ""}${challengeEnded(c) ? badge(t("Completed"), "var(--money)") : badge(c.isPublic ? t("Public") : t("Private"), c.isPublic ? "var(--text-secondary)" : "var(--purple)")}</div>
+      <div class="row gap6">${failed ? "" : `${c.ownerId === Sync.uid ? badge(t("Creator"), "var(--accent)") : joined && c.isPublic ? badge(t("Joined"), "var(--money)") : ""}${joined ? streakPill(myStreak(c)) : ""}${challengeEnded(c) ? badge(t("Completed"), "var(--money)") : badge(c.isPublic ? t("Public") : t("Private"), c.isPublic ? "var(--text-secondary)" : "var(--purple)")}`}</div>
     </div>
     ${!joined ? `<div class="between">${lbl(C.goalsText(c))}${lbl(t("Day %lld of %lld", c.currentDay, c.durationDays))}</div>` : ""}
     ${joined ? joinedFooter : openFooter}
-  </button>${playBtn ? `<div class="challenge-card-action">${playBtn}</div>` : ""}</div>`;
+  </button>${failed ? `<span class="challenge-fail-mark" aria-label="${t("Failed")}">${iconF("xCircle")}</span>` : ""}${playBtn ? `<div class="challenge-card-action">${playBtn}</div>` : ""}</div>`;
 }
 
 // Карточка ещё не стартовавшего челленджа (Pending): private ждёт создателя,
@@ -1342,7 +1388,7 @@ function PendingCard(c) {
 // ==========================================================================
 function YoursTab() {
   const mine = app.challenges.filter(C.isJoined);
-  const active = mine.filter((c) => !challengeEnded(c) && !c.isCompleted);
+  const active = mine.filter((c) => !challengeEnded(c) && !c.isCompleted && !myFailed(c));
   const nextUp = active.find((c) => !C.isTodayDone(c));
 
   // Блок «Сегодня» — дневная норма только у streak-челленджей; goal-цели (общий счёт) в сумму не входят.
@@ -1540,7 +1586,10 @@ function DetailScreen(id) {
     const inviteBtn = `<button class="action-btn plain" data-act="invite">${icon("share")}${t("Invite friends")}</button>`;
     const shareDayBtn = C.isTodayDone(c) ? `<button class="action-btn share-result-btn" data-act="shareDay:${c.id}">${iconF("share")}${t("Share today's result")}</button>` : "";
     const leaveBtn = `<button class="action-btn" data-act="askLeave:${c.id}" style="background:transparent;color:var(--red);box-shadow:none">${t("Leave challenge")}</button>`;
-    body = ended ? [
+    body = !ended && myFailed(c) ? [
+      failedCard(c), totalCard(c), potCard(c), rulesCard(c),
+      c.beforePhoto ? beforeAfterCard(c) : "", participantsCard(c), leaveBtn,
+    ].join("") : ended ? [
       finaleCard(c), totalCard(c), participantsCard(c), potCard(c), rulesCard(c),
       c.beforePhoto ? beforeAfterCard(c) : "", inviteBtn, leaveBtn,
     ].join("") : [
@@ -1577,6 +1626,14 @@ function totalCard(c) {
     ${lbl(t("Challenge total"), "tracking-15")}
     <div class="money" style="font-size:56px;margin:6px 0">${c.myTotalReps}</div>
     ${s >= 2 ? `<div class="row gap6" style="justify-content:center">${streakPill(s)}${lbl(t("Day streak"), "tracking-1")}</div>` : `<div class="secondary" style="font-size:13px;font-weight:600">${esc(C.exerciseNames(c))}</div>`}
+  </div>`;
+}
+// Статус-карточка проваленного челленджа: причина и что с ним будет дальше.
+function failedCard(c) {
+  return `<div class="card center" style="padding:24px 16px">
+    <span style="display:flex;justify-content:center;color:var(--red)">${iconF("xCircle")}</span>
+    <div style="font-size:22px;font-weight:750;margin:8px 0 4px">${t("Challenge failed")}</div>
+    <div class="secondary" style="font-size:14px;line-height:1.4">${t("You missed more days than the protection allows.")}<br>${t("It will move to Completed in a couple of days.")}</div>
   </div>`;
 }
 // Экран итогов завершённого челленджа: банк, кто дошёл, что забираешь.
