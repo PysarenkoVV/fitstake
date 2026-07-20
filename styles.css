@@ -849,10 +849,9 @@ button:is(:active, .pressed):not(:disabled) { transform: scale(0.97); filter: br
    (.create-section-label): мельче и легче, чтобы не перебивать «шапки» разделов. */
 .create-rep-name { font-size: 12px; font-weight: 600; color: var(--text-secondary); }
 .create-subfield { margin-top: 4px; }
-/* Ручной числовой ввод «Custom»: подпись слева, поле справа (числовая клавиатура). */
-.create-custom { margin-top: 8px; display: flex; align-items: center; gap: 12px; }
-.create-custom-label { font-size: 13px; font-weight: 600; color: var(--text-secondary); }
-.create-custom-input { width: auto; min-width: 104px; max-width: 160px; margin-left: auto; text-align: center; font-size: 18px; font-weight: 700; padding: 12px 14px; }
+/* «Custom»-чип в режиме ввода: тот же чип, но редактируемый (input замаскирован под чип). */
+.create-chip-input { width: 100%; min-width: 0; text-align: center; -webkit-appearance: none; appearance: none; border: none; outline: none; }
+.create-chip-input:focus { outline: none; }
 
 /* ---- Сообщить о проблеме ---- */
 .bug-group { display: flex; flex-direction: column; gap: 8px; }

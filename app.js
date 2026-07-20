@@ -4,7 +4,7 @@
 "use strict";
 
 // Версия оболочки — держать в синхроне с CACHE в sw.js; уходит в баг-репорты.
-const APP_VERSION = "v99";
+const APP_VERSION = "v100";
 // Последняя JS-ошибка — прикладываем к баг-репорту, чтобы сразу видеть причину.
 let lastError = "";
 window.addEventListener("error", (e) => {
@@ -2411,14 +2411,6 @@ function fieldStepper(label, key, min, max, by) {
       <input class="mono" type="number" data-model="${key}" value="${ui.form[key]}" aria-labelledby="${labelId}">
       <button data-act="inc" data-key="${key}" data-min="${min}" data-max="${max}" data-by="${by || 1}">+</button></div></div>`;
 }
-// Ручной ввод для «Custom»-чипа: числовая клавиатура-«калькулятор» (inputmode numeric,
-// только цифры), без степпера. Значение клампится по [min,max] на blur (change).
-function customField(label, key, min, max) {
-  const labelId = `lbl-custom-${key}`;
-  return `<div class="create-custom"><label id="${labelId}" class="create-custom-label">${esc(label)}</label>
-    <input class="field mono create-custom-input" type="text" inputmode="numeric" pattern="[0-9]*" enterkeyhint="done"
-      data-model="${key}" data-num data-min="${min}" data-max="${max}" value="${ui.form[key]}" aria-labelledby="${labelId}"></div>`;
-}
 
 // Создание челленджа: короткий мастер из трёх шагов → карточки итогового ревью.
 // Из ревью каждый раздел открывается отдельно и после сохранения возвращает прямо в ревью.
@@ -2516,12 +2508,17 @@ function CreateScreen() {
   const pick = (act, on, emoji, title, sub, ic) => `<button class="create-pick ${on ? "selected" : ""}" data-act="${act}">
     ${emoji ? `<span class="create-pick-emoji">${emoji}</span>` : ""}${ic ? `<span class="create-pick-ic">${exIcon(ic)}</span>` : ""}
     <span class="create-pick-title">${esc(title)}</span>${sub ? `<span class="create-pick-sub">${esc(sub)}</span>` : ""}</button>`;
-  // Чипы значений: активный — если совпал; «Свой» открывает степпер (флаг custom_<key>).
-  const chips = (key, values, current, suffix) => {
+  // Чипы значений: активный — если совпал. «Custom»-чип по тапу сам превращается
+  // в поле ручного ввода прямо на своём месте (числовая клавиатура), без отдельной секции.
+  const chips = (key, values, current, suffix, min, max, label) => {
     const custom = !!f["custom_" + key];
+    const customChip = custom
+      ? `<input class="create-chip create-chip-input selected" type="text" inputmode="numeric" pattern="[0-9]*" enterkeyhint="done"
+          data-model="${key}" data-num data-min="${min}" data-max="${max}" value="${esc(String(current))}" aria-label="${esc(label || t("Custom"))}">`
+      : `<button class="create-chip" data-act="createCustom:${key}">${t("Custom")}</button>`;
     return `<div class="create-chips">
       ${values.map((v) => `<button class="create-chip ${!custom && +current === v ? "selected" : ""}" data-act="createChip:${key}:${v}">${v}${suffix || ""}</button>`).join("")}
-      <button class="create-chip ${custom ? "selected" : ""}" data-act="createCustom:${key}">${custom ? esc(String(current)) : t("Custom")}</button></div>`;
+      ${customChip}</div>`;
   };
 
   const typeSection = section(t("Challenge type"), `<div class="create-grid-2">
@@ -2531,14 +2528,12 @@ function CreateScreen() {
   const exSection = section(t("Exercise"), `<div class="create-grid-2">
     ${CREATE_EX.map((ex) => pick(`toggle" data-key="sel_${ex}`, f["sel_" + ex], null, Exercise.displayName(ex), null, ex)).join("")}</div>`);
 
-  const durSection = section(t("Duration"), chips("duration", CREATE_DUR_CHIPS, f.duration, t("d"))
-    + (f.custom_duration ? customField(t("Days"), "duration", 1, 365) : ""));
+  const durSection = section(t("Duration"), chips("duration", CREATE_DUR_CHIPS, f.duration, t("d"), 1, 365, t("Days")));
 
   const repLabel = f.type === "goal" ? t("Total reps") : t("Daily minimum reps");
   const repSection = sel.length ? section(repLabel, sel.map((ex) => `<div class="create-rep-row">
     ${sel.length > 1 ? `<div class="create-rep-name">${esc(Exercise.displayName(ex))}</div>` : ""}
-    ${chips(ex, CREATE_REP_CHIPS, f[ex])}
-    ${f["custom_" + ex] ? customField(Exercise.displayName(ex), ex, 5, 5000) : ""}</div>`).join("")) : "";
+    ${chips(ex, CREATE_REP_CHIPS, f[ex], "", 5, 5000, Exercise.displayName(ex))}</div>`).join("")) : "";
 
   const accessSection = section(t("Who can join"), `<div class="create-grid-3">
     ${pick(`seg" data-key="access" data-val="private`, f.access === "private", "🔗", t("Private"), t("Invite by link"))}
@@ -3639,7 +3634,14 @@ root.addEventListener("click", async (e) => {
     return;
   }
   if (cmd === "createChip") { const key = act.split(":")[1]; ui.form[key] = +act.split(":")[2]; ui.form["custom_" + key] = false; render(); return; }
-  if (cmd === "createCustom") { ui.form["custom_" + arg] = true; render(); return; }
+  if (cmd === "createCustom") {
+    ui.form["custom_" + arg] = true; render();
+    // Тап по «Custom» синхронный (INSTANT) — фокус на инпуте в рамках жеста
+    // сразу поднимает числовую клавиатуру (иначе на iOS нужен был бы второй тап).
+    const inp = document.querySelector(`.create-chip-input[data-model="${arg}"]`);
+    if (inp) { inp.focus(); const end = inp.value.length; try { inp.setSelectionRange(end, end); } catch {} }
+    return;
+  }
   if (cmd === "saveChallenge") {
     if (!ui.form) return; // второй тап: первый уже создал челлендж и обнулил форму
     const access = ui.form.access || "solo", synced = access !== "solo";
