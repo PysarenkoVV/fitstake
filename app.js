@@ -4,7 +4,7 @@
 "use strict";
 
 // Версия оболочки — держать в синхроне с CACHE в sw.js; уходит в баг-репорты.
-const APP_VERSION = "v97";
+const APP_VERSION = "v98";
 // Последняя JS-ошибка — прикладываем к баг-репорту, чтобы сразу видеть причину.
 let lastError = "";
 window.addEventListener("error", (e) => {
@@ -2411,6 +2411,14 @@ function fieldStepper(label, key, min, max, by) {
       <input class="mono" type="number" data-model="${key}" value="${ui.form[key]}" aria-labelledby="${labelId}">
       <button data-act="inc" data-key="${key}" data-min="${min}" data-max="${max}" data-by="${by || 1}">+</button></div></div>`;
 }
+// Ручной ввод для «Custom»-чипа: числовая клавиатура-«калькулятор» (inputmode numeric,
+// только цифры), без степпера. Значение клампится по [min,max] на blur (change).
+function customField(label, key, min, max) {
+  const labelId = `lbl-custom-${key}`;
+  return `<div class="create-custom"><label id="${labelId}" class="create-custom-label">${esc(label)}</label>
+    <input class="field mono create-custom-input" type="text" inputmode="numeric" pattern="[0-9]*" enterkeyhint="done"
+      data-model="${key}" data-num data-min="${min}" data-max="${max}" value="${ui.form[key]}" aria-labelledby="${labelId}"></div>`;
+}
 
 // Создание челленджа: короткий мастер из трёх шагов → карточки итогового ревью.
 // Из ревью каждый раздел открывается отдельно и после сохранения возвращает прямо в ревью.
@@ -2524,13 +2532,13 @@ function CreateScreen() {
     ${CREATE_EX.map((ex) => pick(`toggle" data-key="sel_${ex}`, f["sel_" + ex], null, Exercise.displayName(ex), null, ex)).join("")}</div>`);
 
   const durSection = section(t("Duration"), chips("duration", CREATE_DUR_CHIPS, f.duration, t("d"))
-    + (f.custom_duration ? fieldStepper(t("Days"), "duration", 1, 365, 1) : ""));
+    + (f.custom_duration ? customField(t("Days"), "duration", 1, 365) : ""));
 
   const repLabel = f.type === "goal" ? t("Total reps") : t("Daily minimum reps");
   const repSection = sel.length ? section(repLabel, sel.map((ex) => `<div class="create-rep-row">
     ${sel.length > 1 ? `<div class="create-rep-name">${esc(Exercise.displayName(ex))}</div>` : ""}
     ${chips(ex, CREATE_REP_CHIPS, f[ex])}
-    ${f["custom_" + ex] ? fieldStepper(Exercise.displayName(ex), ex, 5, 5000, 5) : ""}</div>`).join("")) : "";
+    ${f["custom_" + ex] ? customField(Exercise.displayName(ex), ex, 5, 5000) : ""}</div>`).join("")) : "";
 
   const accessSection = section(t("Who can join"), `<div class="create-grid-3">
     ${pick(`seg" data-key="access" data-val="private`, f.access === "private", "🔗", t("Private"), t("Invite by link"))}
@@ -3817,7 +3825,14 @@ root.addEventListener("input", (e) => {
   }
   if (el.dataset.model != null) {
     const k = el.dataset.model;
-    ui.form[k] = el.type === "number" || el.type === "range" ? (+el.value || 0) : el.value;
+    if (el.dataset.num != null) {
+      // Числовой «Custom»-филд: держим только цифры (на десктопе могли ввести иное).
+      const digits = el.value.replace(/\D/g, "");
+      if (el.value !== digits) el.value = digits;
+      ui.form[k] = digits === "" ? "" : parseInt(digits, 10);
+    } else {
+      ui.form[k] = el.type === "number" || el.type === "range" ? (+el.value || 0) : el.value;
+    }
     if (k === "photoZoom" || k === "dim") updateSharePreviewStyle();
   }
 });
@@ -3828,6 +3843,15 @@ root.addEventListener("change", (e) => {
     let v = parseInt(el.value); if (isNaN(v)) v = store[k];
     if (r) v = Math.min(Math.max(v, r[0]), r[1]);
     store[k] = v; storeHook(k); render();
+    return;
+  }
+  // Числовой «Custom»-филд: на blur клампим по [min,max] и перерисовываем.
+  if (el.dataset.model != null && el.dataset.num != null) {
+    const k = el.dataset.model, min = +el.dataset.min, max = +el.dataset.max;
+    let v = parseInt(String(ui.form[k] == null ? "" : ui.form[k]).replace(/\D/g, ""), 10);
+    if (isNaN(v)) v = min;
+    ui.form[k] = Math.min(Math.max(v, min), max);
+    render();
   }
 });
 

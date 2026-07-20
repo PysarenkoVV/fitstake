@@ -15,7 +15,7 @@ async function openForm(page) {
   await expect(page.locator(".create-form")).toBeVisible();
 }
 
-test("duration chips select and custom reveals a numeric stepper", async ({ page }) => {
+test("duration Custom reveals a manual numeric input, not a stepper", async ({ page }) => {
   await openForm(page);
   const form = page.locator(".create-form");
   const dur = form.locator(".create-section", { hasText: "DURATION" });
@@ -24,10 +24,20 @@ test("duration chips select and custom reveals a numeric stepper", async ({ page
   await expect(chip14).toHaveClass(/selected/);
 
   await dur.getByRole("button", { name: "Custom", exact: true }).click();
-  const days = page.getByRole("spinbutton", { name: "Days" });
+  // Числовой ввод с клавиатуры-«калькулятора», а не +/- степпер.
+  const days = page.getByRole("textbox", { name: "Days" });
   await expect(days).toHaveValue("14");
-  await page.getByRole("button", { name: "+", exact: true }).click();
-  await expect(days).toHaveValue("15");
+  await expect(days).toHaveAttribute("inputmode", "numeric");
+  await expect(dur.getByRole("button", { name: "+", exact: true })).toHaveCount(0);
+
+  await days.fill("45");
+  await days.blur();
+  await expect(page.getByRole("textbox", { name: "Days" })).toHaveValue("45");
+
+  // На blur значение клампится по максимуму (365 дней).
+  await page.getByRole("textbox", { name: "Days" }).fill("900");
+  await page.getByRole("textbox", { name: "Days" }).blur();
+  await expect(page.getByRole("textbox", { name: "Days" })).toHaveValue("365");
 });
 
 test("streak rules explain consequences and progression shows final target", async ({ page }) => {
