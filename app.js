@@ -4,7 +4,7 @@
 "use strict";
 
 // Версия оболочки — держать в синхроне с CACHE в sw.js; уходит в баг-репорты.
-const APP_VERSION = "v102";
+const APP_VERSION = "v103";
 // Последняя JS-ошибка — прикладываем к баг-репорту, чтобы сразу видеть причину.
 let lastError = "";
 window.addEventListener("error", (e) => {
@@ -30,7 +30,7 @@ const PATHS = {
   seal: '<path d="M12 2l2.4 1.8 3-.2 1 2.8 2.6 1.5-.9 2.9.9 2.9-2.6 1.5-1 2.8-3-.2L12 22l-2.4-1.8-3 .2-1-2.8L3 16.3l.9-2.9L3 10.5l2.6-1.5 1-2.8 3 .2z"/><path d="M8.5 12l2.5 2.5 4.5-4.5" stroke="#0a0a0a"/>',
   search: '<circle cx="11" cy="11" r="7"/><path d="M20 20l-4-4"/>',
   camera: '<path d="M3 8a2 2 0 012-2h2l1.5-2h7L17 6h2a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V8z"/><circle cx="12" cy="12.5" r="3.5"/>',
-  cameraFlip: '<rect x="3.5" y="7" width="17" height="12.5" rx="2.4"/><path d="M8.2 7l1.3-2h5l1.3 2"/><path d="M9.7 12.2a2.7 2.7 0 014.6-1.4"/><path d="M14.6 10.1l-.3 1.9-1.9-.4"/><path d="M14.3 13.2a2.7 2.7 0 01-4.6 1.4"/><path d="M9.4 15.3l.3-1.9 1.9.4"/>',
+  cameraFlip: '<path d="M8.6 7l1.1-2.1h4.6l1.1 2.1H19a2 2 0 012 2v7.6a2 2 0 01-2 2H5a2 2 0 01-2-2V9a2 2 0 012-2z"/><path d="M8.74 11.68A3.6 3.6 0 0115.26 11.68"/><path d="M13.83 10.75L15.26 11.68 15.47 9.99"/><path d="M15.26 14.72A3.6 3.6 0 018.74 14.72"/><path d="M10.17 15.65L8.74 14.72 8.53 16.41"/>',
   photo: '<rect x="3" y="4" width="18" height="14" rx="2"/><path d="M3 15l5-5 4 4 3-3 6 6"/><circle cx="8" cy="9" r="1.4"/>',
   record: '<circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="4" class="rec-dot"/>',
   stop: '<circle cx="12" cy="12" r="10"/><rect x="8" y="8" width="8" height="8" rx="1.5" stroke="#0a0a0a"/>',
