@@ -72,13 +72,19 @@ test("day share editor offers a 9:16 story with photo and gradient backgrounds",
   await expect(page.getByRole("button", { name: "Open camera", exact: true })).toBeVisible();
   await expect(page.getByRole("button", { name: "Share story", exact: true })).toBeVisible();
   await expect(page.getByRole("button", { name: "Minimal", exact: true })).toHaveClass(/active/);
-  await expect(page.locator(".share-reward")).toContainText("Potential reward");
-  await expect(page.locator(".share-reward")).toContainText(/🔥\d+/);
+  // Новый minimal: Strava-оверлей без «Potential reward», с AI verified и вордмарком REPACT.
+  await expect(page.locator(".share-verified")).toBeVisible();
+  await expect(page.locator(".share-wordmark")).toHaveText("REPACT");
+  await expect(page.locator(".share-stat")).toHaveCount(3);
+  await expect(page.locator(".share-reward")).toHaveCount(0);
   await page.evaluate(() => { window.__shareEditorNode = document.querySelector(".share-editor"); });
   await page.getByRole("button", { name: "FitStake gradient", exact: true }).click();
   await expect.poll(() => page.evaluate(() => document.querySelector(".share-editor") === window.__shareEditorNode)).toBe(true);
   await page.getByRole("button", { name: "Challenge", exact: true }).click();
   await expect(page.getByRole("button", { name: "Challenge", exact: true })).toHaveClass(/active/);
+  // «Potential reward» остаётся только в шаблоне Challenge.
+  await expect(page.locator(".share-reward")).toContainText("Potential reward");
+  await expect(page.locator(".share-reward")).toContainText(/🔥\d+/);
   await expect.poll(() => page.evaluate(() => document.querySelector(".share-editor") === window.__shareEditorNode)).toBe(true);
   const preview = page.locator(".share-story-preview");
   await expect(preview).toHaveCSS("aspect-ratio", "9 / 16");
@@ -104,7 +110,7 @@ test("day share editor offers a 9:16 story with photo and gradient backgrounds",
   const downloadPromise = page.waitForEvent("download");
   await page.getByRole("button", { name: "Share story", exact: true }).click();
   const download = await downloadPromise;
-  expect(download.suggestedFilename()).toBe("fitstake-story.jpg");
+  expect(download.suggestedFilename()).toBe("repact-story.jpg");
   await expect.poll(() => page.evaluate(() => window.__storyExport)).toEqual({ width: 1080, height: 1920, type: "image/jpeg" });
   await page.getByRole("button", { name: "Back", exact: true }).click();
   await expect(page.getByText("Share your day", { exact: true })).toHaveCount(0);
@@ -143,8 +149,11 @@ test("completed day stores workout time and set performance", async ({ page }) =
   await expect(page.getByText("04:08", { exact: true })).toBeVisible();
   await expect(page.getByText("52 sec faster", { exact: true })).toBeVisible();
   await page.getByRole("button", { name: "Share", exact: true }).click();
-  await expect(page.locator(".share-story-preview")).toContainText("04:08");
-  await expect(page.locator(".share-story-preview")).toContainText("5 · avg 40");
+  // Minimal-оверлей: время / сеты / среднее — тремя колонками.
+  await expect(page.locator(".share-stat-value")).toHaveText(["04:08", "5", "40"]);
+  const improvement = page.locator(".share-insight");
+  await expect(improvement).toContainText("faster than last time");
+  await expect(improvement).toContainText("00:52");
 });
 
 test("completed challenge exports an informative 9:16 story", async ({ page }) => {

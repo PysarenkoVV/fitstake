@@ -4,7 +4,7 @@
 "use strict";
 
 // Версия оболочки — держать в синхроне с CACHE в sw.js; уходит в баг-репорты.
-const APP_VERSION = "v93";
+const APP_VERSION = "v94";
 // Последняя JS-ошибка — прикладываем к баг-репорту, чтобы сразу видеть причину.
 let lastError = "";
 window.addEventListener("error", (e) => {
@@ -215,7 +215,9 @@ const RU = {
   "Above goal": "Сверх нормы", "Best day": "Лучший день", "Today's place": "Место сегодня", "Streak": "Серия",
   "Reps · 30 days": "Повторы · 30 дней", "Completion": "Выполнено", "All": "Все",
   "%lld of %lld": "%lld из %lld",
-  "reps": "повторов", "Exercises": "Упражнения", "Your turn": "Твой ход",
+  "reps": "повторов", "Exercises": "Упражнения",
+  "AI verified": "Проверено ИИ", "Avg / set": "Ср. за сет", "Day": "День",
+  "faster than last time": "быстрее прошлого раза",
   "Body & measurements": "Тело и замеры", "Wallet": "Кошелёк", "Privacy & data": "Приватность и данные",
   "Video is processed on your device by the camera — not recorded and not sent to any server.": "Видео обрабатывается на твоём устройстве камерой — не записывается и не отправляется на сервер.",
   "Before / After photos are stored on your device — the app doesn't upload them to our servers.": "Фото до/после хранятся на твоём устройстве — приложение не загружает их на наши серверы.",
@@ -2732,25 +2734,55 @@ function ShareDayEditorFull() {
   </div></div>`;
 }
 
+// Длительность для сторис: до часа — MM:SS, от часа — H:MM:SS.
+function shareDuration(ms) {
+  const s = Math.max(0, Math.round((+ms || 0) / 1000));
+  if (s < 3600) return workoutClock(ms);
+  return Math.floor(s / 3600) + ":" + String(Math.floor((s % 3600) / 60)).padStart(2, "0") + ":" + String(s % 60).padStart(2, "0");
+}
+// Три метрики minimal-оверлея: тренировка (время/сеты/среднее) или, без сетов, — день/повторы/процент цели.
+function shareDayStats(c, workout) {
+  if (workout.sets) return [
+    [workout.time, t("Time")],
+    [String(workout.sets), t("Sets")],
+    [String(workout.average), t("Avg / set")],
+  ];
+  const pct = Math.round(C.myTodayTotal(c) / Math.max(C.repsNorm(c), 1) * 100);
+  return [
+    [`${c.currentDay}/${c.durationDays}`, t("Day")],
+    [String(C.myTodayTotal(c)), t("Reps")],
+    [pct + "%", t("Goal")],
+  ];
+}
 function shareStoryCopy(c, f) {
-  const exercises = c.goals.map((g) => `${C.myToday(c, g.exercise)} ${Exercise.displayName(g.exercise).toLowerCase()}`).join(" · ");
   const workout = workoutSummary(c);
-  const workoutLine = workout.sets ? `<div class="share-session-line"><strong>${workout.time}</strong><span>${t("%lld sets", workout.sets)}</span><span>${t("avg %lld", workout.average)}</span></div>${workout.improvementMs ? `<div class="share-improvement">${t("%lld sec faster", Math.round(workout.improvementMs / 1000))}</div>` : ""}` : "";
-  const reward = `<div class="share-reward"><span>${t("Potential reward")}</span><strong>${COIN_SYM}${fmt(C.payout(c))}</strong></div>`;
-  if (f.template === "challenge") return `
+  if (f.template === "challenge") {
+    const exercises = c.goals.map((g) => `${C.myToday(c, g.exercise)} ${Exercise.displayName(g.exercise).toLowerCase()}`).join(" · ");
+    const workoutLine = workout.sets ? `<div class="share-session-line"><strong>${workout.time}</strong><span>${t("%lld sets", workout.sets)}</span><span>${t("avg %lld", workout.average)}</span></div>${workout.improvementMs ? `<div class="share-improvement">${t("%lld sec faster", Math.round(workout.improvementMs / 1000))}</div>` : ""}` : "";
+    return `
     <div class="share-dare"><span>${t("I did mine")}</span><strong>${C.myTodayTotal(c)}</strong><small>${t("reps")}</small></div>
     <div class="share-dare-exercises">${esc(exercises)}</div>
     ${workoutLine}
-    ${reward}
+    <div class="share-reward"><span>${t("Potential reward")}</span><strong>${COIN_SYM}${fmt(C.payout(c))}</strong></div>
     <div class="share-exercise-mark">${c.goals.map((g) => icon(EXERCISE_ICON[g.exercise] || "flame")).join(icon("chevronRight"))}</div>
     <div class="share-brand">FIT<span>STAKE</span><small>${t("Now it's your turn")}</small></div>`;
+  }
+  // Minimal: Strava-style оверлей — статистика прямо на фото, без плашек и оранжевого.
+  const exercisesCaps = c.goals.map((g) => `${C.myToday(c, g.exercise)} ${Exercise.displayName(g.exercise)}`).join(" · ");
+  const stats = shareDayStats(c, workout);
   return `
-    <div class="share-metric"><span>${t("Reps")}</span><strong>${C.myTodayTotal(c)}</strong></div>
-    <div class="share-metric"><span>${t("Exercises")}</span><strong class="share-exercises">${esc(exercises)}</strong></div>
-    ${workout.sets ? `<div class="share-metric"><span>${t("Time")}</span><strong>${workout.time}</strong></div><div class="share-metric"><span>${t("Sets")}</span><strong>${workout.sets} · ${t("avg %lld", workout.average)}</strong></div>${workout.improvementMs ? `<div class="share-improvement">${t("%lld sec faster", Math.round(workout.improvementMs / 1000))}</div>` : ""}` : `<div class="share-metric"><span>${t("Progress")}</span><strong>${t("Day %lld of %lld", c.currentDay, c.durationDays)}</strong></div>`}
-    ${reward}
-    <div class="share-exercise-mark">${c.goals.map((g) => icon(EXERCISE_ICON[g.exercise] || "flame")).join(icon("chevronRight"))}</div>
-    <div class="share-brand">FIT<span>STAKE</span><small>${t("Your turn")}</small></div>`;
+    <div class="share-verified"><span class="share-verified-star">✦</span>${t("AI verified")}</div>
+    <div class="share-hero">
+      <div class="share-hero-value">${C.myTodayTotal(c)}</div>
+      <div class="share-hero-label">${t("Reps")}</div>
+    </div>
+    <div class="share-exercise-summary">${esc(exercisesCaps)}</div>
+    <div class="share-stats">${stats.map(([v, l]) => `<div class="share-stat"><span class="share-stat-value">${esc(v)}</span><span class="share-stat-label">${esc(l)}</span></div>`).join(`<span class="share-stat-divider"></span>`)}</div>
+    ${workout.improvementMs > 0 ? `<div class="share-insight">${shareDuration(workout.improvementMs)} ${t("faster than last time")}</div>` : ""}
+    <div class="share-footer">
+      <div class="share-wordmark">REP<span>ACT</span></div>
+      <div class="share-day">${t("Day")} ${c.currentDay} / ${c.durationDays}</div>
+    </div>`;
 }
 
 function sharePhotoControls(f) {
@@ -2937,9 +2969,23 @@ async function shareDayStory(c, options) {
     glow.addColorStop(0, "rgba(77,194,128,.34)"); glow.addColorStop(1, "rgba(77,194,128,0)"); g.fillStyle = glow; g.fillRect(0, 0, W, H);
   }
   const dim = Math.max(.1, Math.min(.85, ((options && options.dim) || 45) / 100));
-  const shade = g.createLinearGradient(0, 0, 0, H);
-  shade.addColorStop(0, `rgba(0,0,0,${Math.min(.94, dim + .32)})`); shade.addColorStop(.46, `rgba(0,0,0,${dim * .22})`); shade.addColorStop(1, `rgba(0,0,0,${Math.min(.92, dim + .25)})`);
-  g.fillStyle = shade; g.fillRect(0, 0, W, H);
+  if (options.template === "challenge") {
+    const shade = g.createLinearGradient(0, 0, 0, H);
+    shade.addColorStop(0, `rgba(0,0,0,${Math.min(.94, dim + .32)})`); shade.addColorStop(.46, `rgba(0,0,0,${dim * .22})`); shade.addColorStop(1, `rgba(0,0,0,${Math.min(.92, dim + .25)})`);
+    g.fillStyle = shade; g.fillRect(0, 0, W, H);
+  } else {
+    // Minimal: мягкий shade — фото остаётся видимым, центр почти прозрачный.
+    // Формулы = .template-minimal .share-story-shade в styles.css.
+    const v = g.createLinearGradient(0, 0, 0, H);
+    v.addColorStop(0, `rgba(0,0,0,${Math.min(.65, dim + .1)})`);
+    v.addColorStop(.34, `rgba(0,0,0,${dim * .15})`);
+    v.addColorStop(.58, `rgba(0,0,0,${dim * .15})`);
+    v.addColorStop(1, `rgba(0,0,0,${Math.min(.82, dim * .75 + .35)})`);
+    g.fillStyle = v; g.fillRect(0, 0, W, H);
+    const hz = g.createLinearGradient(0, 0, W * .55, 0);
+    hz.addColorStop(0, `rgba(0,0,0,${dim * .55})`); hz.addColorStop(1, "rgba(0,0,0,0)");
+    g.fillStyle = hz; g.fillRect(0, 0, W, H);
+  }
 
   const label = (text, y) => { g.fillStyle = "rgba(255,255,255,.82)"; g.font = "500 31px -apple-system,system-ui,sans-serif"; g.fillText(text, pad, y); };
   const value = (text, y, size = 66) => { g.fillStyle = "#fff"; g.font = `800 ${size}px -apple-system,system-ui,sans-serif`; g.fillText(text, pad, y); };
@@ -2965,40 +3011,80 @@ async function shareDayStory(c, options) {
       }
     }
     label(t("Potential reward"), rewardY); value(COIN_SYM + fmt(C.payout(c)), rewardY + 76, 58);
+    g.fillStyle = "#fff"; g.font = "900 58px -apple-system,system-ui,sans-serif"; g.fillText("FIT", pad, H - 210);
+    const fitW = g.measureText("FIT").width; g.fillStyle = "#ff5e1f"; g.fillText("STAKE", pad + fitW, H - 210);
+    g.fillStyle = "#ff5e1f"; g.font = "700 38px -apple-system,system-ui,sans-serif"; g.fillText(t("Now it's your turn"), pad, H - 145);
   } else {
-    label(t("Reps"), 170); value(String(C.myTodayTotal(c)), 252, 82);
-    label(t("Exercises"), 352);
-    g.font = "800 47px -apple-system,system-ui,sans-serif";
-    const lines = wrapLines(g, exercises, W - pad * 2, 2);
-    lines.forEach((line, i) => value(line, 422 + i * 58, 47));
-    const progressY = 422 + lines.length * 58 + 46;
-    let rewardY;
-    if (workout.sets) {
-      label(t("Time"), progressY); value(workout.time, progressY + 76, 66);
-      label(t("Sets"), progressY + 160); value(`${workout.sets} · ${t("avg %lld", workout.average)}`, progressY + 232, 48);
-      rewardY = progressY + 322;
-      if (workout.improvementMs) {
-        g.fillStyle = "#ff5e1f"; g.font = "800 42px -apple-system,system-ui,sans-serif";
-        g.fillText(t("%lld sec faster", Math.round(workout.improvementMs / 1000)).toUpperCase(), pad, rewardY);
-        rewardY += 88;
-      }
-    } else {
-      label(t("Progress"), progressY); value(t("Day %lld of %lld", c.currentDay, c.durationDays), progressY + 76, 58);
-      rewardY = progressY + 174;
-    }
-    label(t("Potential reward"), rewardY); value(COIN_SYM + fmt(C.payout(c)), rewardY + 76, 58);
-  }
+    // Minimal (Strava-style) — зеркало HTML-превью: sans без плашек, лайм-акцент, без оранжевого.
+    const ink = "#F4F2EC", sub = "rgba(244,242,236,.72)", lime = "#B8FF3D";
+    const padX = 80, padTop = 120, padBottom = 90;
+    const sans = (w, s) => `${w} ${s}px -apple-system,system-ui,sans-serif`;
+    g.shadowColor = "rgba(0,0,0,.65)"; g.shadowBlur = 18; g.shadowOffsetY = 2;
 
-  g.fillStyle = "#fff"; g.font = "900 58px -apple-system,system-ui,sans-serif"; g.fillText("FIT", pad, H - 210);
-  const fitW = g.measureText("FIT").width; g.fillStyle = "#ff5e1f"; g.fillText("STAKE", pad + fitW, H - 210);
-  g.fillStyle = "#ff5e1f"; g.font = "700 38px -apple-system,system-ui,sans-serif"; g.fillText(t(options.template === "challenge" ? "Now it's your turn" : "Your turn"), pad, H - 145);
+    // AI VERIFIED со звёздочкой
+    let y = padTop + 30;
+    g.fillStyle = lime; g.font = sans(600, 34); g.fillText("✦", padX, y + 2);
+    g.fillStyle = sub; g.font = sans(650, 30);
+    try { g.letterSpacing = "5px"; } catch {}
+    g.fillText(t("AI verified").toUpperCase(), padX + 46, y);
+    try { g.letterSpacing = "0px"; } catch {}
+
+    // Главный результат
+    y += 246; // базлайн числа: 30 + отступ 48 + кап-высота ~198
+    g.fillStyle = ink; g.font = sans(600, 230);
+    g.fillText(String(C.myTodayTotal(c)), padX - 6, y);
+    y += 62;
+    g.fillStyle = sub; g.font = sans(650, 34);
+    try { g.letterSpacing = "6px"; } catch {}
+    g.fillText(t("Reps").toUpperCase(), padX, y);
+    try { g.letterSpacing = "0px"; } catch {}
+
+    // Упражнения (до двух строк)
+    y += 92;
+    g.fillStyle = ink; g.font = sans(700, 40);
+    const exLines = wrapLines(g, exercises.toUpperCase(), W - padX * 2, 2);
+    exLines.forEach((line, i) => g.fillText(line, padX, y + i * 54));
+    y += (exLines.length - 1) * 54;
+
+    // Три метрики: значения сверху, подписи снизу, тонкие разделители
+    y += 96;
+    const stats = shareDayStats(c, workout);
+    const colW = (W - padX * 2) / 3;
+    stats.forEach(([v, l], i) => {
+      const x = padX + i * colW;
+      g.fillStyle = ink; g.font = sans(650, 58); g.fillText(v, x, y);
+      g.fillStyle = sub; g.font = sans(600, 27); g.fillText(l.toUpperCase(), x, y + 44);
+    });
+    g.save(); g.shadowColor = "transparent";
+    g.fillStyle = "rgba(255,255,255,.22)";
+    for (let i = 1; i < 3; i++) g.fillRect(padX + i * colW - 34, y - 52, 2, 102);
+    g.restore();
+
+    // Улучшение против прошлого раза
+    if (workout.improvementMs > 0) {
+      y += 118;
+      g.fillStyle = lime; g.font = sans(700, 31);
+      g.fillText(`${shareDuration(workout.improvementMs)} ${t("faster than last time")}`.toUpperCase(), padX, y);
+    }
+
+    // Низ: слева REPACT, справа день челленджа
+    const fy = H - padBottom;
+    g.fillStyle = ink; g.font = sans(900, 56); g.fillText("REP", padX, fy);
+    const repW = g.measureText("REP").width;
+    g.fillStyle = lime; g.fillText("ACT", padX + repW, fy);
+    g.textAlign = "right";
+    g.fillStyle = sub; g.font = sans(600, 34);
+    g.fillText(`${t("Day").toUpperCase()} ${c.currentDay} / ${c.durationDays}`, W - padX, fy);
+    g.textAlign = "left";
+    g.shadowColor = "transparent"; g.shadowBlur = 0; g.shadowOffsetY = 0;
+  }
 
   const blob = await new Promise((res) => cv.toBlob(res, "image/jpeg", .92));
-  const file = new File([blob], "fitstake-story.jpg", { type: "image/jpeg" });
+  const file = new File([blob], "repact-story.jpg", { type: "image/jpeg" });
   if (navigator.canShare && navigator.canShare({ files: [file] })) {
-    try { await navigator.share({ files: [file], title: "FitStake" }); return; } catch {}
+    try { await navigator.share({ files: [file], title: "Repact" }); return; } catch {}
   }
-  const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = "fitstake-story.jpg"; a.click();
+  const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = "repact-story.jpg"; a.click();
 }
 
 // SVG-иконку → data-URI, чтобы нарисовать её на canvas через drawImage с нужным цветом.

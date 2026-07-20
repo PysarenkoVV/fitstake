@@ -897,16 +897,49 @@ button:is(:active, .pressed):not(:disabled) { transform: scale(0.97); filter: br
 .created-actions { width: 100%; max-width: 420px; display: flex; flex-direction: column; gap: 10px; padding-top: 24px; }
 .share-editor { overflow-y: auto; }
 .share-editor-shell { min-height: 100dvh; max-width: 560px; margin: 0 auto; padding: 0 16px calc(18px + env(safe-area-inset-bottom)); display: flex; flex-direction: column; gap: 14px; }
-.share-story-preview { position: relative; width: min(100%, 310px); aspect-ratio: 9 / 16; margin: 0 auto; overflow: hidden; border-radius: 18px; background: #0a0a0a; box-shadow: 0 0 0 1px var(--border); }
+.share-story-preview { position: relative; width: min(100%, 310px); aspect-ratio: 9 / 16; margin: 0 auto; overflow: hidden; border-radius: 18px; background: #0a0a0a; box-shadow: 0 0 0 1px var(--border); container-type: inline-size; }
 .share-story-preview > img, .share-gradient, .share-story-shade { position: absolute; inset: 0; width: 100%; height: 100%; }
 .share-story-preview > img { object-fit: cover; transform: translate3d(var(--photo-x), var(--photo-y), 0) scale(var(--photo-scale)); touch-action: none; user-select: none; }
 .share-gradient { background: radial-gradient(circle at 94% 16%, rgba(255,94,31,.88), transparent 42%), radial-gradient(circle at 4% 88%, rgba(77,194,128,.46), transparent 38%), linear-gradient(145deg, #070707 12%, #21120c 54%, #090909 88%); }
 .share-story-shade { background: linear-gradient(180deg, rgba(0,0,0,calc(var(--story-dim) + .25)), rgba(0,0,0,calc(var(--story-dim) * .2)) 47%, rgba(0,0,0,calc(var(--story-dim) + .2))); pointer-events: none; }
 .share-story-copy { position: absolute; inset: 0; padding: 30px 24px 24px; display: flex; flex-direction: column; color: #fff; }
-.share-metric { display: flex; flex-direction: column; gap: 1px; margin-bottom: 16px; text-shadow: 0 2px 12px rgba(0,0,0,.72); }
-.share-metric span { font-size: 10px; font-weight: 600; color: rgba(255,255,255,.82); }
-.share-metric strong { font-size: 25px; line-height: 1.08; font-weight: 800; letter-spacing: -.5px; }
-.share-metric .share-exercises { font-size: 16px; line-height: 1.2; }
+
+/* ---- Minimal-оверлей (Strava-style): статистика прямо на фото, без плашек и оранжевого.
+   Размеры в cqw = канвас-пиксели / 10.8 (канвас 1080 × 1920) — превью 1:1 повторяет экспорт. ---- */
+.template-minimal .share-story-shade {
+  /* Формулы = minimal-ветка shareDayStory: мягкий верх/низ, прозрачный центр + тень слева под статистикой. */
+  background:
+    linear-gradient(90deg, rgba(0, 0, 0, calc(var(--story-dim) * 0.55)), transparent 55%),
+    linear-gradient(180deg,
+      rgba(0, 0, 0, min(0.65, calc(var(--story-dim) + 0.1))) 0%,
+      rgba(0, 0, 0, calc(var(--story-dim) * 0.15)) 34%,
+      rgba(0, 0, 0, calc(var(--story-dim) * 0.15)) 58%,
+      rgba(0, 0, 0, min(0.82, calc(var(--story-dim) * 0.75 + 0.35))) 100%);
+}
+.template-minimal .share-story-copy {
+  padding: 11.1cqw 7.4cqw 8.3cqw;
+  color: #f4f2ec;
+  text-shadow: 0 2px 18px rgba(0, 0, 0, 0.65);
+}
+.share-verified { display: flex; align-items: center; gap: 1.2cqw; font-size: 2.8cqw; font-weight: 650; letter-spacing: 0.5cqw; text-transform: uppercase; color: rgba(244, 242, 236, 0.72); }
+.share-verified-star { font-size: 3.2cqw; color: #b8ff3d; text-transform: none; letter-spacing: 0; }
+.share-hero { margin-top: 4.4cqw; display: flex; flex-direction: column; gap: 1.6cqw; }
+.share-hero-value { font-size: 21.3cqw; line-height: 0.9; font-weight: 600; font-variant-numeric: tabular-nums; letter-spacing: -0.4cqw; }
+.share-hero-label { font-size: 3.2cqw; font-weight: 650; letter-spacing: 0.55cqw; text-transform: uppercase; color: rgba(244, 242, 236, 0.72); }
+.share-exercise-summary {
+  margin-top: 5.6cqw; font-size: 3.7cqw; line-height: 1.35; font-weight: 700; text-transform: uppercase;
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+}
+.share-stats { margin-top: 6.5cqw; display: flex; align-items: stretch; }
+.share-stat { flex: 1; display: flex; flex-direction: column; gap: 0.9cqw; }
+.share-stat-value { font-size: 5.4cqw; font-weight: 650; font-variant-numeric: tabular-nums; }
+.share-stat-label { font-size: 2.5cqw; font-weight: 600; letter-spacing: 0.3cqw; text-transform: uppercase; color: rgba(244, 242, 236, 0.72); }
+.share-stat-divider { width: 1px; margin-right: 6.3cqw; background: rgba(255, 255, 255, 0.22); }
+.share-insight { margin-top: 5.6cqw; font-size: 2.9cqw; font-weight: 700; letter-spacing: 0.25cqw; text-transform: uppercase; color: #b8ff3d; }
+.share-footer { margin-top: auto; display: flex; align-items: baseline; justify-content: space-between; }
+.share-wordmark { font-size: 5.2cqw; font-weight: 900; letter-spacing: -0.1cqw; }
+.share-wordmark > span { color: #b8ff3d; }
+.share-day { font-size: 3.2cqw; font-weight: 600; text-transform: uppercase; font-variant-numeric: tabular-nums; color: rgba(244, 242, 236, 0.72); }
 .share-exercise-mark { margin-top: 3px; display: flex; align-items: center; gap: 8px; color: var(--accent); }
 .share-exercise-mark svg { width: 28px; height: 28px; filter: drop-shadow(0 2px 8px rgba(0,0,0,.55)); }
 .share-exercise-mark svg:nth-child(even) { width: 15px; height: 15px; }
