@@ -930,7 +930,7 @@ button:is(:active, .pressed):not(:disabled) { transform: scale(0.97); filter: br
 .share-verified { display: flex; align-items: center; gap: 1.2cqw; font-size: 2.8cqw; font-weight: 650; letter-spacing: 0.5cqw; text-transform: uppercase; color: rgba(244, 242, 236, 0.72); }
 .share-verified-star { font-size: 3.2cqw; color: #b8ff3d; text-transform: none; letter-spacing: 0; }
 .share-hero { margin-top: 4.4cqw; display: flex; flex-direction: column; gap: 1.6cqw; }
-.share-hero-value { font-size: 21.3cqw; line-height: 0.9; font-weight: 600; font-variant-numeric: tabular-nums; letter-spacing: -0.4cqw; }
+.share-hero-value { font-size: 32cqw; line-height: 0.9; font-weight: 600; font-variant-numeric: tabular-nums; letter-spacing: -0.9cqw; }
 .share-hero-label { font-size: 3.2cqw; font-weight: 650; letter-spacing: 0.55cqw; text-transform: uppercase; color: rgba(244, 242, 236, 0.72); }
 .share-exercise-summary {
   margin-top: 5.6cqw; font-size: 3.7cqw; line-height: 1.35; font-weight: 700; text-transform: uppercase;

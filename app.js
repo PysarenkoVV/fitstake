@@ -4,7 +4,7 @@
 "use strict";
 
 // Версия оболочки — держать в синхроне с CACHE в sw.js; уходит в баг-репорты.
-const APP_VERSION = "v98";
+const APP_VERSION = "v99";
 // Последняя JS-ошибка — прикладываем к баг-репорту, чтобы сразу видеть причину.
 let lastError = "";
 window.addEventListener("error", (e) => {
@@ -2771,6 +2771,11 @@ function shareDuration(ms) {
   if (s < 3600) return workoutClock(ms);
   return Math.floor(s / 3600) + ":" + String(Math.floor((s % 3600) / 60)).padStart(2, "0") + ":" + String(s % 60).padStart(2, "0");
 }
+// Базовый размер hero-числа minimal-оверлея (в cqw = % ширины канваса 1080px).
+// Подстраховка от переполнения safe-area на редких 5+-значных суммах — до 4 цифр
+// (реалистичный потолок при 4 упражнениях по ≤500/день) базовый размер помещается впритык.
+const SHARE_HERO_CQW = 32;
+function shareHeroCqw(total) { return String(total).length >= 5 ? 24 : SHARE_HERO_CQW; }
 // Три метрики minimal-оверлея: тренировка (время/сеты/среднее) или, без сетов, — день/повторы/процент цели.
 function shareDayStats(c, workout) {
   if (workout.sets) return [
@@ -2804,7 +2809,7 @@ function shareStoryCopy(c, f) {
   return `
     <div class="share-verified"><span class="share-verified-star">✦</span>${t("AI verified")}</div>
     <div class="share-hero">
-      <div class="share-hero-value">${C.myTodayTotal(c)}</div>
+      <div class="share-hero-value" style="font-size:${shareHeroCqw(C.myTodayTotal(c))}cqw">${C.myTodayTotal(c)}</div>
       <div class="share-hero-label">${t("Reps")}</div>
     </div>
     <div class="share-exercise-summary">${esc(exercisesCaps)}</div>
@@ -3060,25 +3065,29 @@ async function shareDayStory(c, options) {
     g.fillText(t("AI verified").toUpperCase(), padX + 46, y);
     try { g.letterSpacing = "0px"; } catch {}
 
-    // Главный результат
-    y += 246; // базлайн числа: 30 + отступ 48 + кап-высота ~198
-    g.fillStyle = ink; g.font = sans(600, 230);
+    // Главный результат — крупный hero-номер (Strava-style), размер синхронен
+    // с shareHeroCqw()/.share-hero-value в превью (px на канвасе = cqw × W/100).
+    const heroPx = Math.round(shareHeroCqw(C.myTodayTotal(c)) * W / 100);
+    y += Math.round(246 * heroPx / 230); // базлайн числа: масштабируем от базового 230px
+    g.fillStyle = ink; g.font = sans(600, heroPx);
+    try { g.letterSpacing = "-" + Math.round(heroPx * 0.028) + "px"; } catch {}
     g.fillText(String(C.myTodayTotal(c)), padX - 6, y);
-    y += 62;
+    try { g.letterSpacing = "0px"; } catch {}
+    y += Math.round(62 * heroPx / 230);
     g.fillStyle = sub; g.font = sans(650, 34);
     try { g.letterSpacing = "6px"; } catch {}
     g.fillText(t("Reps").toUpperCase(), padX, y);
     try { g.letterSpacing = "0px"; } catch {}
 
     // Упражнения (до двух строк)
-    y += 92;
+    y += Math.round(92 * heroPx / 230);
     g.fillStyle = ink; g.font = sans(700, 40);
     const exLines = wrapLines(g, exercises.toUpperCase(), W - padX * 2, 2);
     exLines.forEach((line, i) => g.fillText(line, padX, y + i * 54));
     y += (exLines.length - 1) * 54;
 
     // Три метрики: значения сверху, подписи снизу, тонкие разделители
-    y += 96;
+    y += Math.round(96 * heroPx / 230);
     const stats = shareDayStats(c, workout);
     const colW = (W - padX * 2) / 3;
     stats.forEach(([v, l], i) => {
@@ -3093,7 +3102,7 @@ async function shareDayStory(c, options) {
 
     // Улучшение против прошлого раза
     if (workout.improvementMs > 0) {
-      y += 118;
+      y += Math.round(118 * heroPx / 230);
       g.fillStyle = lime; g.font = sans(700, 31);
       g.fillText(`${shareDuration(workout.improvementMs)} ${t("faster than last time")}`.toUpperCase(), padX, y);
     }
