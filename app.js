@@ -4,7 +4,7 @@
 "use strict";
 
 // Версия оболочки — держать в синхроне с CACHE в sw.js; уходит в баг-репорты.
-const APP_VERSION = "v96";
+const APP_VERSION = "v97";
 // Последняя JS-ошибка — прикладываем к баг-репорту, чтобы сразу видеть причину.
 let lastError = "";
 window.addEventListener("error", (e) => {
@@ -2533,9 +2533,9 @@ function CreateScreen() {
     ${f["custom_" + ex] ? fieldStepper(Exercise.displayName(ex), ex, 5, 5000, 5) : ""}</div>`).join("")) : "";
 
   const accessSection = section(t("Who can join"), `<div class="create-grid-3">
-    ${pick(`seg" data-key="access" data-val="solo`, f.access === "solo", "🧍", t("Solo"), t("Just you"))}
     ${pick(`seg" data-key="access" data-val="private`, f.access === "private", "🔗", t("Private"), t("Invite by link"))}
-    ${pick(`seg" data-key="access" data-val="public`, f.access === "public", "🌐", t("Public"), t("Anyone joins"))}</div>
+    ${pick(`seg" data-key="access" data-val="public`, f.access === "public", "🌐", t("Public"), t("Anyone joins"))}
+    ${pick(`seg" data-key="access" data-val="solo`, f.access === "solo", "🧍", t("Solo"), t("Just you"))}</div>
     ${f.access === "public" ? `<div class="create-subfield">${fieldStepper(t("Players to gather"), "minPlayers", 2, 50, 1)}</div>` : ""}`);
 
   const missBlock = `<section class="create-rule-block"><div class="create-rule-heading"><div class="create-rule-title">${t("Missed days")}</div><div class="form-footer">${t("Missed days decide how many unfinished days you can have before you leave the challenge and lose your stake.")}</div></div>
@@ -3323,7 +3323,7 @@ async function shareChallengePoster(data) {
 // Открытие/закрытие модалок и поздравлений
 // ==========================================================================
 function newCreateForm(over) {
-  return Object.assign({ step: 0, type: "streak", access: "solo", minPlayers: 5,
+  return Object.assign({ step: 0, type: "streak", access: "private", minPlayers: 5,
     title: "", sel_pushups: true, sel_squats: false, sel_pullups: false, sel_dips: false,
     pushups: store.dailyGoal || 50, squats: store.dailyGoal || 50, pullups: 20, dips: 30,
     duration: 30, buyIn: 0, isPublic: !isGuest(), miss: "oneTotal", progOn: false, progStep: 5, progPeriod: "day" }, over || {});

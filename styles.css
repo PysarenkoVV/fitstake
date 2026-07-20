@@ -845,7 +845,9 @@ button:is(:active, .pressed):not(:disabled) { transform: scale(0.97); filter: br
 .create-chip:is(:active, .pressed) { transform: scale(0.94); }
 .create-rep-row { display: flex; flex-direction: column; gap: 8px; }
 .create-rep-row + .create-rep-row { margin-top: 6px; }
-.create-rep-name { font-size: 14px; font-weight: 650; color: var(--text-secondary); }
+/* Под-лейбл упражнения внутри секции репсов — подчинён секционному заголовку
+   (.create-section-label): мельче и легче, чтобы не перебивать «шапки» разделов. */
+.create-rep-name { font-size: 12px; font-weight: 600; color: var(--text-secondary); }
 .create-subfield { margin-top: 4px; }
 
 /* ---- Сообщить о проблеме ---- */
