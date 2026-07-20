@@ -4,7 +4,7 @@
 "use strict";
 
 // Версия оболочки — держать в синхроне с CACHE в sw.js; уходит в баг-репорты.
-const APP_VERSION = "v95";
+const APP_VERSION = "v96";
 // Последняя JS-ошибка — прикладываем к баг-репорту, чтобы сразу видеть причину.
 let lastError = "";
 window.addEventListener("error", (e) => {
@@ -3972,11 +3972,14 @@ render = function () {
   const sheetTop = document.querySelector(".sheet") && document.querySelector(".sheet").scrollTop;
   const detailTop = document.querySelector("#detail-scroll") && document.querySelector("#detail-scroll").scrollTop;
   const fullTop = document.querySelector(".fullscreen") && document.querySelector(".fullscreen").scrollTop;
+  // Форма создания скроллится внутренним телом (шапка/футер закреплены), а не .fullscreen.
+  const wizardTop = document.querySelector(".create-wizard-body") && document.querySelector(".create-wizard-body").scrollTop;
   const winTop = window.scrollY;
   _render();
   if (sheetTop != null) { const s = document.querySelector(".sheet"); if (s) s.scrollTop = sheetTop; }
   if (detailTop != null) { const d = document.querySelector("#detail-scroll"); if (d) d.scrollTop = detailTop; }
   if (fullTop != null) { const f = document.querySelector(".fullscreen"); if (f) f.scrollTop = fullTop; }
+  if (wizardTop != null) { const w = document.querySelector(".create-wizard-body"); if (w) w.scrollTop = wizardTop; }
   window.scrollTo(0, winTop);
   // Перерисовка убила нажатый элемент — переносим пульс на его копию в новом DOM,
   // чтобы анимация нажатия доиграла до конца (степперы, тоглы и т.п.).
