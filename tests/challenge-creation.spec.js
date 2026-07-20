@@ -80,7 +80,7 @@ test("invite link opens the requested challenge", async ({ page }) => {
 test("day share editor offers a 9:16 story with photo and gradient backgrounds", async ({ page }) => {
   await page.evaluate(() => window.openShareDay({ id: "main" }));
   await expect(page.getByText("Share your day", { exact: true })).toBeVisible();
-  await expect(page.getByRole("button", { name: "FitStake gradient", exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Repact gradient", exact: true })).toBeVisible();
   await expect(page.getByRole("button", { name: "Photo library", exact: true })).toBeVisible();
   await expect(page.getByRole("button", { name: "Open camera", exact: true })).toBeVisible();
   await expect(page.getByRole("button", { name: "Share story", exact: true })).toBeVisible();
@@ -91,7 +91,7 @@ test("day share editor offers a 9:16 story with photo and gradient backgrounds",
   await expect(page.locator(".share-stat")).toHaveCount(3);
   await expect(page.locator(".share-reward")).toHaveCount(0);
   await page.evaluate(() => { window.__shareEditorNode = document.querySelector(".share-editor"); });
-  await page.getByRole("button", { name: "FitStake gradient", exact: true }).click();
+  await page.getByRole("button", { name: "Repact gradient", exact: true }).click();
   await expect.poll(() => page.evaluate(() => document.querySelector(".share-editor") === window.__shareEditorNode)).toBe(true);
   await page.getByRole("button", { name: "Challenge", exact: true }).click();
   await expect(page.getByRole("button", { name: "Challenge", exact: true })).toHaveClass(/active/);
@@ -184,6 +184,6 @@ test("completed challenge exports an informative 9:16 story", async ({ page }) =
     exerciseSummary: "1500 pull-ups · 1500 dips", weight: "75 → 78 kg", maxReps: "15 → 35", payout: 700,
   }));
   const download = await downloadPromise;
-  expect(download.suggestedFilename()).toBe("fitstake-challenge.jpg");
+  expect(download.suggestedFilename()).toBe("repact-challenge.jpg");
   await expect.poll(() => page.evaluate(() => window.__challengeExport)).toEqual({ width: 1080, height: 1920, type: "image/jpeg" });
 });

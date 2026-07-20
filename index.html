@@ -10,12 +10,23 @@
   <meta name="theme-color" content="#070707" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-  <meta name="apple-mobile-web-app-title" content="FitStake" />
+  <meta name="apple-mobile-web-app-title" content="Repact" />
   <link rel="manifest" href="manifest.json" />
   <link rel="apple-touch-icon" href="icons/icon-180.png" />
   <link rel="icon" href="icons/icon-192.png" />
-  <link rel="stylesheet" href="styles.css?v=100" />
-  <title>FitStake</title>
+  <link rel="stylesheet" href="styles.css?v=101" />
+  <title>Repact</title>
+  <meta name="description" content="AI-counted push-up & squat challenges. Put a stake on your streak and prove every rep with your camera." />
+  <meta property="og:type" content="website" />
+  <meta property="og:site_name" content="Repact" />
+  <meta property="og:title" content="Repact — count every rep, keep your streak" />
+  <meta property="og:description" content="AI-counted push-up & squat challenges. Put a stake on your streak and prove every rep with your camera." />
+  <meta property="og:url" content="https://pysarenkovv.github.io/fitstake/" />
+  <meta property="og:image" content="https://pysarenkovv.github.io/fitstake/icons/icon-512.png" />
+  <meta name="twitter:card" content="summary" />
+  <meta name="twitter:title" content="Repact — count every rep, keep your streak" />
+  <meta name="twitter:description" content="AI-counted push-up & squat challenges. Prove every rep with your camera." />
+  <meta name="twitter:image" content="https://pysarenkovv.github.io/fitstake/icons/icon-512.png" />
   <!-- PostHog — продуктовая аналитика (воронка, ретеншн) -->
   <script>
     !function(t,e){var o,n,p,r;e.__SV||(window.posthog && window.posthog.__loaded)||(window.posthog=e,e._i=[],e.init=function(i,s,a){function g(t,e){var o=e.split(".");2==o.length&&(t=t[o[0]],e=o[1]),t[e]=function(){t.push([e].concat(Array.prototype.slice.call(arguments,0)))}}(p=t.createElement("script")).type="text/javascript",p.crossOrigin="anonymous",p.async=!0,p.src=s.api_host.replace(".i.posthog.com","-assets.i.posthog.com")+"/static/array.js",(r=t.getElementsByTagName("script")[0]).parentNode.insertBefore(p,r);var u=e;for(void 0!==a?u=e[a]=[]:a="posthog",u.people=u.people||[],u.toString=function(t){var e="posthog";return"posthog"!==a&&(e+="."+a),t||(e+=" (stub)"),e},u.people.toString=function(){return u.toString(1)+".people (stub)"},o="Fi Di init Ji Xi Tr Ki tn Zi capture calculateEventProperties ln register register_once register_for_session unregister unregister_for_session dn getFeatureFlag getFeatureFlagPayload getFeatureFlagResult getAllFeatureFlags isFeatureEnabled reloadFeatureFlags updateFlags updateEarlyAccessFeatureEnrollment getEarlyAccessFeatures on onFeatureFlags onSurveysLoaded onSessionId getSurveys getActiveMatchingSurveys renderSurvey displaySurvey cancelPendingSurvey canRenderSurvey canRenderSurveyAsync cn identify setPersonProperties unsetPersonProperties group resetGroups setPersonPropertiesForFlags resetPersonPropertiesForFlags setGroupPropertiesForFlags resetGroupPropertiesForFlags reset shutdown setIdentity clearIdentity get_distinct_id getGroups get_session_id get_session_replay_url alias set_config startSessionRecording stopSessionRecording sessionRecordingStarted captureException addExceptionStep captureLog startExceptionAutocapture stopExceptionAutocapture loadToolbar get_property getSessionProperty un sn createPersonProfile setInternalOrTestUser hn Wi pn opt_in_capturing opt_out_capturing has_opted_in_capturing has_opted_out_capturing get_explicit_consent_status is_capturing clear_opt_in_out_capturing rn debug Er it getPageViewId captureTraceFeedback captureTraceMetric Ui".split(" "),n=0;n<o.length;n++)g(u,o[n]);e._i.push([i,s,a])},e.__SV=1)}(document,window.posthog||[]);
@@ -29,10 +40,10 @@
 <body>
   <div id="app"></div>
   <script src="firebase-config.js"></script>
-  <script src="sync.js?v=100"></script>
-  <script src="pose.js?v=100"></script>
-  <script src="workout-session.js?v=100"></script>
-  <script src="app.js?v=100"></script>
+  <script src="sync.js?v=101"></script>
+  <script src="pose.js?v=101"></script>
+  <script src="workout-session.js?v=101"></script>
+  <script src="app.js?v=101"></script>
   <script>
     if ("serviceWorker" in navigator) {
       window.addEventListener("load", () => navigator.serviceWorker.register("sw.js").catch(() => {}));

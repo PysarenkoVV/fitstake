@@ -4,7 +4,7 @@
 "use strict";
 
 // Версия оболочки — держать в синхроне с CACHE в sw.js; уходит в баг-репорты.
-const APP_VERSION = "v100";
+const APP_VERSION = "v101";
 // Последняя JS-ошибка — прикладываем к баг-репорту, чтобы сразу видеть причину.
 let lastError = "";
 window.addEventListener("error", (e) => {
@@ -206,7 +206,7 @@ const RU = {
   "The photo stays hidden until the finish — then it appears next to your AFTER photo.": "Фото скрыто до финиша — там оно встанет рядом с фото ПОСЛЕ.",
   "Title": "Название", "Today": "Сегодня", "Total reps": "Всего повторов", "Total reps over the last 4 weeks.": "Сумма повторов за последние 4 недели.",
   "Show photos": "Показать фото", "Upload from library": "Загрузить из галереи", "Week %lld": "Неделя %lld",
-  "Share your day": "Поделиться днём", "Choose a background": "Выбери фон", "FitStake gradient": "Градиент FitStake",
+  "Share your day": "Поделиться днём", "Choose a background": "Выбери фон", "Repact gradient": "Градиент Repact",
   "Photo library": "Фото из галереи", "Open camera": "Открыть камеру", "Share story": "Поделиться сторис",
   "Share today's result": "Поделиться результатом",
   "Template": "Шаблон", "Minimal": "Минимал", "Challenge": "Вызов", "Photo scale": "Масштаб фото",
@@ -277,7 +277,7 @@ const RU = {
   "Email already registered — log in": "Почта уже занята — войди", "No account yet — sign up": "Аккаунта нет — зарегистрируйся",
   "Create your account": "Создай аккаунт", "Step %lld of %lld": "Шаг %lld из %lld",
   "Which exercise do you want to start with?": "С какого упражнения начнёшь?",
-  "%lld in FitStake": "%lld в FitStake", "Create from scratch": "Создать с нуля",
+  "%lld in Repact": "%lld в Repact", "Create from scratch": "Создать с нуля",
   "Review challenge": "Проверь челлендж", "Tap any card to make changes before creating.": "Нажми на карточку, чтобы изменить её перед созданием.",
   "Exercise & daily goal": "Упражнения и цель", "Pick exercises and set a goal for each.": "Выбери упражнения и цель для каждого.",
   "How long?": "Как долго?", "Choose how long the challenge will run.": "Выбери длительность челленджа.",
@@ -1486,7 +1486,7 @@ function friendsSummary() {
   const list = friendsList();
   if (!list.length) return "";
   return `<button class="card card-soft" data-act="openFriends" style="padding:16px 18px;width:100%;display:flex;align-items:center;gap:12px;text-align:left">
-    <span style="flex:1;font-weight:600;font-size:15px">${t("%lld in FitStake", list.length)}</span>
+    <span style="flex:1;font-weight:600;font-size:15px">${t("%lld in Repact", list.length)}</span>
     <span class="secondary" style="display:flex">${icon("chevronRight")}</span></button>`;
 }
 function FriendsSheet() {
@@ -2333,7 +2333,7 @@ function Onboarding() {
   let content;
   if (step === 0) content = `<div class="center" style="height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px">
     <div style="color:var(--accent);width:76px;height:76px;display:flex">${iconF("flame")}</div>
-    <div class="display" style="font-size:46px">FitStake</div>
+    <div class="display" style="font-size:46px">Repact</div>
     <div class="form-footer" style="max-width:320px;font-weight:500">${t("Every rep is verified by the camera. Coins on the line. Miss too many days and you're out.")}</div></div>`;
   // Вход — последний шаг, перед сохранением прогресса (только с Firebase).
   else if (step === STEP.auth) content = question(t("Create your account"), t("So your progress is saved and syncs across your devices."), authForm());
@@ -2750,7 +2750,7 @@ function ShareDayEditorFull() {
       </div>
       <div class="form-label">${t("Choose a background")}</div>
       <div class="share-bg-options">
-        <button class="share-bg-option ${f.background === "gradient" ? "selected" : ""}" data-act="shareBg:gradient"><span class="share-bg-swatch gradient"></span><span>${t("FitStake gradient")}</span></button>
+        <button class="share-bg-option ${f.background === "gradient" ? "selected" : ""}" data-act="shareBg:gradient"><span class="share-bg-swatch gradient"></span><span>${t("Repact gradient")}</span></button>
         <button class="share-bg-option ${photo ? "selected" : ""}" data-act="pickSharePhoto:library"><span class="share-bg-swatch">${iconF("photo")}</span><span>${t("Photo library")}</span></button>
         <button class="share-bg-option" data-act="pickSharePhoto:camera"><span class="share-bg-swatch">${iconF("camera")}</span><span>${t("Open camera")}</span></button>
       </div>
@@ -2971,11 +2971,11 @@ async function shareCard(data) {
   g.fillStyle = "#ff5e1f"; g.font = `750 36px ${sans}`; g.fillText(t("Now it's your turn"), pad, H - 126);
 
   const blob = await new Promise((res) => cv.toBlob(res, "image/jpeg", .92));
-  const file = new File([blob], "fitstake-challenge.jpg", { type: "image/jpeg" });
+  const file = new File([blob], "repact-challenge.jpg", { type: "image/jpeg" });
   if (navigator.canShare && navigator.canShare({ files: [file] })) {
-    try { await navigator.share({ files: [file], title: "FitStake" }); return; } catch {}
+    try { await navigator.share({ files: [file], title: "Repact" }); return; } catch {}
   }
-  const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = "fitstake-challenge.jpg"; a.click();
+  const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = "repact-challenge.jpg"; a.click();
 }
 
 async function shareDayStory(c, options) {
@@ -3239,7 +3239,7 @@ async function shareChallengePoster(data) {
 
   // Логотип
   setLS("3px"); g.font = "800 20px -apple-system,system-ui,sans-serif";
-  const brand = "FITSTAKE", bw = g.measureText(brand).width, fl = 22, gapL = 9, lw = fl + gapL + bw, lsx = cx - lw / 2;
+  const brand = "REPACT", bw = g.measureText(brand).width, fl = 22, gapL = 9, lw = fl + gapL + bw, lsx = cx - lw / 2;
   drawIcon("flame", lsx + fl / 2, y + 11, fl);
   g.fillStyle = "#fff"; g.textAlign = "left"; g.textBaseline = "middle"; g.fillText(brand, lsx + fl + gapL, y + 12);
   setLS("0px"); y += LOGO_H + GAP1;
@@ -3311,12 +3311,12 @@ async function shareChallengePoster(data) {
 
   // Футер
   g.font = "600 13px -apple-system,system-ui,sans-serif"; setLS("0px");
-  const w1 = g.measureText(L.fOpen).width, w2 = g.measureText("FitStake").width, w3 = g.measureText(L.fEnd).width;
+  const w1 = g.measureText(L.fOpen).width, w2 = g.measureText("Repact").width, w3 = g.measureText(L.fEnd).width;
   const pIc = 14, pg = 8, fgW = pIc + pg + w1 + w2 + w3, fx = cx - fgW / 2;
   drawIcon("phone", fx + pIc / 2, y + 8, pIc);
   g.textAlign = "left"; g.textBaseline = "middle";
   g.fillStyle = "rgba(255,255,255,.6)"; g.fillText(L.fOpen, fx + pIc + pg, y + 9);
-  g.fillStyle = ORANGE; g.fillText("FitStake", fx + pIc + pg + w1, y + 9);
+  g.fillStyle = ORANGE; g.fillText("Repact", fx + pIc + pg + w1, y + 9);
   g.fillStyle = "rgba(255,255,255,.6)"; g.fillText(L.fEnd, fx + pIc + pg + w1 + w2, y + 9);
   y += FOOT_H + GAP7;
 
@@ -3324,11 +3324,11 @@ async function shareChallengePoster(data) {
   ctext(L.micro, y, 11, 700, "rgba(255,255,255,.3)", "2px", MICRO_H);
 
   const blob = await new Promise((res) => cv.toBlob(res, "image/png"));
-  const file = new File([blob], "fitstake-challenge.png", { type: "image/png" });
+  const file = new File([blob], "repact-challenge.png", { type: "image/png" });
   if (navigator.canShare && navigator.canShare({ files: [file] })) {
-    try { await navigator.share({ files: [file], title: "FitStake" }); return; } catch {}
+    try { await navigator.share({ files: [file], title: "Repact" }); return; } catch {}
   }
-  const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = "fitstake-challenge.png"; a.click();
+  const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = "repact-challenge.png"; a.click();
 }
 
 // ==========================================================================
@@ -4116,7 +4116,7 @@ async function shareInvite(id) {
   track("invite_shared", { challenge_id: c.id });
   const text = t("Join my challenge") + " — " + c.title;
   if (navigator.share) {
-    try { await navigator.share({ title: "FitStake", text, url }); return; } catch {}
+    try { await navigator.share({ title: "Repact", text, url }); return; } catch {}
   }
   try { await navigator.clipboard.writeText(url); toast(t("Link copied")); }
   catch { prompt("URL", url); }
