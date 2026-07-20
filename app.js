@@ -4,7 +4,7 @@
 "use strict";
 
 // Версия оболочки — держать в синхроне с CACHE в sw.js; уходит в баг-репорты.
-const APP_VERSION = "v91";
+const APP_VERSION = "v92";
 // Последняя JS-ошибка — прикладываем к баг-репорту, чтобы сразу видеть причину.
 let lastError = "";
 window.addEventListener("error", (e) => {
@@ -2422,7 +2422,7 @@ const CREATE_DUR_CHIPS = [3, 7, 14, 30];
 const CREATE_REP_CHIPS = [50, 100, 200, 500];
 function CreateScreen() {
   const f = ui.form, sel = selectedExercises(f);
-  const section = (label, content) => `<section class="create-section"><div class="create-section-label">${esc(label)}</div>${content}</section>`;
+  const section = (label, content, cls) => `<section class="create-section${cls ? " " + cls : ""}"><div class="create-section-label">${esc(label)}</div>${content}</section>`;
   const pick = (act, on, emoji, title, sub, ic) => `<button class="create-pick ${on ? "selected" : ""}" data-act="${act}">
     ${emoji ? `<span class="create-pick-emoji">${emoji}</span>` : ""}${ic ? `<span class="create-pick-ic">${exIcon(ic)}</span>` : ""}
     <span class="create-pick-title">${esc(title)}</span>${sub ? `<span class="create-pick-sub">${esc(sub)}</span>` : ""}</button>`;
@@ -2468,7 +2468,7 @@ function CreateScreen() {
   const stakeSection = section(t("Stake & rules"), `
     <div class="form-section"><div class="form-label">${t("Stake amount")}</div><div class="row gap8"><span class="secondary money" style="font-size:24px">${COIN_SYM}</span><input class="field money" type="number" inputmode="numeric" data-model="buyIn" value="${f.buyIn}" style="font-size:24px"></div></div>
     <div class="form-section"><label class="form-label" for="create-title">${t("Challenge name")}</label><input id="create-title" class="field" data-model="title" value="${esc(f.title)}" placeholder="${esc(defaultTitle(f))}" maxlength="40"></div>
-    ${f.type === "streak" ? missBlock + progBlock : ""}`);
+    ${f.type === "streak" ? missBlock + progBlock : ""}`, "create-section-major");
 
   return `<div class="fullscreen"><div class="create-wizard">
     <div class="row gap12 create-wizard-topbar">
@@ -2504,14 +2504,21 @@ function saveChallengeForm() {
 function ChallengeCreatedFull() {
   const c = app.challenges.find((x) => x.id === ui.createdChallengeId);
   if (!c) return "";
-  return `<div class="fullscreen"><div class="celebrate">
-    <div class="prep-hero">${iconF("checkCircle")}</div>
-    <div class="display" style="font-size:34px">${t("Challenge created")}</div>
-    <div class="secondary" style="text-align:center">${esc(c.title)}<br>${t("Invite people now or share it later from the challenge page.")}</div>
-    <div class="spacer"></div>
-    <button class="action-btn" data-act="shareCreated">${icon("share")}${t("Share invite")}</button>
-    <button class="action-btn" data-act="copyCreated" style="background:var(--white-08);color:#fff">${t("Copy link")}</button>
-    <button class="text-btn" data-act="openCreated">${t("Open challenge")}</button>
+  // Состав — из созданного челленджа (а не формы); при дефолтном названии не дублируем.
+  const composition = c.goals.map((g) => `${g.repsPerDay || g.target} ${Exercise.displayName(g.exercise)}`).join(" + ");
+  return `<div class="fullscreen"><div class="celebrate created">
+    <div class="created-hero">
+      <div class="prep-hero">${iconF("checkCircle")}</div>
+      <div class="display" style="font-size:34px">${t("Challenge created")}</div>
+      <div class="created-name">${esc(c.title)}</div>
+      ${composition !== c.title ? `<div class="created-goals">${esc(composition)}</div>` : ""}
+      <div class="created-sub">${t("Invite people now or share it later from the challenge page.")}</div>
+    </div>
+    <div class="created-actions">
+      <button class="action-btn" data-act="shareCreated">${icon("share")}${t("Share invite")}</button>
+      <button class="action-btn plain" data-act="copyCreated">${t("Copy link")}</button>
+      <button class="text-btn" data-act="openCreated">${t("Open challenge")}</button>
+    </div>
   </div></div>`;
 }
 // Карточка условий картинкой — тот же генератор, что и для результатов (Web Share API → инста и т.п.).
