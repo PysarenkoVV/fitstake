@@ -533,8 +533,9 @@ button:is(:active, .pressed):not(:disabled) { transform: scale(0.97); filter: br
   position: absolute; inset: 0;
   width: 100%; height: 100%;
   object-fit: cover;
-  transform: scaleX(-1);
 }
+/* Фронталку показываем зеркально (как в селфи), заднюю — как есть. */
+.session.mirror video, .session.mirror .skeleton { transform: scaleX(-1); }
 .session .topbar {
   position: absolute; top: 0; left: 0; right: 0;
   padding: max(12px, env(safe-area-inset-top)) 20px 24px;
@@ -554,7 +555,20 @@ button:is(:active, .pressed):not(:disabled) { transform: scale(0.97); filter: br
 }
 .session .sess-elapsed span { color: rgba(255,255,255,.58); font-size: 9px; font-weight: 750; letter-spacing: .8px; text-transform: uppercase; }
 .session .sess-elapsed strong { color: #fff; font-size: 24px; line-height: 1; font-weight: 850; font-variant-numeric: tabular-nums; letter-spacing: -.5px; }
-.session .cam-col { display: flex; flex-direction: column; gap: 12px; }
+.session .cam-col { display: flex; flex-direction: column; align-items: center; gap: 12px; }
+/* Пилюля 1× / 0.5× — тот же тёмный glass, что и cam-btn, но с цифрой. */
+.session .cam-zoom {
+  min-width: 52px; height: 44px; padding: 0 14px;
+  border-radius: 22px;
+  display: flex; align-items: center; justify-content: center;
+  color: #fff; font-weight: 800; font-size: 15px; font-variant-numeric: tabular-nums; letter-spacing: -.2px;
+  background: rgba(40, 40, 40, 0.5);
+  backdrop-filter: blur(18px); -webkit-backdrop-filter: blur(18px);
+  transition: transform var(--motion-press) var(--ease-press);
+}
+.session .cam-zoom.on { color: var(--accent); box-shadow: inset 0 0 0 1.5px var(--accent); }
+.session .cam-zoom:is(:active, .pressed) { transform: scale(0.9); }
+.session .cam-zoom[hidden] { display: none; }
 .session .hint {
   align-self: center;
   text-align: center;

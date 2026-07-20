@@ -319,6 +319,9 @@ class PoseSession {
     this._recCanvas = null;
     this._lastTs = -1;
     this.countingEnabled = false;
+    this.facing = "user";   // "user" (фронталка) | "environment" (задняя)
+    this.zoom = 1;          // 1× | 0.5× — 0.5 = задний ультра-ширик (отдельная линза)
+    this._lenses = null;    // { ultra: deviceId } — узнаём после выдачи доступа
   }
 
   // Переключить активное упражнение комбо (считается только оно).
@@ -343,20 +346,40 @@ class PoseSession {
     this._video = video;
     this._canvas = canvas;
     this._ctx = canvas.getContext("2d");
-    this._stream = await navigator.mediaDevices.getUserMedia({
-      video: { facingMode: "user", width: { ideal: 1280 }, height: { ideal: 720 } },
-      audio: false,
-    });
+    this._stream = await navigator.mediaDevices.getUserMedia({ video: this._videoConstraints(), audio: false });
     video.srcObject = this._stream;
     await video.play().catch(() => {});
     await new Promise((res) => {
       if (video.videoWidth) return res();
       video.onloadedmetadata = () => res();
     });
+    await this._findLenses(); // узнать про задний ультра-ширик для кнопки 0.5×
     this._landmarker = await getLandmarker();
     this._running = true;
     this._loop();
   }
+
+  // Ограничения потока под текущие камеру/зум. 0.5× — это отдельная физическая
+  // линза (ультра-ширик), цифровым зумом её не получить — только по deviceId.
+  _videoConstraints() {
+    const base = { width: { ideal: 1280 }, height: { ideal: 720 } };
+    if (this.facing === "environment" && this.zoom === 0.5 && this._lenses && this._lenses.ultra) {
+      return Object.assign({ deviceId: { exact: this._lenses.ultra } }, base);
+    }
+    return Object.assign({ facingMode: this.facing }, base);
+  }
+
+  // После выдачи доступа к камере ищем заднюю ультра-широкую (iOS: «Back Ultra Wide Camera»).
+  async _findLenses() {
+    try {
+      const cams = (await navigator.mediaDevices.enumerateDevices()).filter((d) => d.kind === "videoinput");
+      const ultra = cams.find((d) => /ultra|0\.5/i.test(d.label || ""));
+      this._lenses = { ultra: ultra ? ultra.deviceId : null };
+    } catch { this._lenses = { ultra: null }; }
+  }
+
+  hasUltraWide() { return !!(this._lenses && this._lenses.ultra); }
+  isMirrored() { return this.facing === "user"; }
 
   _loop() {
     if (!this._running) return;
@@ -471,7 +494,8 @@ class PoseSession {
   _drawRecordFrame(size) {
     const g = this._recCtx;
     g.save();
-    g.translate(size.width, 0); g.scale(-1, 1);
+    // Фронталку показываем зеркально (как в селфи) — и в записи так же; заднюю не зеркалим.
+    if (this.isMirrored()) { g.translate(size.width, 0); g.scale(-1, 1); }
     g.drawImage(this._video, 0, 0, size.width, size.height);
     g.drawImage(this._canvas, 0, 0, size.width, size.height);
     g.restore();
@@ -497,8 +521,8 @@ class PoseSession {
 
     g.textAlign = "left"; g.textBaseline = "alphabetic";
     const brandSize = Math.round(size.width * .042);
-    g.font = `900 ${brandSize}px ${sans}`; g.fillStyle = "#fff"; g.fillText("FIT", margin, margin * 1.2);
-    const fitWidth = g.measureText("FIT").width; g.fillStyle = "#ff5e1f"; g.fillText("STAKE", margin + fitWidth, margin * 1.2);
+    g.font = `900 ${brandSize}px ${sans}`; g.fillStyle = "#fff"; g.fillText("REP", margin, margin * 1.2);
+    const repWidth = g.measureText("REP").width; g.fillStyle = "#ff5e1f"; g.fillText("ACT", margin + repWidth, margin * 1.2);
     if (ctx.title) {
       const title = String(ctx.title);
       fitText(title, size.width - margin * 2, Math.round(size.width * .038), 650);
@@ -552,12 +576,50 @@ class PoseSession {
 
   videoTrack() { return this._stream ? this._stream.getVideoTracks()[0] : null; }
 
+  // Переключить поток на текущие facing/zoom: сначала гасим старый трек
+  // (iOS не держит две активные камеры), потом берём новый.
+  async _reopenStream() {
+    if (!this._running || !this._video) return false;
+    if (this._stream) this._stream.getTracks().forEach((t) => t.stop());
+    this._stream = null;
+    try {
+      this._stream = await navigator.mediaDevices.getUserMedia({ video: this._videoConstraints(), audio: false });
+    } catch { return false; }
+    if (!this._running) { this._stream.getTracks().forEach((t) => t.stop()); this._stream = null; return false; }
+    this._video.srcObject = this._stream;
+    await this._video.play().catch(() => {});
+    return true;
+  }
+
+  // Фронт ↔ задняя. При провале — откат на прежнюю. Возвращает актуальный facing.
+  async flipCamera() {
+    const pf = this.facing, pz = this.zoom;
+    this.facing = this.facing === "user" ? "environment" : "user";
+    if (this.facing === "user") this.zoom = 1; // 0.5× только на задней
+    if (await this._reopenStream()) return this.facing;
+    this.facing = pf; this.zoom = pz;
+    await this._reopenStream();
+    return this.facing;
+  }
+
+  // 1× ↔ 0.5× (только на задней). При провале — откат. Возвращает актуальный zoom.
+  async setZoom(zoom) {
+    if (this.facing !== "environment") return this.zoom;
+    const pz = this.zoom;
+    this.zoom = zoom === 0.5 ? 0.5 : 1;
+    if (this.zoom === pz) return this.zoom;
+    if (await this._reopenStream()) return this.zoom;
+    this.zoom = pz;
+    await this._reopenStream();
+    return this.zoom;
+  }
+
   // Перезапуск камеры после возврата из фона (iOS «замораживает» трек в фоне).
   async restartCamera() {
     if (!this._running || !this._video) return false;
     let fresh;
     try {
-      fresh = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "user", width: { ideal: 1280 }, height: { ideal: 720 } }, audio: false });
+      fresh = await navigator.mediaDevices.getUserMedia({ video: this._videoConstraints(), audio: false });
     } catch { return false; }
     if (!this._running) { fresh.getTracks().forEach((t) => t.stop()); return false; }
     const old = this._stream;
@@ -582,16 +644,16 @@ function mid(a, b) {
 
 async function shareVideo(blob) {
   const ext = blob.type.includes("mp4") ? "mp4" : "webm";
-  const file = new File([blob], "fitstake." + ext, { type: blob.type });
+  const file = new File([blob], "repact." + ext, { type: blob.type });
   if (navigator.canShare && navigator.canShare({ files: [file] })) {
     // Отмена (свайп вниз) — не повод скачивать: download-фолбэк открывал в PWA
     // превью Safari, после которого iOS оставлял камеру замороженной.
-    try { await navigator.share({ files: [file], title: "FitStake" }); } catch {}
+    try { await navigator.share({ files: [file], title: "Repact" }); } catch {}
     return;
   }
   const a = document.createElement("a");
   a.href = URL.createObjectURL(blob);
-  a.download = "fitstake." + ext;
+  a.download = "repact." + ext;
   a.click();
 }
 

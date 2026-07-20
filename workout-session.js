@@ -18,7 +18,7 @@ async function openSession(challengeId, startExercise) {
       : { exercise: g.exercise, target: C.norm(c, g), start: C.myToday(c, g.exercise) });
 
   const overlay = document.createElement("div");
-  overlay.className = "session";
+  overlay.className = "session mirror";
   overlay.innerHTML = `
     <video autoplay muted playsinline></video>
     <canvas class="skeleton"></canvas>
@@ -27,7 +27,9 @@ async function openSession(challengeId, startExercise) {
         <button class="cam-btn" data-sess="close" aria-label="${t("Close")}">${icon("xmark")}</button>
         <div class="sess-elapsed"><span>${t("Overall time")}</span><strong id="sess-elapsed">00:00</strong></div>
         <div class="cam-col">
+          <button class="cam-btn" data-sess="flip" aria-label="${t("Switch camera")}">${icon("cameraFlip")}</button>
           ${CAN_RECORD ? `<button class="cam-btn" data-sess="record" aria-label="${t("Record video")}">${icon("record")}</button>` : ""}
+          <button class="cam-zoom" data-sess="zoom" hidden aria-label="${t("Ultra-wide 0.5×")}">1×</button>
         </div>
       </div>
       <div class="hint" id="sess-hint"></div>
@@ -460,6 +462,28 @@ async function openSession(challengeId, startExercise) {
       if (on) { wsfx("recStart"); toast(t("Recording started")); } else wsfx("recStop");
       b.innerHTML = icon(on ? "stop" : "record");
       b.style.color = on ? "var(--red)" : "rgba(255,255,255,.85)";
+    }
+    else if (a === "flip") {
+      if (b.disabled) return;
+      b.disabled = true;
+      const facing = await sess.flipCamera();
+      overlay.classList.toggle("mirror", facing === "user"); // заднюю не зеркалим
+      // Кнопка 0.5× — только на задней камере и только если есть ультра-ширик.
+      const zoomBtn = overlay.querySelector('[data-sess="zoom"]');
+      if (zoomBtn) {
+        zoomBtn.hidden = !(facing === "environment" && sess.hasUltraWide());
+        zoomBtn.textContent = "1×";
+        zoomBtn.classList.remove("on");
+      }
+      b.disabled = false;
+    }
+    else if (a === "zoom") {
+      if (b.disabled) return;
+      b.disabled = true;
+      const z = await sess.setZoom(sess.zoom === 1 ? 0.5 : 1);
+      b.textContent = z === 0.5 ? "0.5×" : "1×";
+      b.classList.toggle("on", z === 0.5);
+      b.disabled = false;
     }
   });
 }
