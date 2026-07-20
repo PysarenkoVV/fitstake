@@ -55,6 +55,24 @@ test("через два «серых» дня провал уезжает во �
   await expect(archived.locator(".challenge-fail-mark")).toBeVisible();
 });
 
+test("«Продолжить» прощает пропуски и возвращает проваленный челлендж в Active", async ({ page }) => {
+  await injectFailed(page);
+  await page.locator(".challenge-card.failed .challenge-card-main").click();
+  await expect(page.getByText("Challenge failed", { exact: true })).toBeVisible();
+
+  await page.getByRole("button", { name: "Keep going", exact: true }).click();
+  // Клик-хендлер асинхронный (sfx/haptic) — дожидаемся отклика UI автоповтором,
+  // прежде чем читать состояние напрямую (иначе evaluate успевает раньше рендера).
+  await expect(page.getByText("Challenge failed", { exact: true })).toHaveCount(0);
+  // Момент провала снят, я снова активен — без ожидания сети (локальный solo-челлендж).
+  expect(await page.evaluate(() => app.failedAt.doomed)).toBeUndefined();
+  expect(await page.evaluate(() => myFailed(app.challenges.find((c) => c.id === "doomed")))).toBe(false);
+
+  await page.getByRole("button", { name: "Back", exact: true }).click();
+  await expect(page.locator(".challenge-card.failed")).toHaveCount(0);
+  await expect(page.locator(".challenge-card").filter({ hasText: "Doomed" })).toBeVisible();
+});
+
 test("границы провала: день 1 и разрешённый пропуск — не провал", async ({ page }) => {
   const res = await page.evaluate(() => {
     const probe = (daysAgo, missPolicy) => {

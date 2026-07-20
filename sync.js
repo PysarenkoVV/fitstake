@@ -283,6 +283,10 @@ window.Sync = (() => {
     });
   }
 
+  // «Провалил, но хочу продолжать»: прощаем пропуски до этой даты — misses считаются заново.
+  function restart(dateKey) { if (enabled) ready(() => write("fitstake/challenge_main/participants/" + uid, { restartFrom: dateKey })); }
+  function restartChallenge(id, dateKey) { if (enabled) ready(() => write("fitstake/challenges/" + id + "/participants/" + uid, { restartFrom: dateKey })); }
+
   function setFollowing(targetUid, on) {
     return new Promise((resolve) => ready(() => {
       const ref = F.ref(db, "fitstake/follows/" + uid + "/" + targetUid);
@@ -319,7 +323,7 @@ window.Sync = (() => {
   }
 
   return {
-    enabled, state, init, registerUser, join, report, createChallenge, joinChallenge, leaveChallenge, reportChallenge, setReady, setStartAt, setFollowing, publishActivity, setReaction, reportBug, signIn, signUp, signInGoogle, signOutUser,
+    enabled, state, init, registerUser, join, report, createChallenge, joinChallenge, leaveChallenge, reportChallenge, restart, restartChallenge, setReady, setStartAt, setFollowing, publishActivity, setReaction, reportBug, signIn, signUp, signInGoogle, signOutUser,
     get uid() { return uid; },
     get email() { return accountEmail; },
     get isAnonymous() { return isAnon; },

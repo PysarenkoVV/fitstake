@@ -4,7 +4,7 @@
 "use strict";
 
 // Версия оболочки — держать в синхроне с CACHE в sw.js; уходит в баг-репорты.
-const APP_VERSION = "v94";
+const APP_VERSION = "v95";
 // Последняя JS-ошибка — прикладываем к баг-репорту, чтобы сразу видеть причину.
 let lastError = "";
 window.addEventListener("error", (e) => {
@@ -178,6 +178,7 @@ const RU = {
   "Join for": "Вступить за", "kg": "кг", "Leaderboard": "Таблица итогов", "Let's go": "Погнали",
   "Test coins · no cash value": "Тест-монеты · без денежной стоимости",
   "Leave challenge": "Выйти из челленджа", "Leave challenge?": "Выйти из челленджа?", "Leave": "Выйти", "Cancel": "Отмена",
+  "Keep going": "Продолжить", "Challenge restarted — keep going!": "Пропуски прощены — продолжай!",
   "Your buy-in won't be refunded and you won't be able to see the results.": "Взнос не вернётся, и результаты ты больше не сможешь посмотреть.",
   "Male": "Мужской", "Max reps": "Максимум за подход", "Max reps in one set": "Максимум за подход",
   "Max reps in one set: %lld": "Максимум за подход: %lld", "Measurements": "Замеры", "Members: %lld": "Участников: %lld",
@@ -504,7 +505,7 @@ function newChallenge(o) {
 
 // Единственный общий челлендж: 150 отжиманий + 50 приседаний в день.
 // С включённым Sync участники настоящие; без него — мок-соперники.
-const Sync = window.Sync || { enabled: false, uid: null, state: {}, init: async () => false, registerUser() {}, join() {}, report() {} };
+const Sync = window.Sync || { enabled: false, uid: null, state: {}, init: async () => false, registerUser() {}, join() {}, report() {}, restart() {}, restartChallenge() {} };
 const SHARED_START = "2026-07-11";
 
 // PostHog: продуктовая аналитика. Обёрнуто — не падаем, если скрипт заблокирован/не загружен.
@@ -589,12 +590,15 @@ function dayClosed(c, day, dayData) {
   return c.goals.every((g) => (dayData[g.exercise] || 0) >= C.norm(c, g, day));
 }
 // Прошедшие (не сегодняшние) дни, где дневная норма не закрыта.
-function missedDays(c, days) {
+// restartFrom (dateKey) — «рестарт после провала»: пропуски до этой даты прощены и не считаются.
+function missedDays(c, days, restartFrom) {
   const startKey = challengeStartKey(c);
   if (!startKey) return 0;
   let missed = 0;
   for (let day = 1; day < c.currentDay; day++) {
-    if (!dayClosed(c, day, days[dateKey(dayEpoch(startKey, day))] || {})) missed++;
+    const key = dateKey(dayEpoch(startKey, day));
+    if (restartFrom && key < restartFrom) continue;
+    if (!dayClosed(c, day, days[key] || {})) missed++;
   }
   return missed;
 }
@@ -603,9 +607,9 @@ function allowedMisses(policy, throughDays) {
   if (policy === "onePerTwoWeeks") return Math.floor(Math.max(throughDays - 1, 0) / 14) + 1;
   return 1; // oneTotal и дефолт
 }
-function eliminatedByMisses(c, days) {
+function eliminatedByMisses(c, days, restartFrom) {
   if (c.type === "goal") return false; // у goal нет дневной нормы и выбывания
-  return missedDays(c, days) > allowedMisses(c.missPolicy, c.currentDay - 1);
+  return missedDays(c, days, restartFrom) > allowedMisses(c.missPolicy, c.currentDay - 1);
 }
 // Серия закрытых дней подряд от сегодня назад; незакрытое «сегодня» серию не рвёт.
 function streakOf(c, days) {
@@ -636,10 +640,28 @@ function myFailed(c) {
   if (!startKey) return false; // ещё не стартовал
   let missed = 0;
   for (let day = 1; day < c.currentDay; day++) {
-    const stats = (c.workoutStatsByDay || {})[dateKey(dayEpoch(startKey, day))];
+    const key = dateKey(dayEpoch(startKey, day));
+    if (c.myRestartFrom && key < c.myRestartFrom) continue; // прощено рестартом
+    const stats = (c.workoutStatsByDay || {})[key];
     if (!stats || !stats.completedAt) missed++;
   }
   return missed > allowedMisses(c.missPolicy, c.currentDay - 1);
+}
+// «Провалил, но хочу продолжать»: прощаем пропуски до сегодня и возвращаем в Active.
+// Тотал/историю повторов не трогает — только точку отсчёта для будущих пропусков.
+function restartFailed(id) {
+  const c = app.challenges.find((x) => x.id === id);
+  if (!c) return;
+  const today = dateKey();
+  const me = C.me(c);
+  if (me) me.state = "active"; // оптимистично: мгновенный отклик, пока не долетел синк
+  delete app.failedAt[id];
+  if (c.id === "main") Sync.restart(today);
+  else if (c.isPublic && Sync.enabled) Sync.restartChallenge(id, today);
+  else c.myRestartFrom = today; // локальный (solo/private) — прощаем сами, без сервера
+  saveApp();
+  toast(t("Challenge restarted — keep going!"));
+  render();
 }
 // Фиксируем момент провала (от него считаются «серые» два дня) и переводим себя
 // в выбывшие — лидерборд и банк дальше считаются как для выбывшего.
@@ -737,7 +759,7 @@ function applySync() {
     const day = pdays[today] || {};
     const todayReps = Object.values(day).reduce((a, b) => a + b, 0);
     const doneToday = ch.goals.every((g) => (day[g.exercise] || 0) >= C.norm(ch, g));
-    const eliminated = eliminatedByMisses(ch, pdays);
+    const eliminated = eliminatedByMisses(ch, pdays, p.restartFrom);
     return { id, name: p.name || "?", isMe: id === Sync.uid, state: eliminated ? "eliminated" : "active",
       doneToday, todayReps, _days: pdays, _total: p.total || 0, _streak: streakOf(ch, pdays) };
     });
@@ -811,7 +833,7 @@ function applyPublicChallenges(today) {
       const days = p.days || {}, day = days[today] || {}, totals = totalsByExercise(days);
       // goal — «готово» по общей сумме к цели; streak — по сегодняшней норме.
       const done = c.goals.every((g) => (C.isGoal(c) ? (totals[g.exercise] || 0) : (day[g.exercise] || 0)) >= C.norm(c, g));
-      return { id: pid, name: p.name || "?", isMe: pid === Sync.uid, state: eliminatedByMisses(c, days) ? "eliminated" : "active",
+      return { id: pid, name: p.name || "?", isMe: pid === Sync.uid, state: eliminatedByMisses(c, days, p.restartFrom) ? "eliminated" : "active",
         doneToday: done, todayReps: Object.values(day).reduce((a, b) => a + b, 0), _days: days, _total: p.total || 0, _streak: streakOf(c, days),
         _ready: typeof p.ready === "number" ? p.ready : null };
     });
@@ -1588,8 +1610,9 @@ function DetailScreen(id) {
     const inviteBtn = `<button class="action-btn plain" data-act="invite">${icon("share")}${t("Invite friends")}</button>`;
     const shareDayBtn = C.isTodayDone(c) ? `<button class="action-btn share-result-btn" data-act="shareDay:${c.id}">${iconF("share")}${t("Share today's result")}</button>` : "";
     const leaveBtn = `<button class="action-btn" data-act="askLeave:${c.id}" style="background:transparent;color:var(--red);box-shadow:none">${t("Leave challenge")}</button>`;
+    const restartBtn = `<button class="action-btn money" data-act="restartFailed:${c.id}">${iconF("flame")}${t("Keep going")}</button>`;
     body = !ended && myFailed(c) ? [
-      failedCard(c), totalCard(c), potCard(c), rulesCard(c),
+      failedCard(c), restartBtn, totalCard(c), potCard(c), rulesCard(c),
       c.beforePhoto ? beforeAfterCard(c) : "", participantsCard(c), leaveBtn,
     ].join("") : ended ? [
       finaleCard(c), totalCard(c), participantsCard(c), potCard(c), rulesCard(c),
@@ -3541,6 +3564,7 @@ root.addEventListener("click", async (e) => {
     case "invitePending": shareInvite(arg); return;
     case "askLeave": openLeave(arg); return;
     case "confirmLeave": leaveChallenge(arg); ui.sheet = null; ui.form = null; ui.detailId = null; render(); return;
+    case "restartFailed": restartFailed(arg); return;
     case "openBug": openBug(); return;
     case "bugPick": if (ui.bug) { ui.bug.pick = arg; render(); } return;
     case "openBuyCoins": openBuyCoins(); return;
