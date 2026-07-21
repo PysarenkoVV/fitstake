@@ -40,3 +40,19 @@ test("all-time totals moved to the Progress tab", async ({ page }) => {
   await expect(page.getByText("All-time", { exact: true })).toBeVisible();
   await expect(page.getByText("Total reps", { exact: true })).toBeVisible();
 });
+
+test("play button on an active challenge card opens workout setup", async ({ page }) => {
+  await page.evaluate(() => {
+    const c = newChallenge({
+      id: "play-active", title: "Play Active", access: "solo",
+      goals: [{ exercise: "pushups", repsPerDay: 5000 }], durationDays: 7, buyIn: 0,
+      startAt: startOfDay(Date.now()), currentDay: 1,
+      participants: [{ id: "me", name: "Me", isMe: true, state: "active", doneToday: false, todayReps: 0 }],
+    });
+    app.challenges.unshift(c);
+    ui.tab = "challenges"; ui.challengeTab = "active"; ui.detailId = null; render();
+  });
+  await page.locator(".challenge-card").filter({ hasText: "Play Active" }).locator(".card-play").click();
+  await expect(page.getByText("Camera setup", { exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Open camera", exact: true })).toBeVisible();
+});

@@ -1635,7 +1635,7 @@ function ChallengesTab() {
   }).join("")}</div>`;
 
   const list = buckets[tabKey];
-  const card = tabKey === "pending" ? PendingCard : (c) => ChallengeCard(c, false);
+  const card = tabKey === "pending" ? PendingCard : (c) => ChallengeCard(c, tabKey === "active");
   const body = list.length ? list.map(card).join("") : challengeEmpty(tabKey);
   return screenHeader(t("Challenges")) + `<div class="stack">${syncState}${tabsUI}${body}</div>`;
 }
