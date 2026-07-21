@@ -439,7 +439,7 @@ class PoseSession {
     const on = (p) => p && p.confidence > 0.2;
     ctx.lineWidth = Math.max(3, size.width / 260);
     // Изумрудный, когда всё нужное в кадре; иначе брендовый лайм.
-    ctx.strokeStyle = ready ? "rgba(77,194,128,0.95)" : "rgba(200,255,33,0.9)";
+    ctx.strokeStyle = ready ? "rgba(69,212,131,0.95)" : "rgba(200,255,33,0.9)";
     ctx.lineCap = "round";
     for (const [a, b] of BONES) {
       const pa = points[a], pb = points[b];
@@ -547,7 +547,7 @@ class PoseSession {
       g.fillText(`/ ${target}`, margin + currentWidth + Math.round(size.width * .025), baseY - Math.round(size.width * .10));
       const barY = baseY - Math.round(size.width * .045), barW = size.width - margin * 2, barH = Math.max(6, Math.round(size.width * .012));
       g.fillStyle = "rgba(255,255,255,.2)"; g.fillRect(margin, barY, barW, barH);
-      g.fillStyle = current >= target ? "#4dc280" : "#c8ff21"; g.fillRect(margin, barY, barW * Math.max(0, Math.min(1, target ? current / target : 0)), barH);
+      g.fillStyle = current >= target ? "#45d483" : "#c8ff21"; g.fillRect(margin, barY, barW * Math.max(0, Math.min(1, target ? current / target : 0)), barH);
     }
 
     const metaY = size.height - margin * .8;
@@ -557,7 +557,7 @@ class PoseSession {
     if (target != null) {
       const left = Math.max(0, target - current);
       const status = left ? t("%lld left", left) : t("Goal reached!");
-      g.textAlign = "right"; g.fillStyle = left ? "#fff" : "#4dc280"; g.fillText(status, size.width - margin, metaY);
+      g.textAlign = "right"; g.fillStyle = left ? "#fff" : "#45d483"; g.fillText(status, size.width - margin, metaY);
     }
     g.textAlign = "left";
   }

@@ -27,13 +27,13 @@ const PATHS = {
   xmark: '<path d="M6 6l12 12M18 6L6 18"/>',
   check: '<path d="M4 12l5 5L20 6"/>',
   checkCircle: '<circle cx="12" cy="12" r="10"/><path d="M8 12l3 3 5-5"/>',
-  seal: '<path d="M12 2l2.4 1.8 3-.2 1 2.8 2.6 1.5-.9 2.9.9 2.9-2.6 1.5-1 2.8-3-.2L12 22l-2.4-1.8-3 .2-1-2.8L3 16.3l.9-2.9L3 10.5l2.6-1.5 1-2.8 3 .2z"/><path d="M8.5 12l2.5 2.5 4.5-4.5" stroke="#0a0a0a"/>',
+  seal: '<path d="M12 2l2.4 1.8 3-.2 1 2.8 2.6 1.5-.9 2.9.9 2.9-2.6 1.5-1 2.8-3-.2L12 22l-2.4-1.8-3 .2-1-2.8L3 16.3l.9-2.9L3 10.5l2.6-1.5 1-2.8 3 .2z"/><path d="M8.5 12l2.5 2.5 4.5-4.5" stroke="#07110b"/>',
   search: '<circle cx="11" cy="11" r="7"/><path d="M20 20l-4-4"/>',
   camera: '<path d="M3 8a2 2 0 012-2h2l1.5-2h7L17 6h2a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V8z"/><circle cx="12" cy="12.5" r="3.5"/>',
   cameraFlip: '<path d="M8.6 7l1.1-2.1h4.6l1.1 2.1H19a2 2 0 012 2v7.6a2 2 0 01-2 2H5a2 2 0 01-2-2V9a2 2 0 012-2z"/><path d="M8.74 11.68A3.6 3.6 0 0115.26 11.68"/><path d="M13.83 10.75L15.26 11.68 15.47 9.99"/><path d="M15.26 14.72A3.6 3.6 0 018.74 14.72"/><path d="M10.17 15.65L8.74 14.72 8.53 16.41"/>',
   photo: '<rect x="3" y="4" width="18" height="14" rx="2"/><path d="M3 15l5-5 4 4 3-3 6 6"/><circle cx="8" cy="9" r="1.4"/>',
   record: '<circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="4" class="rec-dot"/>',
-  stop: '<circle cx="12" cy="12" r="10"/><rect x="8" y="8" width="8" height="8" rx="1.5" stroke="#0a0a0a"/>',
+  stop: '<circle cx="12" cy="12" r="10"/><rect x="8" y="8" width="8" height="8" rx="1.5" stroke="#07110b"/>',
   lock: '<rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V8a4 4 0 018 0v3"/>',
   lockOpen: '<rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V8a4 4 0 017-2.5"/>',
   faceid: '<path d="M4 8V6a2 2 0 012-2h2M16 4h2a2 2 0 012 2v2M20 16v2a2 2 0 01-2 2h-2M8 20H6a2 2 0 01-2-2v-2"/><path d="M9 10v1M15 10v1M12 9v4l-1 1M9 15s1 1.5 3 1.5S15 15 15 15"/>',
@@ -42,13 +42,13 @@ const PATHS = {
   share: '<path d="M12 3v13M8 7l4-4 4 4M5 12v7a1 1 0 001 1h12a1 1 0 001-1v-7"/>',
   personXmark: '<circle cx="9" cy="8" r="3.5"/><path d="M3 21c0-3.5 3-5.5 6-5.5M16 9l5 5M21 9l-5 5"/>',
   xCircle: '<circle cx="12" cy="12" r="10"/><path d="M9 9l6 6M15 9l-6 6"/>',
-  plusCircle: '<circle cx="12" cy="12" r="10"/><path d="M12 8v8M8 12h8" stroke="#0a0a0a"/>',
+  plusCircle: '<circle cx="12" cy="12" r="10"/><path d="M12 8v8M8 12h8" stroke="#07110b"/>',
   plusCircleLine: '<circle cx="12" cy="12" r="10"/><path d="M12 8v8M8 12h8"/>', // контурный: круг и плюс currentColor (для кнопок)
   calendar: '<rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 9h18M8 3v4M16 3v4"/>',
   home: '<path d="M4 11.2 12 5l8 6.2"/><path d="M6.5 10.2V19h11v-8.8"/>',
   ruler: '<rect x="2" y="9" width="20" height="7" rx="1.5"/><path d="M6.5 9v3M11 9v4M15.5 9v3M20 9v4"/>',
   scale: '<rect x="4" y="4" width="16" height="16" rx="3"/><path d="M8.8 10.2a4.5 4.5 0 016.4 0M12 12l2-2.5"/>',
-  dollar: '<circle cx="12" cy="12" r="10"/><path d="M12 7v10M14.5 9.2c-.4-1-1.4-1.4-2.5-1.4-1.4 0-2.5.7-2.5 1.9 0 2.7 5 1.3 5 4 0 1.3-1.2 2-2.5 2-1.2 0-2.2-.5-2.6-1.5" stroke="#0a0a0a"/>',
+  dollar: '<circle cx="12" cy="12" r="10"/><path d="M12 7v10M14.5 9.2c-.4-1-1.4-1.4-2.5-1.4-1.4 0-2.5.7-2.5 1.9 0 2.7 5 1.3 5 4 0 1.3-1.2 2-2.5 2-1.2 0-2.2-.5-2.6-1.5" stroke="#07110b"/>',
   bolt: '<path d="M13 2L4 14h6l-1 8 9-12h-6z"/>',
   trend: '<path d="M3 17l6-6 4 4 8-8M15 7h6v6"/>',
   bug: '<ellipse cx="12" cy="13" rx="4.5" ry="6"/><circle cx="12" cy="6" r="2"/><path d="M12 8v10M7.6 11H4M7.6 14H4M8 17l-3 2M16.4 11H20M16.4 14H20M16 17l3 2M10.6 4.4L9.4 2.6M13.4 4.4l1.2-1.8"/>',
@@ -1602,7 +1602,7 @@ function activityFeedRows(events) {
     }).join("");
     return `<div class="activity-row">
       <button class="entry-row activity-main" data-act="notification:${e.challengeId}">
-        <div class="avatar" style="background:rgba(77,194,128,.14);color:var(--money)">${icon(e.type === "day" ? "check" : e.type === "start" ? "flame" : "bolt")}</div>
+        <div class="avatar" style="background:rgba(69,212,131,.14);color:var(--money)">${icon(e.type === "day" ? "check" : e.type === "start" ? "flame" : "bolt")}</div>
         <span style="flex:1"><span style="display:block;font-size:14px;line-height:1.35">${esc(message)}</span><span class="secondary" style="display:block;font-size:12px;margin-top:4px">${relativeActivityTime(e.ts)}</span></span>
       </button><div class="reaction-row">${reactionButtons}</div>
     </div>`;
@@ -2069,11 +2069,11 @@ function weeklyChart(weeks) {
       <text x="${padL - 6}" y="${(y + 3).toFixed(1)}" fill="rgba(255,255,255,.4)" font-size="9" font-family="ui-monospace,monospace" text-anchor="end">${fmt(Math.round(v))}</text>`;
   }).join("");
   return `<svg class="chart" viewBox="0 0 ${W} ${H}">
-    <defs><linearGradient id="wg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#4dc280" stop-opacity="0.32"/><stop offset="1" stop-color="#4dc280" stop-opacity="0"/></linearGradient></defs>
+    <defs><linearGradient id="wg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#45d483" stop-opacity="0.32"/><stop offset="1" stop-color="#45d483" stop-opacity="0"/></linearGradient></defs>
     ${grid}
     <path d="${area}" fill="url(#wg)"/>
-    <path d="${line}" fill="none" stroke="#4dc280" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
-    ${xs.map((x, i) => `<circle cx="${x.toFixed(1)}" cy="${ys[i].toFixed(1)}" r="3.4" fill="#4dc280" stroke="#141414" stroke-width="2"/>`).join("")}
+    <path d="${line}" fill="none" stroke="#45d483" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+    ${xs.map((x, i) => `<circle cx="${x.toFixed(1)}" cy="${ys[i].toFixed(1)}" r="3.4" fill="#45d483" stroke="#141414" stroke-width="2"/>`).join("")}
     ${xs.map((x, i) => weeks[i] > 0 ? `<text x="${x.toFixed(1)}" y="${(ys[i] - 9).toFixed(1)}" fill="#fff" font-size="10" font-weight="700" font-family="ui-monospace,monospace" text-anchor="middle">${fmt(weeks[i])}</text>` : "").join("")}
     ${xs.map((x, i) => `<text x="${x.toFixed(1)}" y="${(H - 6).toFixed(1)}" fill="rgba(255,255,255,.55)" font-size="10" font-family="ui-monospace,monospace" text-anchor="middle">${t("Week %lld", i + 1)}</text>`).join("")}
   </svg>`;
@@ -2753,7 +2753,7 @@ function ParticipantSheet() {
 // Поздравления
 // ==========================================================================
 function confetti() {
-  const colors = ["#c8ff21", "#4dc280", "#ffd60a", "#fff", "#a855f7"];
+  const colors = ["#c8ff21", "#45d483", "#ffd60a", "#fff", "#a855f7"];
   let s = "";
   for (let i = 0; i < 44; i++) {
     const x = (i * 37) % 100, delay = ((i * 13) % 9) / 10, dur = 1.6 + ((i * 7) % 12) / 10;
@@ -2985,7 +2985,7 @@ async function shareCard(data) {
 
   g.font = `900 54px ${sans}`; g.fillStyle = "#fff"; g.fillText("REP", pad, 116);
   const repWidth = g.measureText("REP").width; g.fillStyle = "#c8ff21"; g.fillText("ACT", pad + repWidth, 116);
-  g.fillStyle = "#4dc280"; g.font = `750 30px ${sans}`; g.fillText(t("Challenge complete!").toUpperCase(), pad, 184);
+  g.fillStyle = "#45d483"; g.font = `750 30px ${sans}`; g.fillText(t("Challenge complete!").toUpperCase(), pad, 184);
 
   g.font = `850 66px ${sans}`;
   const titleLines = wrapLines(g, data.title, W - pad * 2, 2);
@@ -3024,7 +3024,7 @@ async function shareCard(data) {
 
   const rewardY = H - 390;
   label(t("You take home"), rewardY);
-  value(COIN_SYM + fmt(data.payout), rewardY + 102, 92, "#4dc280");
+  value(COIN_SYM + fmt(data.payout), rewardY + 102, 92, "#45d483");
   g.fillStyle = "#c8ff21"; g.font = `750 36px ${sans}`; g.fillText(t("Now it's your turn"), pad, H - 126);
 
   const blob = await new Promise((res) => cv.toBlob(res, "image/jpeg", .92));
@@ -3049,12 +3049,12 @@ async function shareDayStory(c, options) {
     g.drawImage(bg, x, y, drawW, drawH);
   } else {
     const base = g.createLinearGradient(0, 0, W, H);
-    base.addColorStop(0, "#080808"); base.addColorStop(.52, "#17100c"); base.addColorStop(1, "#0a0a0a");
+    base.addColorStop(0, "#080808"); base.addColorStop(.52, "#111a14"); base.addColorStop(1, "#07110b");
     g.fillStyle = base; g.fillRect(0, 0, W, H);
     let glow = g.createRadialGradient(W * .9, H * .18, 0, W * .9, H * .18, 760);
     glow.addColorStop(0, "rgba(200,255,33,.72)"); glow.addColorStop(1, "rgba(200,255,33,0)"); g.fillStyle = glow; g.fillRect(0, 0, W, H);
     glow = g.createRadialGradient(W * .08, H * .84, 0, W * .08, H * .84, 620);
-    glow.addColorStop(0, "rgba(77,194,128,.34)"); glow.addColorStop(1, "rgba(77,194,128,0)"); g.fillStyle = glow; g.fillRect(0, 0, W, H);
+    glow.addColorStop(0, "rgba(69,212,131,.34)"); glow.addColorStop(1, "rgba(69,212,131,0)"); g.fillStyle = glow; g.fillRect(0, 0, W, H);
   }
   const dim = Math.max(.1, Math.min(.85, ((options && options.dim) || 45) / 100));
   if (options.template === "challenge") {
