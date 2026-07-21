@@ -82,6 +82,36 @@ test("camera rejects sparse landmarks before drawing or counting a pose", async 
   expect(result).toEqual({ sparse: false, full: true, outsideFrame: false });
 });
 
+test("push-ups and dips hide unstable legs but keep hips in the skeleton", async ({ page }) => {
+  const result = await page.evaluate(() => {
+    const point = (x, y) => ({ x, y, confidence: 1 });
+    const points = {
+      leftShoulder: point(.42, .24), rightShoulder: point(.58, .24),
+      leftElbow: point(.36, .40), rightElbow: point(.64, .40),
+      leftWrist: point(.34, .56), rightWrist: point(.66, .56),
+      leftHip: point(.45, .52), rightHip: point(.55, .52),
+      leftKnee: point(.44, .70), rightKnee: point(.56, .70),
+      leftAnkle: point(.43, .90), rightAnkle: point(.57, .90),
+      neck: point(.50, .24), root: point(.50, .52),
+    };
+    const drawnY = (exercise) => {
+      const ys = [];
+      const session = new window.PoseSession([exercise]);
+      session._ctx = {
+        clearRect() {}, beginPath() {}, moveTo() {}, lineTo() {}, stroke() {}, fill() {},
+        arc(x, y) { ys.push(Math.round(y)); },
+      };
+      session._drawSkeleton(points, { width: 100, height: 100 }, true);
+      return ys.sort((a, b) => a - b);
+    };
+    return { pushups: drawnY("pushups"), dips: drawnY("dips"), squats: drawnY("squats") };
+  });
+  expect(result.pushups).toEqual([24, 24, 40, 40, 52, 52, 56, 56]);
+  expect(result.dips).toEqual(result.pushups);
+  expect(result.squats).toContain(70);
+  expect(result.squats).toContain(90);
+});
+
 test("push-ups at an angle to the camera count via the 3D elbow angle", async ({ page }) => {
   const result = await page.evaluate(() => {
     // Локти направлены к камере: в 2D плечо-локоть-кисть почти коллинеарны (~180°)

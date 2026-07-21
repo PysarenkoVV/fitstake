@@ -473,11 +473,14 @@ class PoseSession {
     const ctx = this._ctx;
     ctx.clearRect(0, 0, size.width, size.height);
     const on = (p) => posePointVisible(p);
+    const hideLegs = this.exercises[this.active] === "pushups" || this.exercises[this.active] === "dips";
+    const hidden = (name) => hideLegs && /Knee|Ankle$/.test(name);
     ctx.lineWidth = Math.max(3, size.width / 260);
     // Изумрудный, когда всё нужное в кадре; иначе брендовый лайм.
     ctx.strokeStyle = ready ? "rgba(69,212,131,0.95)" : "rgba(200,255,33,0.9)";
     ctx.lineCap = "round";
     for (const [a, b] of BONES) {
+      if (hidden(a) || hidden(b)) continue;
       const pa = points[a], pb = points[b];
       if (!on(pa) || !on(pb)) continue;
       ctx.beginPath();
@@ -488,6 +491,7 @@ class PoseSession {
     ctx.fillStyle = "#fff";
     const r = Math.max(4, size.width / 200);
     for (const name of Object.keys(LM)) {
+      if (hidden(name)) continue;
       const p = points[name];
       if (!on(p)) continue;
       ctx.beginPath();
