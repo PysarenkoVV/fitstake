@@ -89,6 +89,25 @@ test("camera rejects sparse landmarks before drawing or counting a pose", async 
   expect(result).toEqual({ sparse: false, full: true, outsideFrame: false, floorPushup: true, floorSquat: false });
 });
 
+test("camera quality hints explain only missing or unusable poses", async ({ page }) => {
+  const result = await page.evaluate(() => {
+    const p = (x, y, confidence = 1) => ({ x, y, confidence });
+    const arms = {
+      leftShoulder: p(.30, .40), rightShoulder: p(.55, .42),
+      leftElbow: p(.24, .56), rightElbow: p(.62, .58),
+      leftWrist: p(.16, .72), rightWrist: p(.70, .74),
+    };
+    return {
+      dark: window.poseQualityIssue({}, "pushups", 20, false),
+      absent: window.poseQualityIssue({}, "pushups", 100, false),
+      armsMissing: window.poseQualityIssue({ leftShoulder: p(.4, .4) }, "pushups", 100, true),
+      tooClose: window.poseQualityIssue({ ...arms, leftWrist: p(-.1, .72), rightWrist: p(1.1, .74) }, "pushups", 100, true),
+      ready: window.poseQualityIssue(arms, "pushups", 100, true),
+    };
+  });
+  expect(result).toEqual({ dark: "tooDark", absent: "noBody", armsMissing: "showArms", tooClose: "stepBack", ready: null });
+});
+
 test("push-ups and dips hide unstable legs but keep hips in the skeleton", async ({ page }) => {
   const result = await page.evaluate(() => {
     const point = (x, y) => ({ x, y, confidence: 1 });

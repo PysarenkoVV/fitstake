@@ -352,9 +352,15 @@ async function openSession(challengeId, startExercise) {
       // она исчезает, чтобы текст не мелькал над человеком на каждом движении.
       let hint;
       if (resting || (completionShown && !completionDismissed)) hint = null;
-      else if (!ar || ar.status === "noBody") hint = t("Step into frame");
-      else if (!tracked) hint = g.exercise === "squats" ? t("Both legs must be fully in frame") : t("Both arms must be fully in frame");
-      else if (!countingStarted) hint = t("Body found — hold still");
+      else if (!tracked) {
+        const issue = sess.snapshot.quality && sess.snapshot.quality.issue;
+        hint = issue === "tooDark" ? t("Too dark — add more light")
+          : issue === "stepBack" ? t("Step back from the camera")
+          : issue === "showLegs" ? t("Show both legs")
+          : issue === "showArms" ? t("Show both arms")
+          : t("Step into frame");
+      }
+      else if (!countingStarted) hint = t("Position found");
       else hint = null;
       hintEl.style.display = hint ? "" : "none";
       hintEl.textContent = hint || "";

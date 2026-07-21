@@ -114,6 +114,22 @@ function poseIsCoherent(points, exercise) {
   return Math.hypot(Math.max(...xs) - Math.min(...xs), Math.max(...ys) - Math.min(...ys)) >= 0.22;
 }
 
+function poseQualityIssue(points, exercise, brightness, hasLandmarks) {
+  if (brightness != null && brightness < 38) return "tooDark";
+  if (!hasLandmarks) return "noBody";
+
+  const confident = Object.keys(LM).filter((name) => points[name] && points[name].confidence >= POSE_MIN_CONFIDENCE);
+  const outside = confident.filter((name) => {
+    const p = points[name];
+    return p.x < 0.02 || p.x > 0.98 || p.y < 0.02 || p.y > 0.98;
+  });
+  if (outside.length >= 2) return "stepBack";
+  if (poseIsCoherent(points, exercise)) return null;
+  if (exercise === "squats") return "showLegs";
+  if (exercise === "pushups" || exercise === "pullups" || exercise === "dips") return "showArms";
+  return "noBody";
+}
+
 // ==========================================================================
 // RepCounter — порт RepCounter.swift
 // ==========================================================================
@@ -367,6 +383,8 @@ class PoseSession {
     this._coherentFrames = 0;
     this._incoherentFrames = 0;
     this._poseAccepted = false;
+    this._brightness = null;
+    this._brightnessAt = -Infinity;
     this.countingEnabled = false;
     this.facing = "user";   // "user" (фронталка) | "environment" (задняя)
     this.zoom = 1;          // 1× | 0.5× — 0.5 = задний ультра-ширик (отдельная линза)
@@ -468,6 +486,12 @@ class PoseSession {
         points.root = mid(points.leftHip, points.rightHip);
       }
 
+      const brightness = this._sampleBrightness(video, ts);
+      const quality = {
+        brightness,
+        issue: poseQualityIssue(points, this.exercises[this.active], brightness, !!landmarks),
+      };
+
       if (poseIsCoherent(points, this.exercises[this.active])) {
         this._coherentFrames++;
         this._incoherentFrames = 0;
@@ -488,7 +512,7 @@ class PoseSession {
       // Всё нужное для активного упражнения в кадре — скелет зеленеет.
       const ar = results[this.active];
       const ready = !!(ar && (ar.status === "up" || ar.status === "down"));
-      this.snapshot = { results, points: acceptedPoints, imageSize: size };
+      this.snapshot = { results, points: acceptedPoints, imageSize: size, quality };
       this._drawSkeleton(acceptedPoints, size, ready);
       if (this._recording) this._drawRecordFrame(size);
     }
@@ -524,6 +548,25 @@ class PoseSession {
       ctx.arc(p.x * size.width, p.y * size.height, r, 0, Math.PI * 2);
       ctx.fill();
     }
+  }
+
+  _sampleBrightness(video, now) {
+    if (now - this._brightnessAt < 500) return this._brightness;
+    this._brightnessAt = now;
+    try {
+      if (!this._lightCanvas) {
+        this._lightCanvas = document.createElement("canvas");
+        this._lightCanvas.width = 24;
+        this._lightCanvas.height = 16;
+        this._lightCtx = this._lightCanvas.getContext("2d", { willReadFrequently: true });
+      }
+      this._lightCtx.drawImage(video, 0, 0, 24, 16);
+      const data = this._lightCtx.getImageData(0, 0, 24, 16).data;
+      let total = 0;
+      for (let i = 0; i < data.length; i += 4) total += data[i] * 0.2126 + data[i + 1] * 0.7152 + data[i + 2] * 0.0722;
+      this._brightness = total / (data.length / 4);
+    } catch {}
+    return this._brightness;
   }
 
   // --- Запись ролика: кадр камеры + скелет + счётчик (для шеринга) ---
@@ -726,3 +769,4 @@ async function shareVideo(blob) {
 window.PoseSession = PoseSession;
 window.RepCounter = RepCounter;
 window.poseIsCoherent = poseIsCoherent;
+window.poseQualityIssue = poseQualityIssue;
