@@ -333,10 +333,12 @@ async function openSession(challengeId, startExercise) {
               countdownEl.textContent = String(n);
               countdownEl.classList.remove("word");
               countdownEl.classList.add("show");
-              sfx("tick");
+              wsfx("countdown"); // мягкий бип на каждом 3·2·1
             } else if (n <= 0) {
               countingStarted = true;
               sess.setCountingEnabled(true);
+              wsfx("go");                 // характерный сигнал «старт счёта»
+              haptic([0, 40, 50, 90]);
               countdownEl.textContent = t("Go!");
               countdownEl.classList.toggle("word", t("Go!").length > 4);
               setTimeout(() => countdownEl.classList.remove("show"), 650);

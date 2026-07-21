@@ -4,7 +4,7 @@
 "use strict";
 
 // Версия оболочки — держать в синхроне с CACHE в sw.js; уходит в баг-репорты.
-const APP_VERSION = "v103";
+const APP_VERSION = "v104";
 // Последняя JS-ошибка — прикладываем к баг-репорту, чтобы сразу видеть причину.
 let lastError = "";
 window.addEventListener("error", (e) => {
@@ -1175,6 +1175,8 @@ const WSFX = {
   recStart:   [{ wave: "sine",     f1: 660, dur: 0.06, peak: 0.06 }], // старт записи
   recStop:    [{ wave: "sine",     f1: 660, dur: 0.05, peak: 0.06 }, { wave: "sine", f1: 660, dur: 0.05, peak: 0.06, delay: 0.1 }], // стоп записи — двойной
   recError:   [{ wave: "sawtooth", f1: 400, f2: 200, dur: 0.22, peak: 0.06 }], // ошибка записи
+  countdown:  [{ wave: "sine",     f1: 440, dur: 0.11, peak: 0.06 }], // отсчёт 3·2·1 — мягкий ровный бип, три одинаковых
+  go:         [{ wave: "triangle", f1: 523, f2: 784, dur: 0.16, peak: 0.09 }, { wave: "triangle", f1: 1047, dur: 0.26, peak: 0.1, delay: 0.13 }], // старт счёта — короткое восходящее «поехали» (C5→G5, затем C6)
 };
 function wsfx(name) {
   if (!store.workoutSounds) return;
