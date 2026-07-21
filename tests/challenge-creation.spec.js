@@ -23,6 +23,7 @@ test("duration Custom превращает сам чип в поле ручно�
   await chip14.click();
   await expect(chip14).toHaveClass(/selected/);
 
+  const bodyBefore = await page.locator(".create-wizard-body").elementHandle();
   await dur.getByRole("button", { name: "Custom", exact: true }).click();
   // Инпут — это сам «Custom»-чип внутри ряда чипов (класс create-chip-input),
   // числовая клавиатура, без +/- степпера и без отдельной строки-секции.
@@ -30,6 +31,8 @@ test("duration Custom превращает сам чип в поле ручно�
   await expect(days).toHaveClass(/create-chip-input/);
   await expect(days).toHaveValue("14");
   await expect(days).toHaveAttribute("inputmode", "numeric");
+  await expect(days).toHaveCSS("font-size", "16px");
+  expect(await bodyBefore.evaluate((node) => node.isConnected)).toBe(true);
   await expect(dur.getByRole("button", { name: "+", exact: true })).toHaveCount(0);
   await expect(dur.getByRole("button", { name: "Custom", exact: true })).toHaveCount(0);
 
@@ -41,6 +44,22 @@ test("duration Custom превращает сам чип в поле ручно�
   await dur.getByRole("textbox", { name: "Days" }).fill("900");
   await dur.getByRole("textbox", { name: "Days" }).blur();
   await expect(dur.getByRole("textbox", { name: "Days" })).toHaveValue("365");
+});
+
+test("create form keeps a usable scroll area after repeated choices", async ({ page }) => {
+  await openForm(page);
+  const body = page.locator(".create-wizard-body");
+  await body.evaluate((node) => node.scrollTo(0, node.scrollHeight));
+  await expect.poll(() => body.evaluate((node) => node.scrollTop)).toBeGreaterThan(100);
+
+  await page.getByRole("button", { name: /One safety day/ }).click();
+  await body.evaluate((node) => node.scrollTo(0, 0));
+  await expect.poll(() => body.evaluate((node) => node.scrollTop)).toBe(0);
+
+  const footer = page.getByRole("button", { name: /Create challenge/ });
+  const box = await footer.boundingBox();
+  const viewport = page.viewportSize();
+  expect(box.y + box.height).toBeLessThanOrEqual(viewport.height);
 });
 
 test("streak rules explain consequences and progression shows final target", async ({ page }) => {

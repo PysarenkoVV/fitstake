@@ -38,6 +38,7 @@
   --blur-overlay: 16px;
 
   --tabbar-h: calc(56px + env(safe-area-inset-bottom));
+  --app-height: 100dvh;
 
   /* Одна система движения: быстрый старт, мягкая остановка, без задержек и overshoot. */
   --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
@@ -88,6 +89,7 @@ body::after { bottom: -39vw; left: -43vw; background: radial-gradient(closest-si
    navRender) переходов не запускают. */
 ::view-transition-old(root) { animation: vt-old 420ms var(--ease-standard) both; }
 ::view-transition-new(root) { animation: vt-new 560ms var(--ease-out) both; }
+::view-transition { pointer-events: none; }
 @keyframes vt-old { to { opacity: 0; } }
 @keyframes vt-new { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
 /* Во время View Transition backdrop-filter в снимках не работает — стекло на этот
@@ -837,10 +839,11 @@ button:is(:active, .pressed):not(:disabled) { transform: scale(0.97); filter: br
 /* Мастер создания: плотный выбор на шагах и спокойное карточное ревью в финале. */
 /* height (не min-height): тело скроллится внутри, шапка и футер закреплены,
    контент не уезжает под Dynamic Island. */
-.create-wizard { height: 100dvh; max-width: 560px; margin: 0 auto; display: flex; flex-direction: column; }
+.create-wizard { height: var(--app-height); max-width: 560px; margin: 0 auto; display: flex; flex-direction: column; overflow: hidden; }
 .create-wizard-topbar { padding: max(10px, env(safe-area-inset-top)) 20px 12px; align-items: center; flex: none; }
-.create-wizard-body { min-height: 0; flex: 1; padding: 0 20px; overflow-y: auto; }
-.create-wizard-footer { flex: none; padding: 8px 20px calc(8px + env(safe-area-inset-bottom)); background: linear-gradient(to top, rgba(7, 7, 7, 0.92) 78%, transparent); }
+.create-wizard-body { min-height: 0; flex: 1; padding: 0 20px; overflow-y: auto; overscroll-behavior-y: contain; -webkit-overflow-scrolling: touch; touch-action: pan-y; }
+.create-wizard-footer { position: relative; z-index: 2; flex: none; padding: 8px 20px calc(8px + env(safe-area-inset-bottom)); background: linear-gradient(to top, rgba(7, 7, 7, 0.96) 78%, transparent); }
+.create-close { width:44px; height:44px; margin:-6px 0 -6px -6px; flex:none; display:flex; align-items:center; justify-content:center; color:#fff; }
 .create-goals { display: flex; flex-direction: column; gap: 8px; margin-top: 6px; }
 .create-question { min-height: 100%; padding: 24px 0; display: flex; flex-direction: column; gap: 8px; }
 .create-question-content { flex: 1; display: flex; flex-direction: column; justify-content: center; gap: 10px; padding: 12px 0; }
@@ -930,6 +933,7 @@ button:is(:active, .pressed):not(:disabled) { transform: scale(0.97); filter: br
 .create-subfield { margin-top: 4px; }
 /* «Custom»-чип в режиме ввода: тот же чип, но редактируемый (input замаскирован под чип). */
 .create-chip-input { width: 100%; min-width: 0; text-align: center; -webkit-appearance: none; appearance: none; border: none; outline: none; }
+.create-chip.create-chip-input { font-size: 16px; }
 .create-chip-input:focus { outline: none; }
 
 /* ---- Сообщить о проблеме ---- */

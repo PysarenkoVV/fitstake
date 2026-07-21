@@ -4,7 +4,7 @@
 "use strict";
 
 // Версия оболочки — держать в синхроне с CACHE в sw.js; уходит в баг-репорты.
-const APP_VERSION = "v123";
+const APP_VERSION = "v124";
 // Последняя JS-ошибка — прикладываем к баг-репорту, чтобы сразу видеть причину.
 let lastError = "";
 window.addEventListener("error", (e) => {
@@ -1165,6 +1165,21 @@ function isGuest() { return !Sync.enabled || Sync.isAnonymous || !Sync.email; }
 function esc(s) { return String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c])); }
 
 const root = document.getElementById("app");
+
+// iOS иногда оставляет 100dvh в размере открытой клавиатуры. VisualViewport
+// сообщает реальную видимую высоту и возвращает футер к safe area после blur.
+function syncAppHeight() {
+  const viewport = window.visualViewport;
+  const height = viewport ? viewport.height : window.innerHeight;
+  if (height > 0) document.documentElement.style.setProperty("--app-height", `${Math.round(height)}px`);
+}
+syncAppHeight();
+if (window.visualViewport) {
+  window.visualViewport.addEventListener("resize", syncAppHeight, { passive: true });
+  window.visualViewport.addEventListener("scroll", syncAppHeight, { passive: true });
+}
+window.addEventListener("orientationchange", syncAppHeight, { passive: true });
+window.addEventListener("pageshow", syncAppHeight, { passive: true });
 let scrollMemo = {};
 // Системная настройка «уменьшить движение» — гасим необязательный моушн.
 const REDUCE_MOTION = () => window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
@@ -1279,8 +1294,10 @@ function navRender(before) {
   // иначе контент просвечивает и блюр «догоняет» после анимации (правило .vt в styles.css).
   document.documentElement.classList.add("vt");
   const vt = document.startViewTransition(() => { if (before) before(); render(); });
+  const cleanup = () => document.documentElement.classList.remove("vt");
+  const guard = setTimeout(() => { try { vt.skipTransition(); } catch {} cleanup(); }, 900);
   vt.ready.catch(() => {}); // быстрая повторная навигация прерывает переход → AbortError, глушим
-  vt.finished.catch(() => {}).finally(() => document.documentElement.classList.remove("vt"));
+  vt.finished.catch(() => {}).finally(() => { clearTimeout(guard); cleanup(); });
 }
 
 // Подсказка «на экран Домой» — только iOS Safari вне standalone; закрывается навсегда.
@@ -2557,6 +2574,14 @@ function progressionEndText(f) {
   return selectedExercises(f).map((e) => `${Exercise.displayName(e)} ${f[e] + f.progStep * increments}`).join(" · ");
 }
 
+function refreshCreateDerived() {
+  if (!ui.form || ui.full !== CreateScreen) return;
+  const title = document.getElementById("create-title");
+  if (title) title.placeholder = defaultTitle(ui.form);
+  const finalTarget = document.querySelector(".progression-result strong");
+  if (finalTarget) finalTarget.textContent = progressionEndText(ui.form);
+}
+
 function CreateWizard() {
   const f = ui.form, step = f.step, sel = selectedExercises(f);
   const seg = (opts, key, cur) => `<div class="segmented">${opts.map(([v, n]) => `<button data-act="seg" data-key="${key}" data-val="${v}" class="${String(cur) === String(v) ? "active" : ""}">${esc(n)}</button>`).join("")}</div>`;
@@ -2623,7 +2648,7 @@ function CreateScreen() {
     const customChip = custom
       ? `<input class="create-chip create-chip-input selected" type="text" inputmode="numeric" pattern="[0-9]*" enterkeyhint="done"
           data-model="${key}" data-num data-min="${min}" data-max="${max}" value="${esc(String(current))}" aria-label="${esc(label || t("Custom"))}">`
-      : `<button class="create-chip" data-act="createCustom:${key}">${t("Custom")}</button>`;
+      : `<button class="create-chip" data-act="createCustom:${key}" data-min="${min}" data-max="${max}" data-label="${esc(label || t("Custom"))}">${t("Custom")}</button>`;
     return `<div class="create-chips">
       ${values.map((v) => `<button class="create-chip ${!custom && +current === v ? "selected" : ""}" data-act="createChip:${key}:${v}">${v}${suffix || ""}</button>`).join("")}
       ${customChip}</div>`;
@@ -2665,7 +2690,7 @@ function CreateScreen() {
 
   return `<div class="fullscreen"><div class="create-wizard">
     <div class="row gap12 create-wizard-topbar">
-      <button data-act="closeFull" aria-label="${t("Close")}" style="width:32px;height:32px;display:flex;align-items:center;justify-content:center;color:#fff">${icon("xmark")}</button>
+      <button class="create-close" data-act="closeFull" aria-label="${t("Close")}">${icon("xmark")}</button>
       <div class="create-wizard-heading">${t("New challenge")}</div>
     </div>
     <div class="create-wizard-body create-form">${typeSection}${exSection}${durSection}${repSection}${accessSection}${stakeSection}</div>
@@ -3886,13 +3911,41 @@ root.addEventListener("click", async (e) => {
     else if (f.step > 0) { f.step--; navRender(); } else { ui.full = null; ui.form = null; navRender(); }
     return;
   }
-  if (cmd === "createChip") { const key = act.split(":")[1]; ui.form[key] = +act.split(":")[2]; ui.form["custom_" + key] = false; render(); return; }
+  if (cmd === "createChip") {
+    const key = act.split(":")[1];
+    ui.form[key] = +act.split(":")[2]; ui.form["custom_" + key] = false;
+    const group = el.closest(".create-chips");
+    if (group) {
+      group.querySelectorAll(".create-chip").forEach((chip) => chip.classList.toggle("selected", chip === el));
+      const input = group.querySelector(".create-chip-input");
+      if (input) {
+        const button = document.createElement("button");
+        button.className = "create-chip";
+        button.dataset.act = `createCustom:${key}`;
+        button.dataset.min = input.dataset.min;
+        button.dataset.max = input.dataset.max;
+        button.dataset.label = input.getAttribute("aria-label") || t("Custom");
+        button.textContent = t("Custom");
+        input.replaceWith(button);
+      }
+    }
+    refreshCreateDerived();
+    return;
+  }
   if (cmd === "createCustom") {
-    ui.form["custom_" + arg] = true; render();
-    // Тап по «Custom» синхронный (INSTANT) — фокус на инпуте в рамках жеста
-    // сразу поднимает числовую клавиатуру (иначе на iOS нужен был бы второй тап).
-    const inp = document.querySelector(`.create-chip-input[data-model="${arg}"]`);
-    if (inp) { inp.focus(); const end = inp.value.length; try { inp.setSelectionRange(end, end); } catch {} }
+    ui.form["custom_" + arg] = true;
+    // Не пересобираем весь экран: замена DOM во время инерционного скролла
+    // обрывала scroll-жест в iOS. Меняем только нажатый чип.
+    const inp = document.createElement("input");
+    inp.className = "create-chip create-chip-input selected";
+    inp.type = "text"; inp.inputMode = "numeric"; inp.pattern = "[0-9]*"; inp.enterKeyHint = "done";
+    inp.dataset.model = arg; inp.dataset.num = "";
+    inp.dataset.min = el.dataset.min || "1"; inp.dataset.max = el.dataset.max || "5000";
+    inp.value = String(ui.form[arg]);
+    inp.setAttribute("aria-label", el.dataset.label || t("Custom"));
+    el.replaceWith(inp);
+    inp.focus({ preventScroll: true });
+    const end = inp.value.length; try { inp.setSelectionRange(end, end); } catch {}
     return;
   }
   if (cmd === "saveChallenge") {
@@ -4115,7 +4168,8 @@ root.addEventListener("change", (e) => {
     let v = parseInt(String(ui.form[k] == null ? "" : ui.form[k]).replace(/\D/g, ""), 10);
     if (isNaN(v)) v = min;
     ui.form[k] = Math.min(Math.max(v, min), max);
-    render();
+    el.value = String(ui.form[k]);
+    refreshCreateDerived();
   }
 });
 
@@ -4332,6 +4386,10 @@ function pressFinish() {
   return wait ? new Promise((res) => setTimeout(res, wait)) : Promise.resolve();
 }
 document.addEventListener("pointerdown", (e) => {
+  // Тап или начало скролла вне числового чипа закрывает клавиатуру. На iOS
+  // это также гарантирует возврат visual viewport и нижней панели на место.
+  const active = document.activeElement;
+  if (active && active.matches && active.matches(".create-chip-input") && e.target !== active) active.blur();
   pressCancel();
   let el = e.target.closest(PRESSABLE);
   if (!el || el.disabled || el.classList.contains("sheet-backdrop")) return;
