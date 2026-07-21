@@ -41,6 +41,24 @@ test("all-time totals moved to the Progress tab", async ({ page }) => {
   await expect(page.getByText("Total reps", { exact: true })).toBeVisible();
 });
 
+test("Progress highlights weekly growth, discipline, records, and recent workouts", async ({ page }) => {
+  await page.evaluate(() => {
+    const today = startOfDay(Date.now());
+    app.history = [
+      { id: "p1", date: today - DAY, entries: [{ title: "Daily", reps: 80, norm: 80, byEx: { pushups: 50, squats: 30 } }] },
+      { id: "p2", date: today, entries: [{ title: "Daily", reps: 100, norm: 100, byEx: { pushups: 60, squats: 40 } }] },
+    ];
+    app.totalReps = 180; app.repsByExercise = { pushups: 110, squats: 70 };
+    ui.tab = "stats"; render();
+  });
+  await expect(page.getByText("This week", { exact: true })).toBeVisible();
+  await expect(page.getByText("Last 30 days", { exact: true })).toBeVisible();
+  await expect(page.getByText("Personal records", { exact: true })).toBeVisible();
+  await expect(page.getByText("Recent workouts", { exact: true })).toBeVisible();
+  await expect(page.locator(".discipline-day")).toHaveCount(30);
+  await expect(page.locator(".record-row")).toHaveCount(2);
+});
+
 test("play button on an active challenge card opens workout setup", async ({ page }) => {
   await page.evaluate(() => {
     const c = newChallenge({

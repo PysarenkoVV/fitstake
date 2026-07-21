@@ -4,7 +4,7 @@
 "use strict";
 
 // Версия оболочки — держать в синхроне с CACHE в sw.js; уходит в баг-репорты.
-const APP_VERSION = "v120";
+const APP_VERSION = "v121";
 // Последняя JS-ошибка — прикладываем к баг-репорту, чтобы сразу видеть причину.
 let lastError = "";
 window.addEventListener("error", (e) => {
@@ -249,6 +249,9 @@ const RU = {
   "I did mine": "Я своё сделал", "Now it's your turn": "Теперь твоя очередь",
   "Potential reward": "Возможная награда",
   "Above goal": "Сверх нормы", "Best day": "Лучший день", "Today's place": "Место сегодня", "Streak": "Серия",
+  "This week": "На этой неделе", "Last 30 days": "Последние 30 дней", "Active days": "Активных дней",
+  "Best streak": "Лучшая серия", "Current streak": "Текущая серия", "Personal records": "Личные рекорды",
+  "Recent workouts": "Последние тренировки", "Daily best": "Лучший день", "No reps yet": "Пока нет повторов",
   "Reps · 30 days": "Повторы · 30 дней", "Completion": "Выполнено", "All": "Все",
   "%lld of %lld": "%lld из %lld",
   "reps": "повторов", "Exercises": "Упражнения",
@@ -2039,17 +2042,43 @@ function StatsTab() {
     ${insights.map((s) => `<div class="row gap8" style="align-items:flex-start"><span style="color:var(--accent);font-weight:800">•</span><span style="font-size:14px;font-weight:500">${esc(s)}</span></div>`).join("")}
   </div>` : "";
 
-  // Быстрые метрики над графиками: суммарный объём за 30 дней, доля закрытых дней, серия.
+  // Быстрые метрики: суммарный объём за 30 дней, доля закрытых дней, серия.
   const monthReps = days.reduce((s, d) => s + d.reps, 0);
   const activeDays = days.filter((d) => d.norm > 0);
   const completion = activeDays.length ? Math.round(activeDays.filter((d) => d.done).length / activeDays.length * 100) : null;
-  const metric = (value, label, color) => `<div class="card" style="padding:14px 12px;display:flex;flex-direction:column;gap:3px">
-    <div class="money" style="font-size:23px;line-height:1;color:${color}">${esc(value)}</div>
-    <div class="label" style="font-size:10px;letter-spacing:.5px">${esc(label)}</div></div>`;
-  const metricsCard = `<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px">
-    ${metric(fmt(monthReps), t("Reps · 30 days"), "var(--money)")}
-    ${metric(completion != null ? completion + "%" : "—", t("Completion"), "#fff")}
-    ${metric(String(streak), t("Streak"), "var(--accent)")}</div>`;
+  let running = 0, bestStreak = 0;
+  days.forEach((d) => { running = d.done ? running + 1 : 0; bestStreak = Math.max(bestStreak, running); });
+  const weekDelta = lastWeek > 0 ? Math.round((thisWeek - lastWeek) / lastWeek * 100) : null;
+  const heroCard = `<section class="progress-hero card">
+    <div class="progress-hero-head"><span>${t("This week")}</span>${weekDelta == null ? "" : `<b class="${weekDelta >= 0 ? "up" : "down"}">${weekDelta >= 0 ? "+" : ""}${weekDelta}%</b>`}</div>
+    <div class="progress-week-value">${fmt(thisWeek)}</div>
+    <div class="progress-week-label">${t("reps")}</div>
+    <div class="progress-hero-stats">
+      <div><strong>${streak}</strong><span>${t("Current streak")}</span></div>
+      <div><strong>${bestDay}</strong><span>${t("Best day")}</span></div>
+      <div><strong>${days.filter((d) => d.reps > 0).length}</strong><span>${t("Active days")}</span></div>
+    </div>
+  </section>`;
+
+  const disciplineCells = days.map((d) => {
+    const cls = d.done ? "done" : d.reps > 0 ? "partial" : "empty";
+    const label = `${new Date(d.date).toLocaleDateString(loc, { day: "numeric", month: "short" })}: ${d.reps} ${t("reps")}`;
+    return `<span class="discipline-day ${cls} ${d.date === today0 ? "today" : ""}" title="${esc(label)}" aria-label="${esc(label)}"><i style="--load:${Math.min(1, d.reps / Math.max(d.norm || bestDay || 1, 1))}"></i></span>`;
+  }).join("");
+  const disciplineCard = `<section class="progress-section card">
+    <div class="progress-section-head"><div><span>${t("Last 30 days")}</span><small>${fmt(monthReps)} ${t("reps")}</small></div><strong>${completion != null ? completion + "%" : "—"}</strong></div>
+    <div class="discipline-grid" role="img" aria-label="${t("Daily activity — 30 days")}">${disciplineCells}</div>
+    <div class="discipline-legend"><span><i class="done"></i>${t("Completed")}</span><span><i class="partial"></i>${t("In progress")}</span></div>
+  </section>`;
+
+  const dailyRecords = {};
+  for (const d of app.history) for (const e of d.entries || []) for (const [ex, reps] of Object.entries(e.byEx || {})) dailyRecords[ex] = Math.max(dailyRecords[ex] || 0, +reps || 0);
+  const recordKeys = Object.keys(dailyRecords).sort((a, b) => EX_ORDER.indexOf(a) - EX_ORDER.indexOf(b));
+  const recordsCard = recordKeys.length ? `<section class="progress-section card">
+    <div class="progress-section-title">${t("Personal records")}</div>
+    <div class="record-list">${recordKeys.map((ex) => `<div class="record-row"><span class="record-icon">${exIcon(ex)}</span><span><strong>${esc(Exercise.displayName(ex))}</strong><small>${t("Daily best")}</small></span><b>${dailyRecords[ex]}</b></div>`).join("")}</div>
+    <div class="record-streak"><span>${iconF("flame")}${t("Best streak")}</span><strong>${Math.max(bestStreak, streak)}</strong></div>
+  </section>` : "";
 
   const exShort = (ex) => ex === "all" ? t("All") : Exercise.displayName(ex);
   const filterUI = exList.length > 1 ? `<div class="stat-filter">${["all", ...exList].map((ex) => `<button data-act="statEx" data-ex="${ex}" class="${filterEx === ex ? "active" : ""}">${esc(exShort(ex))}</button>`).join("")}</div>` : "";
@@ -2057,11 +2086,6 @@ function StatsTab() {
     <div class="between" style="gap:10px">${dot("var(--money)", t("Weekly volume"))}${filterUI}</div>
     <div class="form-footer">${t("Total reps over the last 4 weeks.")}</div>
     ${weeklyChart(weeks)}</div>`;
-  const dailyCard = `<div class="card" style="padding:16px;display:flex;flex-direction:column;gap:4px">
-    ${dot("var(--accent)", t("Daily activity — 30 days"))}
-    <div class="form-footer">${t("Each bar is one day.")}</div>
-    ${dailyChart(days, loc)}</div>`;
-
   // Журнал
   const today = startOfDay(Date.now());
   const past = app.history.filter((d) => startOfDay(d.date) !== today && d.entries.length).slice(-7).reverse();
@@ -2072,16 +2096,16 @@ function StatsTab() {
     <span style="flex:1;font-weight:500;font-size:15px">${esc(title)}</span>
     <span class="money ${done ? "c-money" : ""}" style="font-size:14px;color:${done ? "" : "rgba(255,255,255,.85)"}">${norm != null ? `${reps} / ${norm}` : `+${reps}`}</span></div>`;
   const dayChip = (txt) => `<span class="day-chip">${esc(txt)}</span>`;
-  let journal = lbl(t("Exercise journal"), "tracking-1") + dayChip(t("Today"));
+  let journal = `<div class="progress-section-title">${t("Recent workouts")}</div>` + dayChip(t("Today"));
   journal += joined.map((c) => entryRow(c.title, C.myTodayTotal(c), C.repsNorm(c), C.isTodayDone(c))).join("");
   journal += todayPractice.map((e) => entryRow(t("Practice"), e.reps, null, false)).join("");
   for (const d of past) {
     journal += dayChip(new Date(d.date).toLocaleDateString(store.lang === "ru" ? "ru-RU" : "en-US", { day: "numeric", month: "short" }));
     journal += d.entries.map((e) => entryRow(e.title || t("Practice"), e.reps, e.norm, e.norm != null && e.reps >= e.norm)).join("");
   }
-  const journalCard = `<div class="card" style="padding:16px;display:flex;flex-direction:column;gap:10px">${journal}</div>`;
+  const journalCard = `<section class="progress-section card progress-journal">${journal}</section>`;
 
-  return screenHeader(t("Progress")) + `<div class="stack">${metricsCard}${allTimeCard}${insightsCard}${weeklyCard}${dailyCard}${journalCard}</div>`;
+  return screenHeader(t("Progress")) + `<div class="stack progress-stack">${heroCard}${disciplineCard}${recordsCard}${weeklyCard}${allTimeCard}${insightsCard}${journalCard}</div>`;
 }
 // Округление верхней отметки оси Y до «круглого» значения (1/2/5 × 10ⁿ),
 // чтобы подписи сетки читались как 0 / 400 / 800, а не 0 / 417 / 835.
@@ -2115,34 +2139,6 @@ function weeklyChart(weeks) {
     ${xs.map((x, i) => `<text x="${x.toFixed(1)}" y="${(H - 6).toFixed(1)}" fill="rgba(255,255,255,.55)" font-size="10" font-family="ui-monospace,monospace" text-anchor="middle">${t("Week %lld", i + 1)}</text>`).join("")}
   </svg>`;
 }
-function dailyChart(days, loc) {
-  const W = 320, H = 150, padL = 6, padR = 6, padT = 8, padB = 22;
-  const plotW = W - padL - padR, plotH = H - padT - padB, baseY = padT + plotH;
-  const max = Math.max(...days.map((d) => d.reps), 1);
-  const bw = plotW / days.length;
-  const bars = days.map((d, i) => {
-    const x = (padL + i * bw + bw * 0.16).toFixed(1), w = (bw * 0.68).toFixed(1);
-    // Пустой день — тонкая серая метка у оси: видно шкалу времени, которую надо заполнить.
-    if (d.reps <= 0) return `<rect x="${x}" y="${(baseY - 3).toFixed(1)}" width="${w}" height="3" rx="1.5" fill="rgba(255,255,255,.1)"/>`;
-    const h = Math.max(4, (d.reps / max) * plotH);
-    // Норма закрыта — яркий столбик; была активность, но недобор — приглушённый.
-    const fill = d.done ? "url(#dg)" : "rgba(200,255,33,.34)";
-    return `<rect x="${x}" y="${(baseY - h).toFixed(1)}" width="${w}" height="${h.toFixed(1)}" rx="2" fill="${fill}"/>`;
-  }).join("");
-  const dstr = (ms) => new Date(ms).toLocaleDateString(loc, { day: "numeric", month: "short" });
-  const ticks = [[0, "start"], [Math.floor(days.length / 2), "middle"], [days.length - 1, "end"]];
-  const dates = ticks.map(([i, anchor]) => {
-    const cx = padL + i * bw + bw / 2;
-    const x = anchor === "start" ? padL : anchor === "end" ? W - padR : cx;
-    return `<text x="${x.toFixed(1)}" y="${(H - 6).toFixed(1)}" fill="rgba(255,255,255,.5)" font-size="9.5" font-family="ui-monospace,monospace" text-anchor="${anchor}">${esc(dstr(days[i].date))}</text>`;
-  }).join("");
-  return `<svg class="chart" viewBox="0 0 ${W} ${H}">
-    <defs><linearGradient id="dg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#c8ff21"/><stop offset="1" stop-color="#c8ff21" stop-opacity="0.3"/></linearGradient></defs>
-    ${bars}
-    ${dates}
-  </svg>`;
-}
-
 // ==========================================================================
 // Профиль
 // ==========================================================================

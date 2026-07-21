@@ -1231,6 +1231,51 @@ button:is(:active, .pressed):not(:disabled) { transform: scale(0.97); filter: br
 .stat-filter button.active { background: var(--money); color: #07110b; }
 .stat-filter button:is(:active, .pressed) { transform: scale(0.94); }
 
+/* Progress — доказательство роста, а не сетка одинаковых KPI. */
+.progress-stack { gap: 16px; }
+.progress-hero { padding: 20px; overflow: hidden; background: radial-gradient(circle at 88% 8%, rgba(200,255,33,.16), transparent 42%), var(--glass-panel); }
+.progress-hero-head { display: flex; align-items: center; justify-content: space-between; color: var(--text-secondary); font-size: 12px; font-weight: 750; letter-spacing: 1.2px; text-transform: uppercase; }
+.progress-hero-head b { padding: 5px 8px; border-radius: 999px; font: 800 11px/1 var(--mono); }
+.progress-hero-head b.up { color: var(--money); background: rgba(69,212,131,.13); }
+.progress-hero-head b.down { color: var(--text-secondary); background: var(--white-08); }
+.progress-week-value { margin-top: 22px; color: var(--text); font: 850 64px/.88 var(--mono); letter-spacing: -4px; font-variant-numeric: tabular-nums; }
+.progress-week-label { margin-top: 10px; color: var(--accent); font-size: 12px; font-weight: 750; letter-spacing: 1.4px; text-transform: uppercase; }
+.progress-hero-stats { margin-top: 26px; padding-top: 18px; display: grid; grid-template-columns: repeat(3, 1fr); box-shadow: inset 0 1px 0 var(--ring); }
+.progress-hero-stats > div { min-width: 0; display: flex; flex-direction: column; gap: 7px; }
+.progress-hero-stats > div + div { padding-left: 14px; box-shadow: inset 1px 0 0 var(--ring); }
+.progress-hero-stats strong { color: var(--text); font: 800 20px/1 var(--mono); font-variant-numeric: tabular-nums; }
+.progress-hero-stats span { color: var(--text-secondary); font-size: 10px; font-weight: 650; line-height: 1.25; }
+.progress-section { padding: 18px; }
+.progress-section-title { color: var(--text); font-size: 17px; font-weight: 750; }
+.progress-section-head { display: flex; align-items: flex-start; justify-content: space-between; }
+.progress-section-head > div { display: flex; flex-direction: column; gap: 5px; }
+.progress-section-head span { color: var(--text); font-size: 17px; font-weight: 750; }
+.progress-section-head small { color: var(--text-secondary); font: 650 11px/1 var(--mono); }
+.progress-section-head > strong { color: var(--accent); font: 850 24px/1 var(--mono); }
+.discipline-grid { margin-top: 20px; display: grid; grid-template-columns: repeat(10, 1fr); gap: 7px; }
+.discipline-day { position: relative; aspect-ratio: 1; overflow: hidden; border-radius: 6px; background: var(--white-08); box-shadow: inset 0 0 0 1px var(--ring); }
+.discipline-day i { position: absolute; inset: auto 0 0; height: calc(var(--load) * 100%); min-height: 2px; }
+.discipline-day.done i { background: linear-gradient(180deg, var(--accent), var(--money)); }
+.discipline-day.partial i { background: rgba(200,255,33,.34); }
+.discipline-day.today { box-shadow: inset 0 0 0 1.5px var(--accent), 0 0 12px rgba(200,255,33,.1); }
+.discipline-legend { margin-top: 14px; display: flex; gap: 16px; color: var(--text-secondary); font-size: 10px; font-weight: 650; }
+.discipline-legend span { display: flex; align-items: center; gap: 6px; }
+.discipline-legend i { width: 9px; height: 9px; border-radius: 3px; }
+.discipline-legend i.done { background: var(--money); }
+.discipline-legend i.partial { background: rgba(200,255,33,.34); }
+.record-list { margin-top: 14px; display: flex; flex-direction: column; }
+.record-row { min-height: 62px; display: flex; align-items: center; gap: 12px; }
+.record-row + .record-row { box-shadow: inset 0 1px 0 var(--ring); }
+.record-icon { width: 36px; height: 36px; flex: none; display: flex; align-items: center; justify-content: center; border-radius: 11px; color: var(--accent); background: rgba(200,255,33,.1); }
+.record-row > span:nth-child(2) { min-width: 0; flex: 1; display: flex; flex-direction: column; gap: 3px; }
+.record-row strong { color: var(--text); font-size: 14px; font-weight: 700; }
+.record-row small { color: var(--text-secondary); font-size: 10px; font-weight: 600; }
+.record-row > b { color: var(--text); font: 850 22px/1 var(--mono); }
+.record-streak { min-height: 50px; padding: 0 12px; border-radius: 13px; display: flex; align-items: center; justify-content: space-between; background: rgba(200,255,33,.08); }
+.record-streak span { display: flex; align-items: center; gap: 8px; color: var(--accent); font-size: 12px; font-weight: 700; }
+.record-streak strong { color: var(--accent); font: 850 20px/1 var(--mono); }
+.progress-journal { display: flex; flex-direction: column; gap: 10px; }
+
 /* стрик-пилюля */
 .streak-pill {
   display: inline-flex; align-items: center; gap: 3px;
