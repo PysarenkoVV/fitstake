@@ -4,7 +4,7 @@
 "use strict";
 
 // Версия оболочки — держать в синхроне с CACHE в sw.js; уходит в баг-репорты.
-const APP_VERSION = "v126";
+const APP_VERSION = "v127";
 // Последняя JS-ошибка — прикладываем к баг-репорту, чтобы сразу видеть причину.
 let lastError = "";
 window.addEventListener("error", (e) => {
@@ -381,6 +381,14 @@ const RU = {
   "%@ completed today's challenge in %@": "%@ выполнил дневную цель в «%@»",
   "just now": "только что", "%lld min ago": "%lld мин назад", "%lld h ago": "%lld ч назад",
   "Couldn't update subscription": "Не удалось изменить подписку",
+  "Couldn't publish challenge": "Не удалось опубликовать челлендж",
+  "Couldn't leave challenge": "Не удалось выйти из челленджа",
+  "Creator": "Создатель", "Joined": "Участвует", "Loading public challenges…": "Загружаем публичные челленджи…",
+  "Couldn't load public challenges. Check connection.": "Не удалось загрузить публичные челленджи. Проверьте соединение.",
+  "In progress": "В процессе", "So your progress is saved and syncs across your devices.": "Чтобы прогресс сохранялся и синхронизировался между устройствами.",
+  "Challenge created": "Челлендж создан", "Invite people now or share it later from the challenge page.": "Пригласите людей сейчас или поделитесь позже со страницы челленджа.",
+  "Share invite": "Поделиться приглашением", "Copy link": "Скопировать ссылку", "Open challenge": "Открыть челлендж",
+  "Join my challenge": "Присоединяйся к моему челленджу",
 };
 
 // Перевод + подстановка %lld / %@ по порядку аргументов.
