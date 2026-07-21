@@ -423,7 +423,8 @@ async function openSession(challengeId, startExercise) {
       catch (e) { finishing = false; toast(t("Couldn't save. Try again.")); return; } // разблокируем — можно повторить
       destroySession();
       render();
-      if (closed) { C.isFinished(c) ? openChallengeComplete(c) : openDayComplete(c); }
+      if (closed && C.isFinished(c)) openChallengeComplete(c);
+      else openWorkoutResult(c, counts, sessionStats, closed);
     } else {
       destroySession();
     }

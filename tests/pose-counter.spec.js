@@ -308,3 +308,34 @@ test("daily target completion shows finish and extra-set actions", async ({ page
   await page.getByRole("button", { name: "Exit without saving", exact: true }).click();
   await expect(page.locator(".session")).toHaveCount(0);
 });
+
+test("saving a partial workout opens a useful result screen", async ({ page }) => {
+  await page.evaluate(async () => {
+    class FakePoseSession {
+      constructor(exercises) {
+        this.snapshot = { results: exercises.map((exercise) => ({ exercise, repCount: 0, status: "up", bendAngle: 170 })) };
+        window.__fakePoseSession = this;
+      }
+      setRecordingContext() {}
+      setActive() {}
+      setCountingEnabled() {}
+      async start() {}
+      stop() {}
+      isRecording() { return false; }
+      async toggleRecording() { return false; }
+    }
+    window.PoseSession = FakePoseSession;
+    const challenge = app.challenges.find((item) => item.id === "main");
+    challenge.goals = [{ exercise: "pushups", repsPerDay: 5000 }];
+    challenge.myTodayReps = {};
+    await window.openSession("main", "pushups");
+    window.__fakePoseSession.snapshot.results[0].repCount = 12;
+  });
+  await page.waitForTimeout(100);
+  await page.getByRole("button", { name: "Close", exact: true }).click();
+  await page.getByRole("button", { name: "Save workout", exact: true }).click();
+  await expect(page.getByText("Workout saved", { exact: true })).toBeVisible();
+  await expect(page.locator(".workout-result-hero strong")).toHaveText("12");
+  await expect(page.getByText("Best set", { exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Done", exact: true })).toBeVisible();
+});

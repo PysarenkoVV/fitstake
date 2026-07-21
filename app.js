@@ -99,6 +99,10 @@ const RU = {
   "Your camera counts every rep and helps you keep honest form.": "Камера считает каждый повтор и помогает следить за техникой.",
   "Try 5 reps": "Попробовать 5 повторений",
   "Camera tracking": "Слежение камерой",
+  "Workout saved": "Тренировка сохранена",
+  "Daily goal": "Дневная цель",
+  "Best set": "Лучший подход",
+  "Done": "Готово",
   "No equipment": "Без оборудования",
   "Quick challenge": "Быстрый челлендж",
   "7-day Push-up Challenge": "Отжимания: 7 дней",
@@ -1136,7 +1140,7 @@ function goalForChoice(level, maxReps, choice) {
 // ==========================================================================
 // UI-состояние и рендер (см. app-ui.js — экраны ниже в этом же файле)
 // ==========================================================================
-const ui = { screen: "onboarding", tab: "yours", detailId: null, sheet: null, full: null, onbStep: 0, form: null, profileSection: null };
+const ui = { screen: "onboarding", tab: "yours", detailId: null, sheet: null, full: null, onbStep: 0, form: null, profileSection: null, workoutResult: null };
 
 function isGuest() { return !Sync.enabled || Sync.isAnonymous || !Sync.email; }
 
@@ -2793,6 +2797,40 @@ function DayCompleteFull() {
     <button class="text-btn" data-act="closeFull">${t("Close")}</button>
   </div></div>`;
 }
+function WorkoutResultFull() {
+  const r = ui.workoutResult;
+  const c = r && app.challenges.find((x) => x.id === r.challengeId);
+  if (!r || !c) return "";
+  const reps = Object.values(r.counts).reduce((sum, n) => sum + n, 0);
+  const today = C.myTodayTotal(c), norm = C.repsNorm(c);
+  const pct = Math.min(100, Math.round(today / Math.max(norm, 1) * 100));
+  const sets = r.stats.setReps.filter((n) => n > 0);
+  const best = sets.length ? Math.max(...sets) : reps;
+  const breakdown = c.goals.map((g) => {
+    const n = r.counts[g.exercise] || 0;
+    return n ? `<span>${esc(Exercise.displayName(g.exercise))}<strong>${n}</strong></span>` : "";
+  }).join("");
+  return `<div class="fullscreen workout-result">${r.dayClosed ? confetti() : ""}<div class="workout-result-shell">
+    <div class="workout-result-verified">${iconF("seal")}<span>${t("AI verified")}</span></div>
+    <div class="workout-result-title">${r.dayClosed ? t("Day done!") : t("Workout saved")}</div>
+    <div class="workout-result-hero"><strong>${reps}</strong><span>${t("reps")}</span></div>
+    ${breakdown ? `<div class="workout-result-breakdown">${breakdown}</div>` : ""}
+    <div class="workout-result-progress">
+      <div><span>${t("Daily goal")}</span><strong>${today} / ${norm}</strong></div>
+      <div class="progress ${today >= norm ? "money" : ""}"><span style="width:${pct}%"></span></div>
+      <small>${today >= norm ? t("Goal reached!") : t("%lld left", Math.max(0, norm - today))}</small>
+    </div>
+    <div class="workout-result-metrics">
+      <div><span>${t("Time")}</span><strong>${workoutClock(r.stats.elapsedMs)}</strong></div>
+      <div><span>${t("Sets")}</span><strong>${sets.length || 1}</strong></div>
+      <div><span>${t("Best set")}</span><strong>${best}</strong></div>
+    </div>
+    <div class="workout-result-actions">
+      <button class="action-btn" data-act="shareDay:${c.id}">${iconF("share")}${t("Share")}</button>
+      <button class="text-btn" data-act="closeFull">${t("Done")}</button>
+    </div>
+  </div></div>`;
+}
 function ShareDayEditorFull() {
   const f = ui.form, c = app.challenges.find((x) => x.id === f.challengeId);
   if (!c) return "";
@@ -3467,14 +3505,20 @@ function openParticipant(id) {
 // Закрытие — через View Transitions: браузер плавно уводит лист/фон, атомарно, без «застрявшего» DOM.
 function closeSheet() { ui.sheet = null; ui.form = null; navRender(); }
 function openDayComplete(c) { ui.fullId = c.id; ui.full = DayCompleteFull; render(); }
+function openWorkoutResult(c, counts, stats, dayClosed) {
+  ui.fullId = c.id;
+  ui.workoutResult = { challengeId: c.id, counts: Object.assign({}, counts), stats: Object.assign({}, stats, { setReps: stats.setReps.slice() }), dayClosed: !!dayClosed };
+  ui.full = WorkoutResultFull;
+  render();
+}
 function openShareDay(c) {
-  const shareReturn = ui.full === DayCompleteFull ? "dayComplete" : "close";
+  const shareReturn = ui.full === WorkoutResultFull ? "workoutResult" : ui.full === DayCompleteFull ? "dayComplete" : "close";
   ui.form = { challengeId: c.id, background: "gradient", photo: null, template: "minimal", photoZoom: 1, photoX: 0, photoY: 0, dim: 45, shareReturn };
   ui.full = ShareDayEditorFull;
   render();
 }
 function openChallengeComplete(c) { ui.form = { challengeId: c.id, weight: store["profile.weightKg"], maxReps: store["profile.maxReps"], photo: null }; ui.full = ChallengeCompleteFull; render(); }
-function closeFull() { ui.full = null; ui.form = null; navRender(); }
+function closeFull() { ui.full = null; ui.form = null; ui.workoutResult = null; navRender(); }
 
 function CameraPrepFull() {
   const rows = [
@@ -3629,7 +3673,7 @@ root.addEventListener("click", async (e) => {
     case "closeShareDay": {
       const shareReturn = ui.form && ui.form.shareReturn;
       ui.form = null;
-      ui.full = shareReturn === "dayComplete" ? DayCompleteFull : null;
+      ui.full = shareReturn === "workoutResult" && ui.workoutResult ? WorkoutResultFull : shareReturn === "dayComplete" ? DayCompleteFull : null;
       render(); return;
     }
     case "showResult": openChallengeComplete(app.challenges.find((c) => c.id === arg)); return;
