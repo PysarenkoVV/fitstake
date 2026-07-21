@@ -8,6 +8,9 @@ test("Ukrainian can be selected on onboarding and persists", async ({ page }) =>
 
   await page.getByRole("button", { name: "Choose language" }).click();
   await expect(page.getByRole("dialog", { name: "Choose language" })).toBeVisible();
+  await expect(page.locator(".language-option").allTextContents()).resolves.toEqual([
+    expect.stringContaining("English"), expect.stringContaining("Українська"), expect.stringContaining("Русский"),
+  ]);
   await page.getByRole("button", { name: /Українська/ }).click();
 
   await expect(page.locator("html")).toHaveAttribute("lang", "uk");

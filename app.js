@@ -4,7 +4,7 @@
 "use strict";
 
 // Версия оболочки — держать в синхроне с CACHE в sw.js; уходит в баг-репорты.
-const APP_VERSION = "v122";
+const APP_VERSION = "v123";
 // Последняя JS-ошибка — прикладываем к баг-репорту, чтобы сразу видеть причину.
 let lastError = "";
 window.addEventListener("error", (e) => {
@@ -1367,7 +1367,7 @@ function screenHeader(title) {
 }
 function langToggle() {
   const code = store.lang === "ua" ? "UA" : store.lang.toUpperCase();
-  return `<button class="badge language-trigger" data-act="openLanguage" aria-label="${esc(t("Choose language"))}"><span>${code}</span><span aria-hidden="true">⌄</span></button>`;
+  return `<button class="badge language-trigger" data-act="openLanguage" aria-label="${esc(t("Choose language"))}"><span>${code}</span><span class="language-chevron" aria-hidden="true"></span></button>`;
 }
 
 function TabBar() {
@@ -2503,7 +2503,7 @@ function sheetShell(title, body, leftIcon) {
 }
 
 function LanguageSheet() {
-  const langs = [["en", "EN", "English"], ["ru", "RU", "Русский"], ["ua", "UA", "Українська"]];
+  const langs = [["en", "EN", "English"], ["ua", "UA", "Українська"], ["ru", "RU", "Русский"]];
   const body = `<div class="language-list">${langs.map(([value, code, name]) => {
     const active = store.lang === value;
     return `<button class="language-option ${active ? "active" : ""}" data-act="setLanguage:${value}" aria-pressed="${active}">
