@@ -79,8 +79,24 @@ function posePointVisible(p, confidence = POSE_MIN_CONFIDENCE) {
 
 // MediaPipe sometimes returns a few confident landmarks for clothes, equipment or the floor.
 // Accept a pose only when it contains a plausible torso and enough connected body landmarks.
-function poseIsCoherent(points) {
+function poseIsCoherent(points, exercise) {
   const visible = Object.keys(LM).filter((name) => posePointVisible(points[name]));
+  const upperBodyExercise = exercise === "pushups" || exercise === "dips";
+
+  // Near the floor the torso often hides the hips from a low camera angle. For arm
+  // exercises a complete, spatially plausible arm is sufficient to keep tracking.
+  if (upperBodyExercise) {
+    const completeArm = ["left", "right"].some((side) =>
+      [side + "Shoulder", side + "Elbow", side + "Wrist"].every((name) => posePointVisible(points[name]))
+    );
+    const visibleArms = ["leftShoulder", "rightShoulder", "leftElbow", "rightElbow", "leftWrist", "rightWrist"]
+      .filter((name) => posePointVisible(points[name]));
+    if (completeArm && visibleArms.length >= 4) {
+      const xs = visibleArms.map((name) => points[name].x), ys = visibleArms.map((name) => points[name].y);
+      if (Math.hypot(Math.max(...xs) - Math.min(...xs), Math.max(...ys) - Math.min(...ys)) >= 0.16) return true;
+    }
+  }
+
   if (visible.length < 6) return false;
 
   const shoulders = [points.leftShoulder, points.rightShoulder].filter((p) => posePointVisible(p));
@@ -321,9 +337,9 @@ async function getLandmarker() {
         },
         runningMode: "VIDEO",
         numPoses: 1,
-        minPoseDetectionConfidence: 0.65,
-        minPosePresenceConfidence: 0.65,
-        minTrackingConfidence: 0.6,
+        minPoseDetectionConfidence: 0.5,
+        minPosePresenceConfidence: 0.5,
+        minTrackingConfidence: 0.5,
       });
     })().catch((e) => {
       landmarkerPromise = null; // разрешить повторную попытку после ошибки загрузки
@@ -349,6 +365,8 @@ class PoseSession {
     this._recCanvas = null;
     this._lastTs = -1;
     this._coherentFrames = 0;
+    this._incoherentFrames = 0;
+    this._poseAccepted = false;
     this.countingEnabled = false;
     this.facing = "user";   // "user" (фронталка) | "environment" (задняя)
     this.zoom = 1;          // 1× | 0.5× — 0.5 = задний ультра-ширик (отдельная линза)
@@ -450,8 +468,16 @@ class PoseSession {
         points.root = mid(points.leftHip, points.rightHip);
       }
 
-      this._coherentFrames = poseIsCoherent(points) ? this._coherentFrames + 1 : 0;
-      const acceptedPoints = this._coherentFrames >= 3 ? points : {};
+      if (poseIsCoherent(points, this.exercises[this.active])) {
+        this._coherentFrames++;
+        this._incoherentFrames = 0;
+        if (this._coherentFrames >= 3) this._poseAccepted = true;
+      } else {
+        this._coherentFrames = 0;
+        this._incoherentFrames++;
+        if (this._incoherentFrames >= 6) this._poseAccepted = false;
+      }
+      const acceptedPoints = this._poseAccepted ? points : {};
 
       const results = this.counters.map((c, i) => {
         // Неактивные упражнения комбо на паузе: счёт заморожен, кадр не обрабатываем.

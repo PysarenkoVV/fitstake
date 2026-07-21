@@ -73,13 +73,20 @@ test("camera rejects sparse landmarks before drawing or counting a pose", async 
       leftKnee: p(.44, .70), rightKnee: p(.56, .70),
       leftAnkle: p(.43, .90), rightAnkle: p(.57, .90),
     };
+    const floorPushup = {
+      leftShoulder: p(.30, .55), rightShoulder: p(.48, .57),
+      leftElbow: p(.22, .66), rightElbow: p(.58, .68),
+      leftWrist: p(.14, .78), rightWrist: p(.68, .80),
+    };
     return {
       sparse: window.poseIsCoherent(sparseLegs),
       full: window.poseIsCoherent(fullBody),
       outsideFrame: window.poseIsCoherent({ ...fullBody, leftShoulder: p(-.2, .24), rightShoulder: p(1.2, .24) }),
+      floorPushup: window.poseIsCoherent(floorPushup, "pushups"),
+      floorSquat: window.poseIsCoherent(floorPushup, "squats"),
     };
   });
-  expect(result).toEqual({ sparse: false, full: true, outsideFrame: false });
+  expect(result).toEqual({ sparse: false, full: true, outsideFrame: false, floorPushup: true, floorSquat: false });
 });
 
 test("push-ups and dips hide unstable legs but keep hips in the skeleton", async ({ page }) => {
