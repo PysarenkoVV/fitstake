@@ -4,7 +4,7 @@
 "use strict";
 
 // Версия оболочки — держать в синхроне с CACHE в sw.js; уходит в баг-репорты.
-const APP_VERSION = "v121";
+const APP_VERSION = "v122";
 // Последняя JS-ошибка — прикладываем к баг-репорту, чтобы сразу видеть причину.
 let lastError = "";
 window.addEventListener("error", (e) => {
@@ -77,6 +77,7 @@ function iconF(name, cls = "") {
 // i18n — точный словарь EN→RU из Localizable.xcstrings
 // ==========================================================================
 const RU = {
+  "Choose language": "Выберите язык",
   "%lld cm": "%lld см", "%lld days — finished": "%lld дней — пройдено",
   "%lld in one set × %lld sets": "%lld за подход × %lld подхода", "%lld kg": "%lld кг",
   "%lld of %lld already did it today": "Сегодня уже сделали: %lld из %lld",
@@ -384,10 +385,15 @@ const RU = {
 
 // Перевод + подстановка %lld / %@ по порядку аргументов.
 function t(key, ...args) {
-  let s = store.lang === "ru" && RU[key] != null ? RU[key] : key;
+  const dict = store.lang === "ru" ? RU : store.lang === "ua" ? (window.UA_TRANSLATIONS || {}) : null;
+  let s = dict && dict[key] != null ? dict[key] : key;
   let i = 0;
   s = s.replace(/%lld|%@/g, () => (i < args.length ? String(args[i++]) : ""));
   return s;
+}
+
+function localeCode() {
+  return store.lang === "ru" ? "ru-RU" : store.lang === "ua" ? "uk-UA" : "en-US";
 }
 
 // ==========================================================================
@@ -1245,7 +1251,8 @@ function sfxFor(cmd, arg) {
 }
 function render() {
   rolloverIfNeeded();
-  if (ui.screen === "onboarding") { root.innerHTML = Onboarding() + (ui.full ? ui.full() : ""); afterRender(); return; }
+  document.documentElement.lang = store.lang === "ua" ? "uk" : store.lang;
+  if (ui.screen === "onboarding") { root.innerHTML = Onboarding() + (ui.sheet ? ui.sheet() : "") + (ui.full ? ui.full() : ""); afterRender(); return; }
   let html = "";
   if (ui.detailId) html = DetailScreen(ui.detailId);
   else {
@@ -1359,8 +1366,8 @@ function screenHeader(title) {
   </div>`;
 }
 function langToggle() {
-  const en = store.lang === "en", tag = (a, on) => `<span style="color:${on ? "#fff" : "var(--text-secondary)"}">${a}</span>`;
-  return `<button class="badge" data-act="toggleLang" style="color:var(--text-secondary)">${tag("EN", en)}·${tag("RU", !en)}</button>`;
+  const code = store.lang === "ua" ? "UA" : store.lang.toUpperCase();
+  return `<button class="badge language-trigger" data-act="openLanguage" aria-label="${esc(t("Choose language"))}"><span>${code}</span><span aria-hidden="true">⌄</span></button>`;
 }
 
 function TabBar() {
@@ -1574,7 +1581,7 @@ function FriendsSheet() {
     const diff = startOfDay(Date.now()) - startOfDay(ts);
     if (diff <= 0) return t("today");
     if (diff === DAY) return t("yesterday");
-    return new Date(ts).toLocaleDateString(store.lang === "ru" ? "ru-RU" : "en-US", { day: "numeric", month: "short" });
+    return new Date(ts).toLocaleDateString(localeCode(), { day: "numeric", month: "short" });
   };
   const rows = list.map(([id, u]) => {
     const isNew = Date.now() - (u.joinedAt || 0) < 48 * 3600 * 1000;
@@ -1605,7 +1612,7 @@ function relativeActivityTime(ts) {
   if (mins < 1) return t("just now");
   if (mins < 60) return t("%lld min ago", mins);
   if (mins < 24 * 60) return t("%lld h ago", Math.floor(mins / 60));
-  return new Date(ts).toLocaleDateString(store.lang === "ru" ? "ru-RU" : "en-US", { day: "numeric", month: "short" });
+  return new Date(ts).toLocaleDateString(localeCode(), { day: "numeric", month: "short" });
 }
 // Строки ленты активности друзей — общий рендер для Хоума и листа уведомлений.
 function activityFeedRows(events) {
@@ -2016,7 +2023,7 @@ function StatsTab() {
   }
 
   // Выводы: превращаем цифры в мотивацию вместо голых графиков.
-  const loc = store.lang === "ru" ? "ru-RU" : "en-US";
+  const loc = localeCode();
   const thisWeek = weeksAll[3], lastWeek = weeksAll[2];
   const allTotals = [...byDay.values()];
   const bestDay = allTotals.length ? Math.max(...allTotals) : 0;
@@ -2100,7 +2107,7 @@ function StatsTab() {
   journal += joined.map((c) => entryRow(c.title, C.myTodayTotal(c), C.repsNorm(c), C.isTodayDone(c))).join("");
   journal += todayPractice.map((e) => entryRow(t("Practice"), e.reps, null, false)).join("");
   for (const d of past) {
-    journal += dayChip(new Date(d.date).toLocaleDateString(store.lang === "ru" ? "ru-RU" : "en-US", { day: "numeric", month: "short" }));
+    journal += dayChip(new Date(d.date).toLocaleDateString(localeCode(), { day: "numeric", month: "short" }));
     journal += d.entries.map((e) => entryRow(e.title || t("Practice"), e.reps, e.norm, e.norm != null && e.reps >= e.norm)).join("");
   }
   const journalCard = `<section class="progress-section card progress-journal">${journal}</section>`;
@@ -2202,7 +2209,7 @@ function ProfileTab() {
     <div class="between">${lbl(t("Measurements"), "tracking-1")}<button data-act="addMeasure" style="color:var(--accent);display:flex">${iconF("plusCircle")}</button></div>
     ${app.measurements.length === 0 ? `<div class="form-footer">${t("No measurements yet. They're added after each challenge.")}</div>` :
       app.measurements.slice().reverse().map((m) => `<div class="between" style="padding:4px 0">
-        <span style="font-size:15px">${new Date(m.date).toLocaleDateString(store.lang === "ru" ? "ru-RU" : "en-US", { day: "numeric", month: "short", year: "numeric" })}</span>
+        <span style="font-size:15px">${new Date(m.date).toLocaleDateString(localeCode(), { day: "numeric", month: "short", year: "numeric" })}</span>
         <span class="row gap6"><span class="money secondary" style="font-size:14px">${t("%lld kg", m.weight)}</span><span class="secondary">·</span><span class="money" style="font-size:14px">${m.maxReps}</span></span></div>`).join("")}
   </div>`;
 
@@ -2493,6 +2500,17 @@ function sheetShell(title, body, leftIcon) {
   return `<div class="sheet-backdrop" data-act="closeSheetBg"><div class="sheet" data-stop role="dialog" aria-modal="true" aria-label="${esc(title)}" tabindex="-1">
     <div class="navbar">${leftIcon ? `<button class="icon-btn" data-act="closeSheet" aria-label="${t("Close")}">${icon("xmark")}</button>` : "<div style='width:32px'></div>"}<div class="title">${esc(title)}</div><div style="width:32px"></div></div>
     <div class="sheet-body">${body}</div></div></div>`;
+}
+
+function LanguageSheet() {
+  const langs = [["en", "EN", "English"], ["ru", "RU", "Русский"], ["ua", "UA", "Українська"]];
+  const body = `<div class="language-list">${langs.map(([value, code, name]) => {
+    const active = store.lang === value;
+    return `<button class="language-option ${active ? "active" : ""}" data-act="setLanguage:${value}" aria-pressed="${active}">
+      <span class="language-code">${code}</span><span>${name}</span><span class="language-check">${active ? "✓" : ""}</span>
+    </button>`;
+  }).join("")}</div>`;
+  return sheetShell(t("Choose language"), body, true);
 }
 function fieldStepper(label, key, min, max, by) {
   const labelId = `lbl-model-${key}`;
@@ -3703,7 +3721,7 @@ function parseVal(v) {
 
 // Действия «на месте» (селект/степпер/тогл) — элемент не исчезает, пульс переносится
 // патчем render; задержку pressFinish на них не вешаем, чтобы отклик был мгновенным.
-const INSTANT_CMDS = new Set(["inc", "dec", "seg", "statEx", "challengeTab", "createChip", "createCustom", "toggle", "toggleStore", "react", "goalChoice", "presetDuration", "bugPick", "shareBg", "toggleLang", "unlockPhotos"]);
+const INSTANT_CMDS = new Set(["inc", "dec", "seg", "statEx", "challengeTab", "createChip", "createCustom", "toggle", "toggleStore", "react", "goalChoice", "presetDuration", "bugPick", "shareBg", "setLanguage", "unlockPhotos"]);
 root.addEventListener("click", async (e) => {
   const el = e.target.closest("[data-act]");
   if (!el) return;
@@ -3787,7 +3805,10 @@ root.addEventListener("click", async (e) => {
     case "notification": ui.sheet = null; ui.form = null; openDetail(arg); return;
     case "dismissPwa": localStorage.setItem("fs.pwahint", "1"); render(); return;
     case "signOut": Sync.signOutUser().then(() => render()); return;
-    case "toggleLang": store.lang = store.lang === "ru" ? "en" : "ru"; render(); return;
+    case "openLanguage": ui.sheet = LanguageSheet; render(); return;
+    case "setLanguage":
+      if (["en", "ru", "ua"].includes(arg)) store.lang = arg;
+      ui.sheet = null; ui.form = null; render(); return;
     case "closeSheet": closeSheet(); return;
     case "closeFull": closeFull(); return;
     case "closeShareDay": {

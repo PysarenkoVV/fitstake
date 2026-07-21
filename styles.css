@@ -110,6 +110,8 @@ img { max-width: 100%; }
 /* Двухрядный хедер вкладок: служебная строка (жучок+язык) над крупным заголовком. */
 .screen-head { padding-top: 6px; margin-bottom: 8px; }
 .screen-head .badge { flex: none; min-height: 36px; padding: 8px 12px; }
+.language-trigger { display:flex; align-items:center; gap:6px; color:var(--text); font-weight:750; letter-spacing:.04em; }
+.language-trigger span:last-child { color:var(--text-secondary); font-size:14px; transform:translateY(-1px); }
 .header-icon-btn { position: relative; width: 38px; height: 38px; border-radius: 50%; display: flex; align-items: center; justify-content: center; background: var(--glass-input); box-shadow: inset 0 0 0 1px var(--ring); }
 .header-icon-btn svg { width: 20px; height: 20px; }
 .notification-count { position: absolute; top: -3px; right: -4px; min-width: 17px; height: 17px; padding: 0 4px; border-radius: 999px; display: flex; align-items: center; justify-content: center; background: var(--accent); color: #000; font: 800 10px/1 var(--mono); }
@@ -797,6 +799,12 @@ button:is(:active, .pressed):not(:disabled) { transform: scale(0.97); filter: br
 /* Шапка листа sticky: своя лёгкая тонировка с блюром, чтобы контент, уезжающий под неё, читался как за стеклом. */
 .sheet .navbar { background: rgba(16, 16, 16, 0.5); backdrop-filter: blur(var(--blur-overlay)); -webkit-backdrop-filter: blur(var(--blur-overlay)); border-radius: 20px 20px 0 0; padding-top: 12px; }
 .sheet-body { padding: 16px; display: flex; flex-direction: column; gap: 14px; }
+.language-list { display:flex; flex-direction:column; gap:8px; padding-bottom:max(4px,env(safe-area-inset-bottom)); }
+.language-option { min-height:62px; display:grid; grid-template-columns:44px 1fr 24px; align-items:center; gap:12px; padding:0 18px; border:1px solid var(--white-08); border-radius:18px; background:var(--surface); color:var(--text); text-align:left; font-size:17px; font-weight:650; }
+.language-option.active { border-color:var(--accent); background:color-mix(in srgb,var(--accent) 10%,var(--surface)); }
+.language-code { color:var(--text-secondary); font-size:13px; font-weight:800; letter-spacing:.08em; }
+.language-option.active .language-code,.language-check { color:var(--accent); }
+.language-check { text-align:right; font-size:20px; font-weight:800; }
 /* Ровный список выбора: одинаковые строки + тонкий разделитель между ними. */
 .picker-list { display: flex; flex-direction: column; }
 .picker-row { display: flex; align-items: center; justify-content: space-between; width: 100%; padding: 16px 6px; gap: 12px; }
