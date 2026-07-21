@@ -4,7 +4,7 @@
 "use strict";
 
 // Версия оболочки — держать в синхроне с CACHE в sw.js; уходит в баг-репорты.
-const APP_VERSION = "v124";
+const APP_VERSION = "v125";
 // Последняя JS-ошибка — прикладываем к баг-репорту, чтобы сразу видеть причину.
 let lastError = "";
 window.addEventListener("error", (e) => {
@@ -1166,20 +1166,22 @@ function esc(s) { return String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "
 
 const root = document.getElementById("app");
 
-// iOS иногда оставляет 100dvh в размере открытой клавиатуры. VisualViewport
-// сообщает реальную видимую высоту и возвращает футер к safe area после blur.
-function syncAppHeight() {
+// Высота формы остаётся стабильной при открытии клавиатуры: клавиатура перекрывает
+// нижнюю CTA, но не поднимает её. Новую высоту принимаем только без клавиатуры.
+let stableAppHeight = window.innerHeight;
+function syncAppHeight(force) {
   const viewport = window.visualViewport;
-  const height = viewport ? viewport.height : window.innerHeight;
-  if (height > 0) document.documentElement.style.setProperty("--app-height", `${Math.round(height)}px`);
+  const height = Math.max(window.innerHeight, viewport ? viewport.height : 0);
+  if (force || height >= stableAppHeight - 100) stableAppHeight = height;
+  if (stableAppHeight > 0) document.documentElement.style.setProperty("--app-height", `${Math.round(stableAppHeight)}px`);
 }
 syncAppHeight();
 if (window.visualViewport) {
-  window.visualViewport.addEventListener("resize", syncAppHeight, { passive: true });
-  window.visualViewport.addEventListener("scroll", syncAppHeight, { passive: true });
+  window.visualViewport.addEventListener("resize", () => syncAppHeight(false), { passive: true });
+  window.visualViewport.addEventListener("scroll", () => syncAppHeight(false), { passive: true });
 }
-window.addEventListener("orientationchange", syncAppHeight, { passive: true });
-window.addEventListener("pageshow", syncAppHeight, { passive: true });
+window.addEventListener("orientationchange", () => { stableAppHeight = 0; syncAppHeight(true); }, { passive: true });
+window.addEventListener("pageshow", () => syncAppHeight(false), { passive: true });
 let scrollMemo = {};
 // Системная настройка «уменьшить движение» — гасим необязательный моушн.
 const REDUCE_MOTION = () => window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
@@ -3934,6 +3936,7 @@ root.addEventListener("click", async (e) => {
   }
   if (cmd === "createCustom") {
     ui.form["custom_" + arg] = true;
+    ui.form[arg] = "";
     // Не пересобираем весь экран: замена DOM во время инерционного скролла
     // обрывала scroll-жест в iOS. Меняем только нажатый чип.
     const inp = document.createElement("input");
@@ -3941,7 +3944,7 @@ root.addEventListener("click", async (e) => {
     inp.type = "text"; inp.inputMode = "numeric"; inp.pattern = "[0-9]*"; inp.enterKeyHint = "done";
     inp.dataset.model = arg; inp.dataset.num = "";
     inp.dataset.min = el.dataset.min || "1"; inp.dataset.max = el.dataset.max || "5000";
-    inp.value = String(ui.form[arg]);
+    inp.value = "";
     inp.setAttribute("aria-label", el.dataset.label || t("Custom"));
     el.replaceWith(inp);
     inp.focus({ preventScroll: true });

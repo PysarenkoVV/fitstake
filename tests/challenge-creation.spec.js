@@ -29,7 +29,7 @@ test("duration Custom превращает сам чип в поле ручно�
   // числовая клавиатура, без +/- степпера и без отдельной строки-секции.
   const days = dur.getByRole("textbox", { name: "Days" });
   await expect(days).toHaveClass(/create-chip-input/);
-  await expect(days).toHaveValue("14");
+  await expect(days).toHaveValue("");
   await expect(days).toHaveAttribute("inputmode", "numeric");
   await expect(days).toHaveCSS("font-size", "16px");
   expect(await bodyBefore.evaluate((node) => node.isConnected)).toBe(true);
