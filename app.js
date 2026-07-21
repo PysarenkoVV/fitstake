@@ -2089,7 +2089,7 @@ function dailyChart(days, loc) {
     if (d.reps <= 0) return `<rect x="${x}" y="${(baseY - 3).toFixed(1)}" width="${w}" height="3" rx="1.5" fill="rgba(255,255,255,.1)"/>`;
     const h = Math.max(4, (d.reps / max) * plotH);
     // Норма закрыта — яркий столбик; была активность, но недобор — приглушённый.
-    const fill = d.done ? "url(#dg)" : "rgba(255,94,31,.34)";
+    const fill = d.done ? "url(#dg)" : "rgba(200,255,33,.34)";
     return `<rect x="${x}" y="${(baseY - h).toFixed(1)}" width="${w}" height="${h.toFixed(1)}" rx="2" fill="${fill}"/>`;
   }).join("");
   const dstr = (ms) => new Date(ms).toLocaleDateString(loc, { day: "numeric", month: "short" });
@@ -2100,7 +2100,7 @@ function dailyChart(days, loc) {
     return `<text x="${x.toFixed(1)}" y="${(H - 6).toFixed(1)}" fill="rgba(255,255,255,.5)" font-size="9.5" font-family="ui-monospace,monospace" text-anchor="${anchor}">${esc(dstr(days[i].date))}</text>`;
   }).join("");
   return `<svg class="chart" viewBox="0 0 ${W} ${H}">
-    <defs><linearGradient id="dg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ff5e1f"/><stop offset="1" stop-color="#ff5e1f" stop-opacity="0.3"/></linearGradient></defs>
+    <defs><linearGradient id="dg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#c8ff21"/><stop offset="1" stop-color="#c8ff21" stop-opacity="0.3"/></linearGradient></defs>
     ${bars}
     ${dates}
   </svg>`;
@@ -2753,7 +2753,7 @@ function ParticipantSheet() {
 // Поздравления
 // ==========================================================================
 function confetti() {
-  const colors = ["#ff5e1f", "#4dc280", "#ffd60a", "#fff", "#a855f7"];
+  const colors = ["#c8ff21", "#4dc280", "#ffd60a", "#fff", "#a855f7"];
   let s = "";
   for (let i = 0; i < 44; i++) {
     const x = (i * 37) % 100, delay = ((i * 13) % 9) / 10, dur = 1.6 + ((i * 7) % 12) / 10;
@@ -2853,9 +2853,9 @@ function shareStoryCopy(c, f) {
     ${workoutLine}
     <div class="share-reward"><span>${t("Potential reward")}</span><strong>${COIN_SYM}${fmt(C.payout(c))}</strong></div>
     <div class="share-exercise-mark">${c.goals.map((g) => icon(EXERCISE_ICON[g.exercise] || "flame")).join(icon("chevronRight"))}</div>
-    <div class="share-brand">FIT<span>STAKE</span><small>${t("Now it's your turn")}</small></div>`;
+    <div class="share-brand">REP<span>ACT</span><small>${t("Now it's your turn")}</small></div>`;
   }
-  // Minimal: Strava-style оверлей — статистика прямо на фото, без плашек и оранжевого.
+  // Minimal: Strava-style оверлей — статистика прямо на фото, без плашек.
   const exercisesCaps = c.goals.map((g) => `${C.myToday(c, g.exercise)} ${Exercise.displayName(g.exercise)}`).join(" · ");
   const stats = shareDayStats(c, workout);
   return `
@@ -2972,7 +2972,7 @@ async function shareCard(data) {
     base.addColorStop(0, "#080808"); base.addColorStop(.55, "#1d100b"); base.addColorStop(1, "#070907");
     g.fillStyle = base; g.fillRect(0, 0, W, H);
     const glow = g.createRadialGradient(W * .9, H * .14, 0, W * .9, H * .14, 760);
-    glow.addColorStop(0, "rgba(255,94,31,.72)"); glow.addColorStop(1, "rgba(255,94,31,0)"); g.fillStyle = glow; g.fillRect(0, 0, W, H);
+    glow.addColorStop(0, "rgba(200,255,33,.72)"); glow.addColorStop(1, "rgba(200,255,33,0)"); g.fillStyle = glow; g.fillRect(0, 0, W, H);
   }
   const shade = g.createLinearGradient(0, 0, 0, H);
   shade.addColorStop(0, "rgba(0,0,0,.82)"); shade.addColorStop(.42, "rgba(0,0,0,.36)"); shade.addColorStop(1, "rgba(0,0,0,.94)");
@@ -2983,8 +2983,8 @@ async function shareCard(data) {
   const value = (text, y, size = 56, color = "#fff") => { g.fillStyle = color; g.font = `850 ${size}px ${sans}`; g.fillText(String(text), pad, y); };
   g.textAlign = "left"; g.textBaseline = "alphabetic";
 
-  g.font = `900 54px ${sans}`; g.fillStyle = "#fff"; g.fillText("FIT", pad, 116);
-  const fitWidth = g.measureText("FIT").width; g.fillStyle = "#ff5e1f"; g.fillText("STAKE", pad + fitWidth, 116);
+  g.font = `900 54px ${sans}`; g.fillStyle = "#fff"; g.fillText("REP", pad, 116);
+  const repWidth = g.measureText("REP").width; g.fillStyle = "#c8ff21"; g.fillText("ACT", pad + repWidth, 116);
   g.fillStyle = "#4dc280"; g.font = `750 30px ${sans}`; g.fillText(t("Challenge complete!").toUpperCase(), pad, 184);
 
   g.font = `850 66px ${sans}`;
@@ -3025,7 +3025,7 @@ async function shareCard(data) {
   const rewardY = H - 390;
   label(t("You take home"), rewardY);
   value(COIN_SYM + fmt(data.payout), rewardY + 102, 92, "#4dc280");
-  g.fillStyle = "#ff5e1f"; g.font = `750 36px ${sans}`; g.fillText(t("Now it's your turn"), pad, H - 126);
+  g.fillStyle = "#c8ff21"; g.font = `750 36px ${sans}`; g.fillText(t("Now it's your turn"), pad, H - 126);
 
   const blob = await new Promise((res) => cv.toBlob(res, "image/jpeg", .92));
   const file = new File([blob], "repact-challenge.jpg", { type: "image/jpeg" });
@@ -3052,7 +3052,7 @@ async function shareDayStory(c, options) {
     base.addColorStop(0, "#080808"); base.addColorStop(.52, "#17100c"); base.addColorStop(1, "#0a0a0a");
     g.fillStyle = base; g.fillRect(0, 0, W, H);
     let glow = g.createRadialGradient(W * .9, H * .18, 0, W * .9, H * .18, 760);
-    glow.addColorStop(0, "rgba(255,94,31,.72)"); glow.addColorStop(1, "rgba(255,94,31,0)"); g.fillStyle = glow; g.fillRect(0, 0, W, H);
+    glow.addColorStop(0, "rgba(200,255,33,.72)"); glow.addColorStop(1, "rgba(200,255,33,0)"); g.fillStyle = glow; g.fillRect(0, 0, W, H);
     glow = g.createRadialGradient(W * .08, H * .84, 0, W * .08, H * .84, 620);
     glow.addColorStop(0, "rgba(77,194,128,.34)"); glow.addColorStop(1, "rgba(77,194,128,0)"); g.fillStyle = glow; g.fillRect(0, 0, W, H);
   }
@@ -3093,17 +3093,17 @@ async function shareDayStory(c, options) {
       label(t("Sets"), rewardY + 154); value(`${workout.sets} · ${t("avg %lld", workout.average)}`, rewardY + 226, 48);
       rewardY += 316;
       if (workout.improvementMs) {
-        g.fillStyle = "#ff5e1f"; g.font = "800 42px -apple-system,system-ui,sans-serif";
+        g.fillStyle = "#c8ff21"; g.font = "800 42px -apple-system,system-ui,sans-serif";
         g.fillText(t("%lld sec faster", Math.round(workout.improvementMs / 1000)).toUpperCase(), pad, rewardY);
         rewardY += 88;
       }
     }
     label(t("Potential reward"), rewardY); value(COIN_SYM + fmt(C.payout(c)), rewardY + 76, 58);
-    g.fillStyle = "#fff"; g.font = "900 58px -apple-system,system-ui,sans-serif"; g.fillText("FIT", pad, H - 210);
-    const fitW = g.measureText("FIT").width; g.fillStyle = "#ff5e1f"; g.fillText("STAKE", pad + fitW, H - 210);
-    g.fillStyle = "#ff5e1f"; g.font = "700 38px -apple-system,system-ui,sans-serif"; g.fillText(t("Now it's your turn"), pad, H - 145);
+    g.fillStyle = "#fff"; g.font = "900 58px -apple-system,system-ui,sans-serif"; g.fillText("REP", pad, H - 210);
+    const repW = g.measureText("REP").width; g.fillStyle = "#c8ff21"; g.fillText("ACT", pad + repW, H - 210);
+    g.fillStyle = "#c8ff21"; g.font = "700 38px -apple-system,system-ui,sans-serif"; g.fillText(t("Now it's your turn"), pad, H - 145);
   } else {
-    // Minimal (Strava-style) — зеркало HTML-превью: sans без плашек, лайм-акцент, без оранжевого.
+    // Minimal (Strava-style) — зеркало HTML-превью: sans без плашек, лайм-акцент.
     const ink = "#F4F2EC", sub = "rgba(244,242,236,.72)", lime = "#B8FF3D";
     const padX = 80, padTop = 120, padBottom = 90;
     const sans = (w, s) => `${w} ${s}px -apple-system,system-ui,sans-serif`;
@@ -3180,7 +3180,7 @@ async function shareDayStory(c, options) {
 }
 
 // SVG-иконку → data-URI, чтобы нарисовать её на canvas через drawImage с нужным цветом.
-function posterIconURI(markup, { stroke = "#ff5e1f", fill = "none", sw = 2 } = {}) {
+function posterIconURI(markup, { stroke = "#c8ff21", fill = "none", sw = 2 } = {}) {
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="${fill}" stroke="${stroke}" stroke-width="${sw}" stroke-linecap="round" stroke-linejoin="round">${markup}</svg>`;
   return "data:image/svg+xml;charset=utf-8," + encodeURIComponent(svg);
 }
@@ -3193,7 +3193,7 @@ function hexPath(g, cx, cy, r) {
 // Промо-карточка челленджа для шеринга (сторис-формат, тёмный full-bleed постер под инсту).
 async function shareChallengePoster(data) {
   const ru = store.lang === "ru";
-  const ORANGE = "#ff5e1f";
+  const LIME = "#c8ff21";
   const single = data.exercises.length === 1;
   const ex0 = data.exercises[0];
   const L = ru ? {
@@ -3220,14 +3220,14 @@ async function shareChallengePoster(data) {
 
   // Иконки грузим один раз как картинки нужного цвета.
   const icons = {
-    flame: posterIconURI(PATHS.flame, { fill: ORANGE, stroke: "none" }),
-    bolt: posterIconURI(PATHS.bolt, { fill: ORANGE, stroke: "none" }),
-    dollar: posterIconURI('<line x1="12" y1="2.5" x2="12" y2="21.5"/><path d="M16.5 6.5H10a3 3 0 0 0 0 6h4a3 3 0 0 1 0 6H6.5"/>', { stroke: ORANGE }),
-    calendar: posterIconURI(PATHS.calendar, { stroke: ORANGE }),
-    shield: posterIconURI('<path d="M12 3l7 3v5c0 4.6-3 7.7-7 9-4-1.3-7-4.4-7-9V6z"/><path d="M9 12l2.2 2.2L15.5 10"/>', { stroke: ORANGE }),
+    flame: posterIconURI(PATHS.flame, { fill: LIME, stroke: "none" }),
+    bolt: posterIconURI(PATHS.bolt, { fill: LIME, stroke: "none" }),
+    dollar: posterIconURI('<line x1="12" y1="2.5" x2="12" y2="21.5"/><path d="M16.5 6.5H10a3 3 0 0 0 0 6h4a3 3 0 0 1 0 6H6.5"/>', { stroke: LIME }),
+    calendar: posterIconURI(PATHS.calendar, { stroke: LIME }),
+    shield: posterIconURI('<path d="M12 3l7 3v5c0 4.6-3 7.7-7 9-4-1.3-7-4.4-7-9V6z"/><path d="M9 12l2.2 2.2L15.5 10"/>', { stroke: LIME }),
     phone: posterIconURI('<rect x="6" y="2.5" width="12" height="19" rx="2.5"/><path d="M10.5 18.5h3"/>', { stroke: "rgba(255,255,255,.6)" }),
   };
-  data.exercises.forEach((e) => { icons["ex_" + e.ex] = posterIconURI(PATHS[EXERCISE_ICON[e.ex]] || PATHS.flame, { stroke: ORANGE }); });
+  data.exercises.forEach((e) => { icons["ex_" + e.ex] = posterIconURI(PATHS[EXERCISE_ICON[e.ex]] || PATHS.flame, { stroke: LIME }); });
   const loaded = {};
   await Promise.all(Object.entries(icons).map(([k, uri]) => loadImg(uri).then((im) => { loaded[k] = im; })));
 
@@ -3276,7 +3276,7 @@ async function shareChallengePoster(data) {
   // --- фон: тёплый near-black + свечения + искры ---
   g.fillStyle = "#0a0806"; g.fillRect(0, 0, W, H);
   let rg = g.createRadialGradient(W / 2, H * 0.9, 30, W / 2, H * 0.9, H * 0.62);
-  rg.addColorStop(0, "rgba(255,94,31,.20)"); rg.addColorStop(1, "rgba(255,94,31,0)");
+  rg.addColorStop(0, "rgba(200,255,33,.20)"); rg.addColorStop(1, "rgba(200,255,33,0)");
   g.fillStyle = rg; g.fillRect(0, 0, W, H);
   rg = g.createRadialGradient(W * 0.85, H * 0.1, 20, W * 0.85, H * 0.1, 280);
   rg.addColorStop(0, "rgba(255,120,40,.12)"); rg.addColorStop(1, "rgba(255,120,40,0)");
@@ -3286,7 +3286,7 @@ async function shareChallengePoster(data) {
     g.fillStyle = `rgba(255,${(140 + Math.random() * 70) | 0},60,${(Math.random() * 0.5 + 0.1).toFixed(2)})`;
     g.beginPath(); g.arc(x, yy, r, 0, 7); g.fill();
   }
-  g.strokeStyle = "rgba(255,94,31,.09)"; g.lineWidth = 3; g.lineCap = "round";
+  g.strokeStyle = "rgba(200,255,33,.09)"; g.lineWidth = 3; g.lineCap = "round";
   for (const side of [-1, 1]) for (let k = 0; k < 2; k++) {
     const bx = cx + side * (Wu / 2 + 16 + k * 12), by = H * 0.45;
     g.beginPath(); g.moveTo(bx - side * 6, by - 9); g.lineTo(bx, by); g.lineTo(bx - side * 6, by + 9); g.stroke();
@@ -3304,9 +3304,9 @@ async function shareChallengePoster(data) {
   // Бейдж
   setLS("2px"); g.font = "700 12px -apple-system,system-ui,sans-serif";
   const btw = g.measureText(L.badge).width, bpad = 18, bwd = btw + bpad * 2, bh = 32, bx0 = cx - bwd / 2;
-  roundRectPath(g, bx0, y, bwd, bh, 16); g.fillStyle = "rgba(255,94,31,.10)"; g.fill();
-  roundRectPath(g, bx0, y, bwd, bh, 16); g.strokeStyle = "rgba(255,94,31,.6)"; g.lineWidth = 1.5; g.stroke();
-  g.fillStyle = ORANGE; g.textAlign = "center"; g.textBaseline = "middle"; g.fillText(L.badge, cx, y + bh / 2 + 1);
+  roundRectPath(g, bx0, y, bwd, bh, 16); g.fillStyle = "rgba(200,255,33,.10)"; g.fill();
+  roundRectPath(g, bx0, y, bwd, bh, 16); g.strokeStyle = "rgba(200,255,33,.6)"; g.lineWidth = 1.5; g.stroke();
+  g.fillStyle = LIME; g.textAlign = "center"; g.textBaseline = "middle"; g.fillText(L.badge, cx, y + bh / 2 + 1);
   setLS("0px"); y += BADGE_H + GAP2;
 
   // Герой
@@ -3315,10 +3315,10 @@ async function shareChallengePoster(data) {
     y = ctext(String(ex0.reps), y, 150, 900, "#fff", "0px", 128);
     g.restore();
     y = ctext(nameUpper, y, nameSize, 900, "#fff", "1px", nameLh);
-    y = ctext(L.aDay, y, 40, 900, ORANGE, "4px", 50);
+    y = ctext(L.aDay, y, 40, 900, LIME, "4px", 50);
   } else {
     y = ctext(L.combo, y, 76, 900, "#fff", "3px", 74);
-    y = ctext(L.exCount, y, 28, 800, ORANGE, "2px", 40);
+    y = ctext(L.exCount, y, 28, 800, LIME, "2px", 40);
   }
   y += GAP_HERO;
 
@@ -3331,8 +3331,8 @@ async function shareChallengePoster(data) {
     roundRectPath(g, pad, y, Wu, CARD_H, 16); g.fillStyle = "rgba(255,255,255,.045)"; g.fill();
     roundRectPath(g, pad, y, Wu, CARD_H, 16); g.strokeStyle = "rgba(255,255,255,.09)"; g.lineWidth = 1; g.stroke();
     const midY = y + CARD_H / 2, hcx = pad + 44;
-    hexPath(g, hcx, midY, 23); g.fillStyle = "rgba(255,94,31,.12)"; g.fill();
-    hexPath(g, hcx, midY, 23); g.strokeStyle = "rgba(255,94,31,.55)"; g.lineWidth = 1.6; g.stroke();
+    hexPath(g, hcx, midY, 23); g.fillStyle = "rgba(200,255,33,.12)"; g.fill();
+    hexPath(g, hcx, midY, 23); g.strokeStyle = "rgba(200,255,33,.55)"; g.lineWidth = 1.6; g.stroke();
     drawIcon(c.icon, hcx, midY, 24);
     g.strokeStyle = "rgba(255,255,255,.1)"; g.lineWidth = 1; g.beginPath(); g.moveTo(pad + 82, y + 16); g.lineTo(pad + 82, y + CARD_H - 16); g.stroke();
     const tx = pad + 98, ts = fitSize(c.title, 18, 800, Wu - 98 - 18, "0px");
@@ -3353,9 +3353,9 @@ async function shareChallengePoster(data) {
   setLS("0px"); y += TAG_H + GAP5;
 
   // CTA
-  g.save(); g.shadowColor = "rgba(255,94,31,.5)"; g.shadowBlur = 28; g.shadowOffsetY = 6;
+  g.save(); g.shadowColor = "rgba(200,255,33,.5)"; g.shadowBlur = 28; g.shadowOffsetY = 6;
   roundRectPath(g, pad, y, Wu, CTA_H, 16);
-  const lg = g.createLinearGradient(0, y, 0, y + CTA_H); lg.addColorStop(0, "#ff8a3d"); lg.addColorStop(1, ORANGE);
+  const lg = g.createLinearGradient(0, y, 0, y + CTA_H); lg.addColorStop(0, "#e8ff75"); lg.addColorStop(1, LIME);
   g.fillStyle = lg; g.fill(); g.restore();
   g.font = "900 20px -apple-system,system-ui,sans-serif"; setLS("1px");
   const cw = g.measureText(L.cta).width, asz = 20, ag = 12, cgW = cw + ag + asz, cgx = cx - cgW / 2, cmy = y + CTA_H / 2;
@@ -3373,7 +3373,7 @@ async function shareChallengePoster(data) {
   drawIcon("phone", fx + pIc / 2, y + 8, pIc);
   g.textAlign = "left"; g.textBaseline = "middle";
   g.fillStyle = "rgba(255,255,255,.6)"; g.fillText(L.fOpen, fx + pIc + pg, y + 9);
-  g.fillStyle = ORANGE; g.fillText("Repact", fx + pIc + pg + w1, y + 9);
+  g.fillStyle = LIME; g.fillText("Repact", fx + pIc + pg + w1, y + 9);
   g.fillStyle = "rgba(255,255,255,.6)"; g.fillText(L.fEnd, fx + pIc + pg + w1 + w2, y + 9);
   y += FOOT_H + GAP7;
 

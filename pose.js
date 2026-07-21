@@ -438,8 +438,8 @@ class PoseSession {
     ctx.clearRect(0, 0, size.width, size.height);
     const on = (p) => p && p.confidence > 0.2;
     ctx.lineWidth = Math.max(3, size.width / 260);
-    // Зелёный, когда всё нужное в кадре — видно, что позиция правильная; иначе оранжевый.
-    ctx.strokeStyle = ready ? "rgba(77,194,128,0.95)" : "rgba(255,94,31,0.9)";
+    // Изумрудный, когда всё нужное в кадре; иначе брендовый лайм.
+    ctx.strokeStyle = ready ? "rgba(77,194,128,0.95)" : "rgba(200,255,33,0.9)";
     ctx.lineCap = "round";
     for (const [a, b] of BONES) {
       const pa = points[a], pb = points[b];
@@ -522,7 +522,7 @@ class PoseSession {
     g.textAlign = "left"; g.textBaseline = "alphabetic";
     const brandSize = Math.round(size.width * .042);
     g.font = `900 ${brandSize}px ${sans}`; g.fillStyle = "#fff"; g.fillText("REP", margin, margin * 1.2);
-    const repWidth = g.measureText("REP").width; g.fillStyle = "#ff5e1f"; g.fillText("ACT", margin + repWidth, margin * 1.2);
+    const repWidth = g.measureText("REP").width; g.fillStyle = "#c8ff21"; g.fillText("ACT", margin + repWidth, margin * 1.2);
     if (ctx.title) {
       const title = String(ctx.title);
       fitText(title, size.width - margin * 2, Math.round(size.width * .038), 650);
@@ -547,7 +547,7 @@ class PoseSession {
       g.fillText(`/ ${target}`, margin + currentWidth + Math.round(size.width * .025), baseY - Math.round(size.width * .10));
       const barY = baseY - Math.round(size.width * .045), barW = size.width - margin * 2, barH = Math.max(6, Math.round(size.width * .012));
       g.fillStyle = "rgba(255,255,255,.2)"; g.fillRect(margin, barY, barW, barH);
-      g.fillStyle = current >= target ? "#4dc280" : "#ff5e1f"; g.fillRect(margin, barY, barW * Math.max(0, Math.min(1, target ? current / target : 0)), barH);
+      g.fillStyle = current >= target ? "#4dc280" : "#c8ff21"; g.fillRect(margin, barY, barW * Math.max(0, Math.min(1, target ? current / target : 0)), barH);
     }
 
     const metaY = size.height - margin * .8;
