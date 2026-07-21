@@ -47,8 +47,17 @@ test("Challenge complete starts at the top and keeps native vertical scrolling",
   const full = page.locator(".challenge-complete");
   await expect(full).toBeVisible();
   await expect(full.locator(".challenge-complete-trophy")).toBeVisible();
+  await expect(full.locator(".repact-prize-mark")).toBeVisible();
+  await expect(page.getByRole("button", { name: "Take photo", exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Upload", exact: true })).toBeVisible();
   expect(await full.evaluate((el) => el.scrollTop)).toBe(0);
   expect(await full.evaluate((el) => getComputedStyle(el).touchAction)).toBe("pan-y");
   await full.evaluate((el) => { el.scrollTop = el.scrollHeight; });
   expect(await full.evaluate((el) => el.scrollTop)).toBeGreaterThan(0);
+
+  const title = page.getByText("Challenge complete!", { exact: true });
+  const titleNode = await title.elementHandle();
+  await page.locator('[data-act="inc"][data-key="weight"]').click();
+  expect(await title.evaluate((el, original) => el === original, titleNode)).toBe(true);
+  await expect(page.locator('[data-model="weight"]')).toHaveValue("76");
 });

@@ -4,7 +4,7 @@
 "use strict";
 
 // Версия оболочки — держать в синхроне с CACHE в sw.js; уходит в баг-репорты.
-const APP_VERSION = "v118";
+const APP_VERSION = "v119";
 // Последняя JS-ошибка — прикладываем к баг-репорту, чтобы сразу видеть причину.
 let lastError = "";
 window.addEventListener("error", (e) => {
@@ -232,6 +232,7 @@ const RU = {
   "Share result": "Поделиться результатом", "Show result": "Показать результат", "Squats": "Приседания",
   "Squats per day": "Приседаний в день", "Stake amount": "Сумма ставки", "Start today's workout": "Начать тренировку дня",
   "Starting balance": "Стартовый баланс", "Statistics": "Статистика", "Stats": "Статистика", "Take a photo": "Сделать фото",
+  "Take photo": "Снять фото", "Upload": "Загрузить",
   "Test currency — no real money.": "Тестовая валюта — настоящие деньги не участвуют.",
   "The buy-in is deducted from your balance right away. Test currency — no real money.": "Взнос сразу списывается с баланса. Валюта тестовая — настоящие деньги не участвуют.",
   "The challenge runs %lld days.": "Челлендж идёт %lld дней.", "The daily goal grows as the challenge goes on.": "Дневная норма растёт по ходу челленджа.",
@@ -2949,13 +2950,30 @@ function sharePhotoControls(f) {
     <div class="form-footer">${t("Drag the photo to position it")}</div>
   </div>`;
 }
+function repactPrize() {
+  return `<svg class="repact-prize-mark" viewBox="0 0 96 96" aria-hidden="true">
+    <defs>
+      <linearGradient id="repactPrizeGradient" x1="18" y1="12" x2="78" y2="84" gradientUnits="userSpaceOnUse">
+        <stop stop-color="#F2FF5B"/><stop offset=".42" stop-color="#C8FF21"/><stop offset="1" stop-color="#45D483"/>
+      </linearGradient>
+      <filter id="repactPrizeGlow" x="-35%" y="-35%" width="170%" height="170%">
+        <feGaussianBlur stdDeviation="4" result="blur"/><feFlood flood-color="#C8FF21" flood-opacity=".34"/><feComposite in2="blur" operator="in"/><feMerge><feMergeNode/><feMergeNode in="SourceGraphic"/></feMerge>
+      </filter>
+    </defs>
+    <path class="repact-prize-ring" d="M48 7 78 24v35L48 89 18 59V24L48 7Z"/>
+    <g fill="url(#repactPrizeGradient)" filter="url(#repactPrizeGlow)">
+      <path d="M28 27h25c11 0 19 8 19 19 0 8-4 14-11 17l-8-8c5-1 8-4 8-9 0-5-4-9-9-9H39v8L25 34l14-12v5H28Z"/>
+      <path d="M68 69H43c-11 0-19-8-19-19 0-8 4-14 11-17l8 8c-5 1-8 4-8 9 0 5 4 9 9 9h13v-8l14 11-14 12v-5h11Z"/>
+    </g>
+  </svg>`;
+}
 function ChallengeCompleteFull() {
   const f = ui.form, c = app.challenges.find((x) => x.id === f.challengeId);
   const weightChange = c.startWeight != null ? `${c.startWeight} → ${f.weight} ${t("kg")} (${f.weight - c.startWeight > 0 ? "+" : ""}${f.weight - c.startWeight})` : t("%lld kg", f.weight);
   const maxChange = c.startMaxReps != null ? `${c.startMaxReps} → ${f.maxReps} (${f.maxReps - c.startMaxReps > 0 ? "+" : ""}${f.maxReps - c.startMaxReps})` : String(f.maxReps);
   return `<div class="fullscreen challenge-complete">${confetti()}<div class="screen challenge-complete-content">
     <header class="challenge-complete-hero">
-      <div class="challenge-complete-trophy c-money pop-in">${iconF("trophy")}</div>
+      <div class="challenge-complete-trophy pop-in">${repactPrize()}</div>
       <div class="display challenge-complete-title">${t("Challenge complete!")}</div>
       <div class="row gap6">${lbl(t("You take home"))}<span class="c-money money" style="font-size:22px">${coinCountUp(C.payout(c), "winPayout", true)}</span></div>
     </header>
@@ -2966,9 +2984,9 @@ function ChallengeCompleteFull() {
         <div style="display:flex;flex-direction:column;gap:6px"><div class="photo-slot" style="height:190px">${c.beforePhoto ? `<img src="${c.beforePhoto}" alt="${t("Before")}">` : icon("camera")}</div>${lbl(t("Before"))}</div>
         <div style="display:flex;flex-direction:column;gap:6px"><div class="photo-slot accent" style="height:190px">${f.photo ? `<img src="${f.photo}" alt="${t("After")}">` : iconF("camera")}</div>${lbl(t("After"))}</div>
       </div>
-      <div class="row gap12">
-        <button class="action-btn" data-act="pickPhoto:camera" style="background:var(--white-08);color:#fff;font-size:14px">${iconF("camera")}${f.photo ? t("Retake") : t("Take a photo")}</button>
-        <button class="action-btn" data-act="pickPhoto:library" style="background:var(--white-08);color:#fff;font-size:14px">${iconF("photo")}${t("Upload from library")}</button>
+      <div class="challenge-photo-actions">
+        <button class="action-btn" data-act="pickPhoto:camera">${iconF("camera")}${f.photo ? t("Retake") : t("Take photo")}</button>
+        <button class="action-btn" data-act="pickPhoto:library">${iconF("photo")}${t("Upload")}</button>
       </div>
     </div>
 
@@ -3819,6 +3837,11 @@ root.addEventListener("click", async (e) => {
     v += dir * by;
     if (!isNaN(min)) v = Math.max(min, v); if (!isNaN(max)) v = Math.min(max, v);
     if (sk != null) { store[sk] = v; storeHook(sk); } else ui.form[key] = v;
+    if (ui.full === ChallengeCompleteFull && sk == null) {
+      const input = Array.from(document.querySelectorAll(".challenge-complete [data-model]")).find((node) => node.dataset.model === key);
+      if (input) input.value = v;
+      return;
+    }
     render(); return;
   }
 

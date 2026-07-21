@@ -963,9 +963,12 @@ button:is(:active, .pressed):not(:disabled) { transform: scale(0.97); filter: br
 .challenge-complete { overscroll-behavior-y: contain; touch-action: pan-y; scroll-padding-top: calc(env(safe-area-inset-top) + 20px); }
 .challenge-complete-content { padding-top: max(24px, calc(env(safe-area-inset-top) + 18px)); padding-bottom: calc(28px + env(safe-area-inset-bottom)); display: flex; flex-direction: column; gap: 18px; align-items: center; text-align: center; }
 .challenge-complete-hero { width: 100%; display: flex; flex-direction: column; align-items: center; gap: 12px; }
-.challenge-complete-trophy { width: 76px; height: 76px; display: flex; }
-.challenge-complete-trophy .icon { width: 76px; height: 76px; }
+.challenge-complete-trophy { width: 96px; height: 96px; display: flex; }
+.repact-prize-mark { width: 96px; height: 96px; overflow: visible; }
+.repact-prize-ring { fill: rgba(200,255,33,.055); stroke: url(#repactPrizeGradient); stroke-width: 1.5; }
 .challenge-complete-title { font-size: 34px; }
+.challenge-photo-actions { width: 100%; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.challenge-photo-actions .action-btn { width: 100%; min-width: 0; min-height: 58px; padding: 12px; background: var(--white-08); color: #fff; font-size: 14px; white-space: nowrap; }
 @keyframes full-in { from { opacity: 0; transform: scale(0.985); } to { opacity: 1; transform: scale(1); } }
 .celebrate { min-height: 100dvh; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; padding: 24px 20px calc(24px + env(safe-area-inset-bottom)); gap: 18px; }
 /* «Челлендж создан»: контент строго под Dynamic Island, единый блок по центру
