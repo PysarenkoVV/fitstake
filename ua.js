@@ -177,7 +177,7 @@ Object.assign(window.UA_TRANSLATIONS, {
   "Text cut off or overlapping": "Текст обрізаний або накладається", "Hard to see in dark or light theme": "Погано видно в темній або світлій темі",
   "Froze or crashed": "Зависло або закрилося", "Laggy": "Гальмує", "Something won't load": "Щось не завантажується",
   "+%lld coins": "+%lld монет", "Daily minimum reps": "Мінімум повторів на день", "Goal": "Ціль",
-  "Hit a total rep target": "Набрати загальну кількість повторів", "Custom": "Своє значення", "Who can join": "Хто може приєднатися",
+  "Hit a total rep target": "Набрати загальну кількість повторів", "Custom": "Своє", "Who can join": "Хто може приєднатися",
   "Players to gather": "Скільки гравців зібрати", "Stake & rules": "Ставка та правила",
   "Private and public challenges waiting to start show up here.": "Тут з’являться приватні та публічні челенджі, які очікують старту.",
   "%@ completed %@ in %@": "%@ виконав вправу «%@» у «%@»", "%@ completed today's challenge in %@": "%@ виконав сьогоднішню ціль у «%@»",
