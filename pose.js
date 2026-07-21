@@ -71,6 +71,33 @@ const LM = {
   leftKnee: 25, rightKnee: 26, leftAnkle: 27, rightAnkle: 28,
 };
 
+const POSE_MIN_CONFIDENCE = 0.45;
+
+function posePointVisible(p, confidence = POSE_MIN_CONFIDENCE) {
+  return !!p && p.confidence >= confidence && p.x >= 0 && p.x <= 1 && p.y >= 0 && p.y <= 1;
+}
+
+// MediaPipe sometimes returns a few confident landmarks for clothes, equipment or the floor.
+// Accept a pose only when it contains a plausible torso and enough connected body landmarks.
+function poseIsCoherent(points) {
+  const visible = Object.keys(LM).filter((name) => posePointVisible(points[name]));
+  if (visible.length < 6) return false;
+
+  const shoulders = [points.leftShoulder, points.rightShoulder].filter((p) => posePointVisible(p));
+  const hips = [points.leftHip, points.rightHip].filter((p) => posePointVisible(p));
+  if (!shoulders.length || !hips.length) return false;
+
+  const center = (items) => ({
+    x: items.reduce((sum, p) => sum + p.x, 0) / items.length,
+    y: items.reduce((sum, p) => sum + p.y, 0) / items.length,
+  });
+  const shoulder = center(shoulders), hip = center(hips);
+  if (Math.hypot(shoulder.x - hip.x, shoulder.y - hip.y) < 0.08) return false;
+
+  const xs = visible.map((name) => points[name].x), ys = visible.map((name) => points[name].y);
+  return Math.hypot(Math.max(...xs) - Math.min(...xs), Math.max(...ys) - Math.min(...ys)) >= 0.22;
+}
+
 // ==========================================================================
 // RepCounter — порт RepCounter.swift
 // ==========================================================================
@@ -94,7 +121,7 @@ class RepCounter {
     const cfg = EX[exercise] || {};
     this.downThreshold = cfg.downThreshold != null ? cfg.downThreshold : 110;
     this.upThreshold = cfg.upThreshold != null ? cfg.upThreshold : 140;
-    this.minConfidence = 0.2;
+    this.minConfidence = POSE_MIN_CONFIDENCE;
     this.smoothing = 0.5;
     this.graceFrames = 15;
     this.stableFrames = 3;
@@ -294,6 +321,9 @@ async function getLandmarker() {
         },
         runningMode: "VIDEO",
         numPoses: 1,
+        minPoseDetectionConfidence: 0.65,
+        minPosePresenceConfidence: 0.65,
+        minTrackingConfidence: 0.6,
       });
     })().catch((e) => {
       landmarkerPromise = null; // разрешить повторную попытку после ошибки загрузки
@@ -318,6 +348,7 @@ class PoseSession {
     this._recorder = null;
     this._recCanvas = null;
     this._lastTs = -1;
+    this._coherentFrames = 0;
     this.countingEnabled = false;
     this.facing = "user";   // "user" (фронталка) | "environment" (задняя)
     this.zoom = 1;          // 1× | 0.5× — 0.5 = задний ультра-ширик (отдельная линза)
@@ -411,23 +442,28 @@ class PoseSession {
         for (const [name, idx] of Object.entries(LM)) {
           const p = landmarks[idx];
           const w = world && world[idx];
-          points[name] = { x: p.x, y: p.y, confidence: p.visibility != null ? p.visibility : 1, world: w ? { x: w.x, y: w.y, z: w.z } : null };
+          const visibility = p.visibility != null ? p.visibility : 1;
+          const presence = p.presence != null ? p.presence : 1;
+          points[name] = { x: p.x, y: p.y, confidence: Math.min(visibility, presence), world: w ? { x: w.x, y: w.y, z: w.z } : null };
         }
         points.neck = mid(points.leftShoulder, points.rightShoulder);
         points.root = mid(points.leftHip, points.rightHip);
       }
 
+      this._coherentFrames = poseIsCoherent(points) ? this._coherentFrames + 1 : 0;
+      const acceptedPoints = this._coherentFrames >= 3 ? points : {};
+
       const results = this.counters.map((c, i) => {
         // Неактивные упражнения комбо на паузе: счёт заморожен, кадр не обрабатываем.
         if (i !== this.active) return { exercise: c.exercise, repCount: c.count, status: "paused", bendAngle: null };
-        const r = c.process(points, size, this.countingEnabled);
+        const r = c.process(acceptedPoints, size, this.countingEnabled);
         return { exercise: c.exercise, repCount: c.count, status: r.status, bendAngle: r.bendAngle };
       });
       // Всё нужное для активного упражнения в кадре — скелет зеленеет.
       const ar = results[this.active];
       const ready = !!(ar && (ar.status === "up" || ar.status === "down"));
-      this.snapshot = { results, points, imageSize: size };
-      this._drawSkeleton(points, size, ready);
+      this.snapshot = { results, points: acceptedPoints, imageSize: size };
+      this._drawSkeleton(acceptedPoints, size, ready);
       if (this._recording) this._drawRecordFrame(size);
     }
     requestAnimationFrame(() => this._loop());
@@ -436,7 +472,7 @@ class PoseSession {
   _drawSkeleton(points, size, ready) {
     const ctx = this._ctx;
     ctx.clearRect(0, 0, size.width, size.height);
-    const on = (p) => p && p.confidence > 0.2;
+    const on = (p) => posePointVisible(p);
     ctx.lineWidth = Math.max(3, size.width / 260);
     // Изумрудный, когда всё нужное в кадре; иначе брендовый лайм.
     ctx.strokeStyle = ready ? "rgba(69,212,131,0.95)" : "rgba(200,255,33,0.9)";
@@ -659,3 +695,4 @@ async function shareVideo(blob) {
 
 window.PoseSession = PoseSession;
 window.RepCounter = RepCounter;
+window.poseIsCoherent = poseIsCoherent;

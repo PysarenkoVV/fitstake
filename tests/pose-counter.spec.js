@@ -57,6 +57,31 @@ test("dips require full extension and ignore angle jitter without vertical trave
   expect(result).toEqual({ beforeExtension: 0, afterExtension: 1, afterJitter: 1 });
 });
 
+test("camera rejects sparse landmarks before drawing or counting a pose", async ({ page }) => {
+  const result = await page.evaluate(() => {
+    const p = (x, y, confidence = 1) => ({ x, y, confidence });
+    const sparseLegs = {
+      leftHip: p(.46, .58), rightHip: p(.54, .58),
+      leftKnee: p(.45, .72), rightKnee: p(.55, .72),
+      leftAnkle: p(.44, .90), rightAnkle: p(.56, .90),
+    };
+    const fullBody = {
+      leftShoulder: p(.42, .24), rightShoulder: p(.58, .24),
+      leftElbow: p(.36, .40), rightElbow: p(.64, .40),
+      leftWrist: p(.34, .56), rightWrist: p(.66, .56),
+      leftHip: p(.45, .52), rightHip: p(.55, .52),
+      leftKnee: p(.44, .70), rightKnee: p(.56, .70),
+      leftAnkle: p(.43, .90), rightAnkle: p(.57, .90),
+    };
+    return {
+      sparse: window.poseIsCoherent(sparseLegs),
+      full: window.poseIsCoherent(fullBody),
+      outsideFrame: window.poseIsCoherent({ ...fullBody, leftShoulder: p(-.2, .24), rightShoulder: p(1.2, .24) }),
+    };
+  });
+  expect(result).toEqual({ sparse: false, full: true, outsideFrame: false });
+});
+
 test("push-ups at an angle to the camera count via the 3D elbow angle", async ({ page }) => {
   const result = await page.evaluate(() => {
     // Локти направлены к камере: в 2D плечо-локоть-кисть почти коллинеарны (~180°)

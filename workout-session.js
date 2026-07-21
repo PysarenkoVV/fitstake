@@ -143,7 +143,8 @@ async function openSession(challengeId, startExercise) {
     prevTotal = totalFor(g, resultFor(g.exercise)); // сброс, чтобы пульс не сработал при смене упражнения
   }
   renderCounter();
-  let prevGoalReached = false, prevBottomKey = "", prevTracked = false, lastWarnTs = 0;
+  let prevGoalReached = false, prevBottomKey = "";
+  let trackingLostSince = 0, trackingStableSince = 0, warnedForCurrentLoss = false;
   let countingStarted = false, readySince = 0, countdownShown = 0, demoFinishing = false;
   const priorWorkoutMs = isDemo ? 0 : workoutSummary(c).elapsedMs;
   let workoutStartedAt = 0, workoutStoppedAt = 0, lastClockText = "";
@@ -357,12 +358,22 @@ async function openSession(challengeId, startExercise) {
       else hint = null;
       hintEl.style.display = hint ? "" : "none";
       hintEl.textContent = hint || "";
-      // Пользователь вышел из кадра (был в кадре → пропал): короткий warning, не чаще раза в 4 с.
-      if (prevTracked && !tracked && total > 0) {
-        const nowTs = performance.now();
-        if (nowTs - lastWarnTs > 4000) { wsfx("warning"); lastWarnTs = nowTs; }
+      // Звук только при устойчивой потере тела, один раз до нормального восстановления трекинга.
+      const nowTs = performance.now();
+      if (tracked) {
+        if (!trackingStableSince) trackingStableSince = nowTs;
+        trackingLostSince = 0;
+        // A brief false reacquisition must not re-arm the error sound.
+        if (nowTs - trackingStableSince >= 2000) warnedForCurrentLoss = false;
+      } else {
+        trackingStableSince = 0;
+        if (!trackingLostSince) trackingLostSince = nowTs;
+        // Warn once, and only after the body has really been absent for two seconds.
+        if (total > 0 && !warnedForCurrentLoss && nowTs - trackingLostSince >= 2000) {
+          wsfx("warning");
+          warnedForCurrentLoss = true;
+        }
       }
-      prevTracked = tracked;
 
       // Нижняя панель: угол текущего упражнения + кнопка Завершить/Готово (переключение упражнений — в блоке счётчика)
       const angle = ar && ar.bendAngle != null ? Math.round(ar.bendAngle) : null;
