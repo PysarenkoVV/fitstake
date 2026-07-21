@@ -4,7 +4,7 @@
 "use strict";
 
 // Версия оболочки — держать в синхроне с CACHE в sw.js; уходит в баг-репорты.
-const APP_VERSION = "v119";
+const APP_VERSION = "v120";
 // Последняя JS-ошибка — прикладываем к баг-репорту, чтобы сразу видеть причину.
 let lastError = "";
 window.addEventListener("error", (e) => {
@@ -843,6 +843,10 @@ function remoteStartAt(rec, m) {
 function applyPublicChallenges(today) {
   const remote = Sync.state.challenges;
   if (!remote) return;
+  // Firebase is the source of truth for synced challenges. Remove stale copies left in
+  // localStorage after an admin cleanup or a remote deletion; keep built-in and solo data.
+  const remoteIds = new Set(Object.keys(remote));
+  app.challenges = app.challenges.filter((c) => !String(c.id).startsWith("ch_") || remoteIds.has(c.id));
   for (const [id, rec] of Object.entries(remote)) {
     if (!rec.meta) continue;
     let c = app.challenges.find((x) => x.id === id);

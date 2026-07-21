@@ -77,3 +77,19 @@ test("Continue workout offers only challenges that are not completed today", asy
   await expect(page.getByText("Camera setup", { exact: true })).toBeVisible();
   expect(await page.evaluate(() => ui.form.challengeId)).toBe("todo-b");
 });
+
+test("remote cleanup removes cached Browse challenges but keeps the main challenge", async ({ page }) => {
+  const result = await page.evaluate(() => {
+    app.challenges.push(newChallenge({
+      id: "ch_stale_remote", title: "Stale Browse challenge", access: "public", isPublic: true,
+      goals: [{ exercise: "pushups", repsPerDay: 50 }], durationDays: 7, buyIn: 0,
+    }));
+    Sync.state.challenges = {};
+    applyPublicChallenges(dateKey());
+    return {
+      staleExists: app.challenges.some((c) => c.id === "ch_stale_remote"),
+      mainExists: app.challenges.some((c) => c.id === "main"),
+    };
+  });
+  expect(result).toEqual({ staleExists: false, mainExists: true });
+});
