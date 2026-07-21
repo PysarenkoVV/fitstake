@@ -4,7 +4,7 @@
 "use strict";
 
 // Версия оболочки — держать в синхроне с CACHE в sw.js; уходит в баг-репорты.
-const APP_VERSION = "v105";
+const APP_VERSION = "v118";
 // Последняя JS-ошибка — прикладываем к баг-репорту, чтобы сразу видеть причину.
 let lastError = "";
 window.addEventListener("error", (e) => {
@@ -274,6 +274,7 @@ const RU = {
   "Your weight": "Твой вес", "Your whole body must be in frame": "В кадре должно быть всё тело целиком", "Yours": "Твои",
   "Language": "Язык", "Edit": "Изменить", "Increase by": "Прирост",
   "Progress": "Прогресс", "Settings": "Настройки", "Continue workout": "Продолжить тренировку",
+  "Choose a workout": "Выбери тренировку", "Pick what you want to complete today.": "Выбери, что хочешь закрыть сегодня.",
   "Home": "Главная", "Friends feed": "Лента друзей", "When friends complete their day — it shows up here.": "Когда друзья закрывают день — это появится здесь.",
   "All done for today": "На сегодня всё", "%lld left": "осталось %lld", "%lldh %lldm": "%lldч %lldм",
   "Insights": "Выводы", "This week +%lld% more reps": "На этой неделе на %lld% больше повторов",
@@ -1449,7 +1450,7 @@ function PendingCard(c) {
 function YoursTab() {
   const mine = app.challenges.filter(C.isJoined);
   const active = mine.filter((c) => !challengeEnded(c) && !c.isCompleted && !myFailed(c));
-  const nextUp = active.find((c) => !C.isTodayDone(c));
+  const availableToday = active.filter((c) => !C.isTodayDone(c));
 
   // Блок «Сегодня» — дневная норма только у streak-челленджей; goal-цели (общий счёт) в сумму не входят.
   const streakActive = active.filter((c) => !C.isGoal(c));
@@ -1459,7 +1460,7 @@ function YoursTab() {
   const streak = mine.length ? Math.max(0, ...mine.map((c) => myStreak(c))) : 0;
   const msLeft = startOfDay(Date.now()) + DAY - Date.now();
   const hh = Math.floor(msLeft / 3600000), mm = Math.floor((msLeft % 3600000) / 60000);
-  const allDone = active.length > 0 && !nextUp;
+  const allDone = active.length > 0 && !availableToday.length;
 
   const meta = [`<span>${t("%lld left", remaining)}</span>`];
   if (streak >= 2) meta.push(`<span>🔥 ${t("%lld-day streak", streak)}</span>`);
@@ -1475,7 +1476,7 @@ function YoursTab() {
     <div class="row label secondary" style="gap:14px;font-size:12px;flex-wrap:wrap;margin-top:2px">${meta.join("")}</div>
     ${allDone
       ? `<div class="action-btn plain" style="color:var(--money);pointer-events:none;margin-top:4px">${iconF("checkCircle")}${t("All done for today")}</div>`
-      : `<button class="action-btn" data-act="play:${nextUp.id}" style="margin-top:4px">${iconF("play")}${t("Continue workout")}</button>`}
+      : `<button class="action-btn" data-act="chooseWorkout" style="margin-top:4px">${iconF("play")}${t("Continue workout")}</button>`}
   </div>` : "";
 
   const browse = app.challenges.filter((c) => !C.isJoined(c) && c.access === "public" && C.status(c) !== "completed").slice(0, 2);
@@ -1790,6 +1791,25 @@ function StartPicker() {
     </button>`;
   }).join("");
   return sheetShell(t("Where to start?"), `<div class="picker-list">${rows}</div>`, true);
+}
+
+function availableWorkoutsToday() {
+  return app.challenges.filter((c) => C.isJoined(c) && !challengeEnded(c) && !c.isCompleted && !myFailed(c) && !C.isTodayDone(c));
+}
+
+function WorkoutPickerSheet() {
+  const rows = availableWorkoutsToday().map((c) => {
+    const remaining = C.isGoal(c)
+      ? Math.max(0, c.goals.reduce((sum, g) => sum + C.norm(c, g), 0) - (c.myTotalReps || 0))
+      : Math.max(0, C.repsNorm(c) - C.myTodayTotal(c));
+    return `<button class="workout-choice" data-act="play:${c.id}">
+      <span class="workout-choice-icon">${iconF("flame")}</span>
+      <span class="workout-choice-copy"><strong>${esc(c.title)}</strong><small>${esc(C.goalsText(c))}</small></span>
+      <span class="workout-choice-left">${t("%lld left", remaining)}</span>
+      ${icon("chevronRight")}
+    </button>`;
+  }).join("");
+  return sheetShell(t("Choose a workout"), `<div class="form-footer workout-choice-hint">${t("Pick what you want to complete today.")}</div><div class="workout-choice-list">${rows}</div>`, true);
 }
 // Подтверждение выхода из челленджа: явный warning про невозврат взноса и потерю результатов.
 function LeaveSheet() {
@@ -2933,10 +2953,12 @@ function ChallengeCompleteFull() {
   const f = ui.form, c = app.challenges.find((x) => x.id === f.challengeId);
   const weightChange = c.startWeight != null ? `${c.startWeight} → ${f.weight} ${t("kg")} (${f.weight - c.startWeight > 0 ? "+" : ""}${f.weight - c.startWeight})` : t("%lld kg", f.weight);
   const maxChange = c.startMaxReps != null ? `${c.startMaxReps} → ${f.maxReps} (${f.maxReps - c.startMaxReps > 0 ? "+" : ""}${f.maxReps - c.startMaxReps})` : String(f.maxReps);
-  return `<div class="fullscreen">${confetti()}<div class="screen" style="padding-top:24px;display:flex;flex-direction:column;gap:18px;align-items:center;text-align:center">
-    <div class="c-money pop-in" style="font-size:76px;display:flex">${iconF("trophy")}</div>
-    <div class="display" style="font-size:34px">${t("Challenge complete!")}</div>
-    <div class="row gap6">${lbl(t("You take home"))}<span class="c-money money" style="font-size:22px">${coinCountUp(C.payout(c), "winPayout", true)}</span></div>
+  return `<div class="fullscreen challenge-complete">${confetti()}<div class="screen challenge-complete-content">
+    <header class="challenge-complete-hero">
+      <div class="challenge-complete-trophy c-money pop-in">${iconF("trophy")}</div>
+      <div class="display challenge-complete-title">${t("Challenge complete!")}</div>
+      <div class="row gap6">${lbl(t("You take home"))}<span class="c-money money" style="font-size:22px">${coinCountUp(C.payout(c), "winPayout", true)}</span></div>
+    </header>
 
     <div class="card" style="padding:16px;width:100%;display:flex;flex-direction:column;gap:12px;text-align:left">
       ${lbl(t("Before / After"), "tracking-1")}
@@ -3540,7 +3562,7 @@ function openShareDay(c) {
   ui.full = ShareDayEditorFull;
   render();
 }
-function openChallengeComplete(c) { ui.form = { challengeId: c.id, weight: store["profile.weightKg"], maxReps: store["profile.maxReps"], photo: null }; ui.full = ChallengeCompleteFull; render(); }
+function openChallengeComplete(c) { ui.form = { challengeId: c.id, weight: store["profile.weightKg"], maxReps: store["profile.maxReps"], photo: null }; ui.full = ChallengeCompleteFull; ui.resetFullScroll = true; render(); }
 function closeFull() { ui.full = null; ui.form = null; ui.workoutResult = null; navRender(); }
 
 function CameraPrepFull() {
@@ -3682,6 +3704,7 @@ root.addEventListener("click", async (e) => {
     case "open": openDetail(arg); return;
     case "back": back(); return;
     case "play": { const startEx = act.split(":")[2]; if (ui.sheet) { ui.sheet = null; ui.form = null; } openCameraPrep(arg, startEx); return; }
+    case "chooseWorkout": ui.sheet = WorkoutPickerSheet; render(); return;
     case "demo": openCameraPrep("demo", "pushups"); return;
     case "demoAgain": ui.full = null; ui.form = null; render(); openCameraPrep("demo", "pushups"); return;
     case "findChallengeDemo": ui.full = null; ui.form = null; go("challenges"); return;
@@ -4159,6 +4182,7 @@ function bindScrollFollow() {
   if (clearScrollFollow) clearScrollFollow();
   clearScrollFollow = null;
   if (REDUCE_MOTION()) return;
+  if (document.querySelector(".challenge-complete")) return;
 
   const scrollBox = document.querySelector(".sheet, .fullscreen") || window;
   const content = document.querySelector(".sheet-body, .fullscreen .screen, #detail-scroll > .screen, #scroller");
@@ -4199,7 +4223,8 @@ render = function () {
   _render();
   if (sheetTop != null) { const s = document.querySelector(".sheet"); if (s) s.scrollTop = sheetTop; }
   if (detailTop != null) { const d = document.querySelector("#detail-scroll"); if (d) d.scrollTop = detailTop; }
-  if (fullTop != null) { const f = document.querySelector(".fullscreen"); if (f) f.scrollTop = fullTop; }
+  if (fullTop != null) { const f = document.querySelector(".fullscreen"); if (f) f.scrollTop = ui.resetFullScroll ? 0 : fullTop; }
+  if (ui.resetFullScroll) { const f = document.querySelector(".fullscreen"); if (f) f.scrollTop = 0; ui.resetFullScroll = false; }
   if (wizardTop != null) { const w = document.querySelector(".create-wizard-body"); if (w) w.scrollTop = wizardTop; }
   window.scrollTo(0, winTop);
   // Перерисовка убила нажатый элемент — переносим пульс на его копию в новом DOM,

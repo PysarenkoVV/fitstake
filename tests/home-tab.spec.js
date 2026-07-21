@@ -56,3 +56,24 @@ test("play button on an active challenge card opens workout setup", async ({ pag
   await expect(page.getByText("Camera setup", { exact: true })).toBeVisible();
   await expect(page.getByRole("button", { name: "Open camera", exact: true })).toBeVisible();
 });
+
+test("Continue workout offers only challenges that are not completed today", async ({ page }) => {
+  await page.evaluate(() => {
+    app.challenges = [
+      newChallenge({ id: "todo-a", title: "Push day", access: "solo", goals: [{ exercise: "pushups", repsPerDay: 50 }], durationDays: 7, buyIn: 0, startAt: startOfDay(Date.now()), participants: [{ id: "me", name: "Me", isMe: true, state: "active", doneToday: false, todayReps: 10 }], myTodayReps: { pushups: 10 } }),
+      newChallenge({ id: "done", title: "Already done", access: "solo", goals: [{ exercise: "squats", repsPerDay: 20 }], durationDays: 7, buyIn: 0, startAt: startOfDay(Date.now()), participants: [{ id: "me", name: "Me", isMe: true, state: "active", doneToday: true, todayReps: 20 }], myTodayReps: { squats: 20 } }),
+      newChallenge({ id: "todo-b", title: "Dip day", access: "solo", goals: [{ exercise: "dips", repsPerDay: 30 }], durationDays: 7, buyIn: 0, startAt: startOfDay(Date.now()), participants: [{ id: "me", name: "Me", isMe: true, state: "active", doneToday: false, todayReps: 0 }] }),
+    ];
+    ui.tab = "yours"; ui.detailId = null; render();
+  });
+
+  await page.getByRole("button", { name: "Continue workout", exact: true }).click();
+  await expect(page.getByRole("dialog", { name: "Choose a workout" })).toBeVisible();
+  await expect(page.getByRole("button", { name: /Push day/ })).toBeVisible();
+  await expect(page.getByRole("button", { name: /Dip day/ })).toBeVisible();
+  await expect(page.getByText("Already done", { exact: true })).toHaveCount(0);
+
+  await page.getByRole("button", { name: /Dip day/ }).click();
+  await expect(page.getByText("Camera setup", { exact: true })).toBeVisible();
+  expect(await page.evaluate(() => ui.form.challengeId)).toBe("todo-b");
+});

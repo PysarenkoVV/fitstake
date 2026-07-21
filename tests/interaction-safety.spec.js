@@ -28,3 +28,27 @@ test("двойной тап по «Create challenge» не роняет обра
   await expect(page.getByRole("button", { name: "Home", exact: true })).toBeVisible();
   expect(errors).toEqual([]);
 });
+
+test("Challenge complete starts at the top and keeps native vertical scrolling", async ({ page }) => {
+  await page.evaluate(() => {
+    const c = newChallenge({
+      id: "complete-scroll", title: "Completed challenge", access: "solo",
+      goals: [{ exercise: "pushups", repsPerDay: 50 }], durationDays: 7, buyIn: 50,
+      startAt: startOfDay(Date.now()), currentDay: 7, isCompleted: true,
+      participants: [{ id: "me", name: "Me", isMe: true, state: "active", doneToday: true, todayReps: 50 }],
+    });
+    app.challenges.unshift(c);
+    ui.full = DemoCompleteFull;
+    render();
+    document.querySelector(".fullscreen").scrollTop = 400;
+    openChallengeComplete(c);
+  });
+
+  const full = page.locator(".challenge-complete");
+  await expect(full).toBeVisible();
+  await expect(full.locator(".challenge-complete-trophy")).toBeVisible();
+  expect(await full.evaluate((el) => el.scrollTop)).toBe(0);
+  expect(await full.evaluate((el) => getComputedStyle(el).touchAction)).toBe("pan-y");
+  await full.evaluate((el) => { el.scrollTop = el.scrollHeight; });
+  expect(await full.evaluate((el) => el.scrollTop)).toBeGreaterThan(0);
+});

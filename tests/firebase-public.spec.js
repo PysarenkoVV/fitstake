@@ -1,6 +1,8 @@
 import { test, expect } from "@playwright/test";
 
-test.skip(!process.env.RUN_FIREBASE_INTEGRATION, "Writes test users and a challenge to the live Firebase project");
+// Disabled until this scenario runs against Firebase Emulator Suite. The old version wrote
+// permanent QA users/challenges into production and client security rules cannot clean them up.
+test.skip(true, "Requires an isolated Firebase emulator; never write QA records to production");
 
 async function prepare(page, name) {
   await page.addInitScript((profileName) => {
