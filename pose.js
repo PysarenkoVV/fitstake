@@ -1,4 +1,4 @@
-/* FitStake — камера, MediaPipe Pose и подсчёт повторов.
+/* Repact — камера, MediaPipe Pose и подсчёт повторов.
    RepCounter — точный порт RepCounter.swift: угол сгиба локтей/коленей,
    гистерезис 110°/140°, grace-кадры и анти-чит по ходу корпуса. */
 

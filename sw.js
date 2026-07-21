@@ -1,5 +1,5 @@
-// FitStake PWA — сеть первична, кэш как офлайн-запас оболочки.
-const CACHE = "fitstake-v105";
+// Repact PWA — сеть первична, кэш как офлайн-запас оболочки.
+const CACHE = "repact-v106";
 const SHELL = [
   ".",
   "index.html",

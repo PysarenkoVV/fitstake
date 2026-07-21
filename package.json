@@ -1,7 +1,7 @@
 {
-  "name": "fitstake-web",
+  "name": "repact-web",
   "version": "1.0.0",
-  "description": "FitStake — веб-версия приложения для подсчёта повторов с камеры",
+  "description": "Repact — AI-подсчёт повторов и фитнес-челленджи",
   "type": "module",
   "scripts": {
     "ai-team": "node ai-team.js",

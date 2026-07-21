@@ -1,4 +1,4 @@
-/* FitStake — дизайн-система, порт Theme.swift:
+/* Repact — дизайн-система:
    чёрный фон, огненный оранжевый акцент, изумрудный «деньги». */
 
 :root {
@@ -206,6 +206,50 @@ img { max-width: 100%; }
 .card-hero { box-shadow: inset 0 0 0 1px rgba(255, 94, 31, 0.35); background: linear-gradient(180deg, rgba(255, 94, 31, 0.07), var(--glass-panel-strong)); }
 .card-soft { background: var(--white-04); box-shadow: none; }
 .card-soft::before { content: none; }
+
+/* ---- Home discovery: сначала магия AI-камеры, затем самый короткий путь в челлендж. ---- */
+.home-discovery { display: flex; flex-direction: column; gap: 22px; }
+.home-ai-hero { overflow: hidden; padding: 22px 20px 18px; background: radial-gradient(circle at 86% 10%, rgba(255,94,31,.2), transparent 38%), var(--glass-panel-strong); }
+.home-ai-hero::after { content: ""; position: absolute; width: 160px; height: 160px; right: -54px; top: -70px; border: 1px solid rgba(255,94,31,.2); border-radius: 50%; pointer-events: none; }
+.home-ai-orbit { width: 58px; height: 58px; margin-bottom: 18px; border-radius: 50%; display: grid; place-items: center; color: var(--accent); background: rgba(255,94,31,.13); box-shadow: inset 0 0 0 1px rgba(255,94,31,.28), 0 0 32px rgba(255,94,31,.12); }
+.home-ai-orbit span, .home-ai-orbit svg { width: 27px; height: 27px; }
+.home-eyebrow, .home-section-head { font: 750 12px/1 var(--mono); letter-spacing: 1.2px; text-transform: uppercase; }
+.home-eyebrow { color: var(--accent); }
+.home-ai-hero h2 { margin: 7px 0 6px; font-size: 34px; line-height: 1; letter-spacing: -1px; text-wrap: balance; }
+.home-ai-hero p { max-width: 300px; margin: 0 0 18px; color: var(--text-secondary); font-size: 15px; line-height: 1.42; text-wrap: pretty; }
+.home-demo-cta { min-height: 54px; }
+.home-proof { margin-top: 14px; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 7px; }
+.home-proof::-webkit-scrollbar { display: none; }
+.home-proof span { min-width: 0; min-height: 32px; padding: 5px 6px; border-radius: 999px; display: flex; align-items: center; justify-content: center; gap: 4px; color: rgba(255,255,255,.62); background: var(--white-04); font-size: 9px; line-height: 1.1; font-weight: 650; text-align: center; }
+.home-proof svg { width: 13px; height: 13px; }
+.home-section { display: flex; flex-direction: column; gap: 10px; }
+.home-section-head { padding: 0 2px; display: flex; align-items: center; justify-content: space-between; color: rgba(255,255,255,.72); }
+.home-section-head button { min-height: 44px; margin: -12px -8px -12px 0; padding: 8px; color: var(--accent); font: 700 13px/1 var(--sans); text-transform: none; letter-spacing: 0; }
+.home-quick { width: 100%; min-height: 76px; padding: 14px; display: flex; align-items: center; gap: 12px; text-align: left; }
+.home-quick-icon, .home-challenge-icon { flex: none; width: 44px; height: 44px; border-radius: 13px; display: grid; place-items: center; color: var(--accent); background: rgba(255,94,31,.12); }
+.home-quick-copy { min-width: 0; flex: 1; display: flex; flex-direction: column; gap: 4px; }
+.home-quick-copy strong { font-size: 17px; }
+.home-quick-copy small { color: var(--text-secondary); font-size: 12px; }
+.home-quick-action { display: flex; align-items: center; gap: 3px; color: var(--accent); font-size: 12px; font-weight: 750; white-space: nowrap; }
+.home-quick-action svg { width: 16px; height: 16px; }
+.home-challenge-strip { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(210px, 78%); gap: 10px; overflow-x: auto; padding: 1px; scroll-snap-type: x proximity; scrollbar-width: none; }
+.home-challenge-strip::-webkit-scrollbar { display: none; }
+.home-challenge { min-height: 156px; padding: 15px; display: flex; flex-direction: column; align-items: flex-start; gap: 7px; text-align: left; scroll-snap-align: start; }
+.home-challenge strong { margin-top: 2px; font-size: 16px; }
+.home-challenge > span:not(.home-challenge-icon) { color: var(--text-secondary); font-size: 13px; }
+.home-challenge small { margin-top: auto; color: rgba(255,255,255,.48); font: 650 11px/1 var(--mono); }
+.home-steps { display: grid; grid-template-columns: 1fr 14px 1fr 14px 1fr; align-items: start; }
+.home-steps span { min-width: 0; display: flex; flex-direction: column; align-items: center; gap: 7px; color: var(--text-secondary); font-size: 11px; line-height: 1.25; text-align: center; }
+.home-steps b { width: 30px; height: 30px; border-radius: 50%; display: grid; place-items: center; color: #fff; background: var(--white-08); box-shadow: inset 0 0 0 1px var(--ring); font: 800 12px/1 var(--mono); }
+.home-steps i { height: 1px; margin-top: 15px; background: var(--ring); }
+.home-quiet { min-height: 64px; padding: 14px 16px; display: flex; align-items: center; gap: 10px; font-size: 13px; line-height: 1.35; }
+.home-quiet svg { flex: none; color: var(--money); }
+.home-invite { width: 100%; min-height: 72px; padding: 14px 16px; display: grid; grid-template-columns: 38px 1fr 20px; align-items: center; gap: 10px; text-align: left; }
+.home-invite > span:first-child { width: 38px; height: 38px; border-radius: 12px; display: grid; place-items: center; color: #fff; background: var(--white-08); }
+.home-invite > span:nth-child(2) { min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+.home-invite strong { font-size: 15px; }
+.home-invite small { color: var(--text-secondary); font-size: 12px; line-height: 1.3; }
+.home-invite > svg { color: var(--text-secondary); }
 
 /* ---- Бейдж ---- */
 .badge {

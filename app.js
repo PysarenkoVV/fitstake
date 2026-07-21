@@ -1,4 +1,4 @@
-/* FitStake — веб-версия iOS-приложения (порт со Swift).
+/* Repact — веб-версия приложения для AI-подсчёта тренировок.
    Чистый JS без сборки. Состояние в памяти + профиль в localStorage. */
 
 "use strict";
@@ -95,6 +95,26 @@ const RU = {
   "Camera access is needed to count your reps.": "Для подсчёта повторов нужен доступ к камере.",
   "Switch camera": "Сменить камеру", "Ultra-wide 0.5×": "Ультраширокий 0.5×",
   "Try a demo workout": "Попробовать демо-тренировку",
+  "AI Workout": "AI-тренировка",
+  "Your camera counts every rep and helps you keep honest form.": "Камера считает каждый повтор и помогает следить за техникой.",
+  "Try 5 reps": "Попробовать 5 повторений",
+  "Camera tracking": "Слежение камерой",
+  "No equipment": "Без оборудования",
+  "Quick challenge": "Быстрый челлендж",
+  "7-day Push-up Challenge": "Отжимания: 7 дней",
+  "7 days · 20 push-ups a day": "7 дней · 20 отжиманий в день",
+  "Start challenge": "Начать челлендж",
+  "Popular challenges": "Популярные челленджи",
+  "Open challenges": "Открытые челленджи",
+  "See all": "Смотреть все",
+  "How it works": "Как это работает",
+  "Choose a goal": "Выбери цель",
+  "Train with camera": "Тренируйся с камерой",
+  "Keep your streak": "Держи серию",
+  "Today in Repact": "Сегодня в Repact",
+  "No activity yet — be the first to train today.": "Пока тихо — стань первым, кто потренируется сегодня.",
+  "Challenge a friend": "Бросить вызов другу",
+  "Create a shared goal and send one link.": "Создай общую цель и отправь одну ссылку.",
   "Camera setup": "Подготовка камеры",
   "Set your phone down": "Поставь телефон устойчиво",
   "Keep the camera still so every rep can be verified.": "Зафиксируй камеру, чтобы каждый повтор можно было проверить.",
@@ -1446,23 +1466,56 @@ function YoursTab() {
       : `<button class="action-btn" data-act="play:${nextUp.id}" style="margin-top:4px">${iconF("play")}${t("Continue workout")}</button>`}
   </div>` : "";
 
-  const empty = `<div class="card center" style="padding:24px;display:flex;flex-direction:column;align-items:center;gap:14px">
-    ${icon("flame", "")}
-    <div class="secondary" style="font-weight:500">${t("You're not in any challenge yet. Join one and put some coins on the line.")}</div>
-    <button class="action-btn" data-act="findChallenge">${icon("search")}${t("Find a challenge")}</button>
-    <button class="text-btn" data-act="demo">${t("Try a demo workout")}</button>
+  const browse = app.challenges.filter((c) => !C.isJoined(c) && c.access === "public" && C.status(c) !== "completed").slice(0, 2);
+  const popularTitle = browse.some((c) => c.participants.length > 1) ? t("Popular challenges") : t("Open challenges");
+  const popular = browse.length ? `<section class="home-section">
+    <div class="home-section-head"><span>${popularTitle}</span><button data-act="findChallenge">${t("See all")}</button></div>
+    <div class="home-challenge-strip">${browse.map((c) => `<button class="card home-challenge" data-act="open:${c.id}">
+      <span class="home-challenge-icon">${iconF("flame")}</span>
+      <strong>${esc(c.title)}</strong>
+      <span>${esc(C.goalsText(c))}</span>
+      <small>${c.participants.length ? t("%lld players", c.participants.length) : t("Public")} · ${t("%lld days", c.durationDays)}</small>
+    </button>`).join("")}</div>
+  </section>` : "";
+
+  const discovery = `<div class="home-discovery">
+    <section class="card home-ai-hero">
+      <div class="home-ai-orbit"><span>${iconF("person")}</span><i></i><i></i></div>
+      <div class="home-eyebrow">${t("AI Workout")}</div>
+      <h2>${t("Try 5 reps")}</h2>
+      <p>${t("Your camera counts every rep and helps you keep honest form.")}</p>
+      <button class="action-btn home-demo-cta" data-act="demo">${iconF("camera")}${t("Try 5 reps")}</button>
+      <div class="home-proof"><span>${icon("camera")}${t("Camera tracking")}</span><span>${icon("seal")}${t("AI verified")}</span><span>${icon("bolt")}${t("No equipment")}</span></div>
+    </section>
+
+    <section class="home-section">
+      <div class="home-section-head"><span>${t("Quick challenge")}</span></div>
+      <button class="card home-quick" data-act="useTemplate:quick7">
+        <span class="home-quick-icon">${iconF("flame")}</span>
+        <span class="home-quick-copy"><strong>${t("Push-ups")}</strong><small>${t("7 days · 20 push-ups a day")}</small></span>
+        <span class="home-quick-action">${t("Start challenge")}${icon("chevronRight")}</span>
+      </button>
+    </section>
+
+    ${popular}
+
+    <section class="home-section">
+      <div class="home-section-head"><span>${t("How it works")}</span></div>
+      <div class="home-steps"><span><b>1</b>${t("Choose a goal")}</span><i></i><span><b>2</b>${t("Train with camera")}</span><i></i><span><b>3</b>${t("Keep your streak")}</span></div>
+    </section>
   </div>`;
 
   // Лента друзей: пульс активности по общим челленджам (сам список челленджей — во вкладке Challenges).
   const feedEvents = Sync.enabled ? sharedActivity().slice(0, 8) : [];
   const feed = feedEvents.length
-    ? `${lbl(t("Friends feed"), "tracking-1")}<div class="stack" style="gap:6px">${activityFeedRows(feedEvents)}</div>`
-    : mine.length ? `<div class="card card-soft center secondary" style="padding:20px;font-weight:500">${t("When friends complete their day — it shows up here.")}</div>` : "";
+    ? `<section class="home-section"><div class="home-section-head"><span>${t("Today in Repact")}</span></div><div class="stack" style="gap:6px">${activityFeedRows(feedEvents)}</div></section>`
+    : mine.length ? `<div class="card card-soft center secondary" style="padding:20px;font-weight:500">${t("When friends complete their day — it shows up here.")}</div>`
+    : `<section class="home-section"><div class="home-section-head"><span>${t("Today in Repact")}</span></div><div class="card card-soft home-quiet">${icon("bolt")}<span>${t("No activity yet — be the first to train today.")}</span></div></section>`;
 
   return screenHeader(t("Home")) + `<div class="stack">
-    ${active.length ? todayHero : (mine.length ? "" : empty)}
+    ${active.length ? todayHero : (mine.length ? "" : discovery)}
     ${feed}
-    <button class="action-btn plain" data-act="invite">${icon("share")}${t("Invite friends")}</button>
+    <button class="card home-invite" data-act="invite"><span>${icon("share")}</span><span><strong>${t("Challenge a friend")}</strong><small>${t("Create a shared goal and send one link.")}</small></span>${icon("chevronRight")}</button>
     ${friendsSummary()}
   </div>`;
 }
@@ -1741,7 +1794,7 @@ function LeaveSheet() {
   return sheetShell(t("Leave challenge?"), body, true);
 }
 
-// Разделы и типовые проблемы для отчёта тестера — под реальные экраны FitStake.
+// Разделы и типовые проблемы для отчёта тестера — под реальные экраны Repact.
 // Канонические строки английские (стабильны для агента-триажа), в UI переводятся t().
 const BUG_CATS = [
   ["🎯", "Counting & camera", ["Counts extra reps", "Doesn't count reps", "Counts when body isn't visible", "Camera is slow or laggy", "Skeleton doesn't appear"]],
@@ -3346,6 +3399,7 @@ function newCreateForm(over) {
 }
 // Быстрые шаблоны перед мастером — сокращают путь создания. over — предзаполнение формы.
 const CREATE_TEMPLATES = [
+  { id: "quick7", exercise: "pushups", step: 5, titleKey: "7-day Push-up Challenge", subKey: "7 days · 20 push-ups a day", over: { sel_pushups: true, pushups: 20, duration: 7 } },
   { id: "pushup30", exercise: "pushups", step: 50, titleKey: "30-day Push-up Challenge", subKey: "50 push-ups a day for a month", over: { sel_pushups: true, pushups: 50, duration: 30 } },
   { id: "squats100", exercise: "squats", step: 50, titleKey: "100 Squats Daily", subKey: "30 days · 100 a day", over: { sel_squats: true, squats: 100, duration: 30 } },
   { id: "pullupProg", exercise: "pullups", step: 5, titleKey: "Pull-up Progression", subKey: "Grows a bit every week", over: { sel_pullups: true, pullups: 10, duration: 30, progOn: true, progStep: 5, progPeriod: "week" } },

@@ -1,6 +1,6 @@
 "use strict";
 
-// FitStake workout camera session. Loaded before app.js; function bodies use app globals at runtime.
+// Repact workout camera session. Loaded before app.js; function bodies use app globals at runtime.
 // Сессия с камерой (живёт вне цикла render, чтобы не рвать видеопоток)
 // ==========================================================================
 const CAN_RECORD = typeof MediaRecorder !== "undefined" && !!HTMLCanvasElement.prototype.captureStream;
