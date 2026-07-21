@@ -401,6 +401,11 @@ button:is(:active, .pressed):not(:disabled) { transform: scale(0.97); filter: br
      (и прикрывает нижний край, чтобы подъём не давал щели). */
   view-transition-name: fs-tabbar;
 }
+/* На первом кадре установленного iOS PWA layout viewport иногда короче экрана.
+   100lvh сразу даёт полную высоту и не требует искусственного свайпа для пересчёта. */
+@media (display-mode: standalone) {
+  .tabbar { top: calc(100lvh - var(--tabbar-h)); bottom: auto; }
+}
 .tabbar button {
   flex: 1;
   display: flex;

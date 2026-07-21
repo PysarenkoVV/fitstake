@@ -4192,25 +4192,6 @@ ui.screen = store.onboarded ? "tabs" : "onboarding";
 if (store.onboarded && JOIN_INTENT) { ui.tab = "challenges"; ui.detailId = JOIN_ID; }
 render();
 
-// iOS standalone (PWA): на первом кадре layout-viewport бывает короче реального экрана
-// (баг WebKit с viewport-fit=cover), из-за чего фиксированный таб-бар висит выше низа,
-// пока пользователь не свайпнет — свайп заставляет пересобрать вьюпорт. Форсируем ту же
-// пересборку: коротко делаем страницу прокручиваемой и скроллим на пиксель и обратно.
-// Только в установленном PWA и только когда контент сам не прокручивается (иначе не нужно).
-function settleViewport() {
-  const standalone = navigator.standalone === true || (window.matchMedia && window.matchMedia("(display-mode: standalone)").matches);
-  if (!standalone || ui.sheet || ui.full || liveSession) return;
-  const de = document.documentElement;
-  if (de.scrollHeight > window.innerHeight + 1) return; // страница и так прокручивается
-  de.style.minHeight = window.innerHeight + 2 + "px";
-  window.scrollTo(0, 1);
-  requestAnimationFrame(() => { window.scrollTo(0, 0); de.style.minHeight = ""; });
-}
-requestAnimationFrame(() => requestAnimationFrame(settleViewport));
-setTimeout(settleViewport, 300);
-window.addEventListener("pageshow", () => setTimeout(settleViewport, 60));
-window.addEventListener("orientationchange", () => setTimeout(settleViewport, 300));
-
 // Живой общий прогресс: подписка на Firebase (если конфиг вставлен).
 // Несколько Firebase-узлов могут обновиться подряд — достаточно одного render за кадр.
 let syncRenderFrame = 0;
