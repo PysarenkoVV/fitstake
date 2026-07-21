@@ -4,7 +4,7 @@
 "use strict";
 
 // Версия оболочки — держать в синхроне с CACHE в sw.js; уходит в баг-репорты.
-const APP_VERSION = "v125";
+const APP_VERSION = "v126";
 // Последняя JS-ошибка — прикладываем к баг-репорту, чтобы сразу видеть причину.
 let lastError = "";
 window.addEventListener("error", (e) => {
@@ -1386,7 +1386,7 @@ function screenHeader(title) {
 }
 function langToggle() {
   const code = store.lang === "ua" ? "UA" : store.lang.toUpperCase();
-  return `<button class="badge language-trigger" data-act="openLanguage" aria-label="${esc(t("Choose language"))}"><span>${code}</span><span class="language-chevron" aria-hidden="true"></span></button>`;
+  return `<button class="badge language-trigger" data-act="openLanguage" aria-label="${esc(t("Choose language"))}">${code}</button>`;
 }
 
 function TabBar() {
