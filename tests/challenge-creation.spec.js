@@ -130,6 +130,23 @@ test("day share editor offers a 9:16 story with photo and gradient backgrounds",
   await expect(page.getByRole("heading", { name: "Home", exact: true })).toBeVisible();
 });
 
+test("story camera fills the screen and crops captures to 9:16", async ({ page }) => {
+  const crops = await page.evaluate(() => ({ landscape: storyCrop(1920, 1080), portrait: storyCrop(1080, 1920) }));
+  expect(crops.landscape).toEqual({ x: 656.25, y: 0, width: 607.5, height: 1080 });
+  expect(crops.portrait).toEqual({ x: 0, y: 0, width: 1080, height: 1920 });
+
+  await page.evaluate(() => {
+    window.openShareDay({ id: "main" });
+    navigator.mediaDevices.getUserMedia = () => new Promise(() => {});
+  });
+  await page.getByRole("button", { name: "Open camera", exact: true }).click();
+  await expect(page.locator(".story-camera")).toBeVisible();
+  await expect(page.locator(".story-camera video")).toHaveCSS("object-fit", "cover");
+  await expect(page.getByText("9:16 · Story", { exact: true })).toBeVisible();
+  await page.locator(".story-camera").getByRole("button", { name: "Close", exact: true }).click();
+  await expect(page.locator(".story-camera")).toHaveCount(0);
+});
+
 test("completed day highlights the result before sharing", async ({ page }) => {
   await page.evaluate(() => window.openDayComplete({ id: "main" }));
   await expect(page.getByText("Day done!", { exact: true })).toBeVisible();

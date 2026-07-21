@@ -103,6 +103,9 @@ const RU = {
   "Daily goal": "Дневная цель",
   "Best set": "Лучший подход",
   "Done": "Готово",
+  "Story": "История",
+  "Fill the frame": "Заполни весь кадр",
+  "Prove it": "Докажи",
   "No equipment": "Без оборудования",
   "Quick challenge": "Быстрый челлендж",
   "7-day Push-up Challenge": "Отжимания: 7 дней",
@@ -2891,12 +2894,14 @@ function shareStoryCopy(c, f) {
     const exercises = c.goals.map((g) => `${C.myToday(c, g.exercise)} ${Exercise.displayName(g.exercise).toLowerCase()}`).join(" · ");
     const workoutLine = workout.sets ? `<div class="share-session-line"><strong>${workout.time}</strong><span>${t("%lld sets", workout.sets)}</span><span>${t("avg %lld", workout.average)}</span></div>${workout.improvementMs ? `<div class="share-improvement">${t("%lld sec faster", Math.round(workout.improvementMs / 1000))}</div>` : ""}` : "";
     return `
+    <div class="share-challenge-axis"></div>
+    <div class="share-challenge-kicker">${t("AI verified")} · ${t("Day")} ${c.currentDay}</div>
     <div class="share-dare"><span>${t("I did mine")}</span><strong>${C.myTodayTotal(c)}</strong><small>${t("reps")}</small></div>
     <div class="share-dare-exercises">${esc(exercises)}</div>
     ${workoutLine}
     <div class="share-reward"><span>${t("Potential reward")}</span><strong>${COIN_SYM}${fmt(C.payout(c))}</strong></div>
-    <div class="share-exercise-mark">${c.goals.map((g) => icon(EXERCISE_ICON[g.exercise] || "flame")).join(icon("chevronRight"))}</div>
-    <div class="share-brand">REP<span>ACT</span><small>${t("Now it's your turn")}</small></div>`;
+    <div class="share-challenge-cta"><span>${t("Now it's your turn")}</span><strong>${t("Prove it")}</strong></div>
+    <div class="share-brand">REP<span>ACT</span><small>${t("Day")} ${c.currentDay} / ${c.durationDays}</small></div>`;
   }
   // Minimal: Strava-style оверлей — статистика прямо на фото, без плашек.
   const exercisesCaps = c.goals.map((g) => `${C.myToday(c, g.exercise)} ${Exercise.displayName(g.exercise)}`).join(" · ");
@@ -2908,6 +2913,7 @@ function shareStoryCopy(c, f) {
       <div class="share-hero-label">${t("Reps")}</div>
     </div>
     <div class="share-exercise-summary">${esc(exercisesCaps)}</div>
+    <div class="share-minimal-progress"><span style="width:${Math.min(100, Math.round(C.myTodayTotal(c) / Math.max(C.repsNorm(c), 1) * 100))}%"></span></div>
     <div class="share-stats">${stats.map(([v, l]) => `<div class="share-stat"><span class="share-stat-value">${esc(v)}</span><span class="share-stat-label">${esc(l)}</span></div>`).join(`<span class="share-stat-divider"></span>`)}</div>
     ${workout.improvementMs > 0 ? `<div class="share-insight">${shareDuration(workout.improvementMs)} ${t("faster than last time")}</div>` : ""}
     <div class="share-footer">
@@ -3124,27 +3130,37 @@ async function shareDayStory(c, options) {
   const exercises = c.goals.map((goal) => `${C.myToday(c, goal.exercise)} ${Exercise.displayName(goal.exercise).toLowerCase()}`).join(" · ");
   const workout = workoutSummary(c);
   if (options.template === "challenge") {
-    value(t("I did mine").toUpperCase(), 190, 58);
-    value(String(C.myTodayTotal(c)), 340, 136);
-    label(t("reps").toUpperCase(), 402);
-    g.font = "800 45px -apple-system,system-ui,sans-serif";
+    // Challenge: плотный спортивный постер — лаймовая ось, огромный результат и CTA.
+    g.fillStyle = "#c8ff21"; g.fillRect(0, 0, 22, H);
+    g.fillStyle = "#c8ff21"; g.font = "850 30px -apple-system,system-ui,sans-serif";
+    g.fillText(`${t("AI verified").toUpperCase()} · ${t("Day").toUpperCase()} ${c.currentDay}`, pad, 128);
+    value(t("I did mine").toUpperCase(), 244, 82);
+    value(String(C.myTodayTotal(c)), 560, 310);
+    label(t("reps").toUpperCase(), 635);
+    g.font = "850 52px -apple-system,system-ui,sans-serif";
     const lines = wrapLines(g, exercises, W - pad * 2, 2);
-    lines.forEach((line, i) => value(line, 510 + i * 58, 45));
-    let rewardY = 610 + lines.length * 58;
+    lines.forEach((line, i) => value(line.toUpperCase(), 760 + i * 62, 52));
+    let rewardY = 850 + lines.length * 62;
     if (workout.sets) {
-      label(t("Time"), rewardY); value(workout.time, rewardY + 76, 66);
-      label(t("Sets"), rewardY + 154); value(`${workout.sets} · ${t("avg %lld", workout.average)}`, rewardY + 226, 48);
-      rewardY += 316;
+      value(workout.time, rewardY + 70, 82);
+      g.fillStyle = "rgba(255,255,255,.72)"; g.font = "750 34px -apple-system,system-ui,sans-serif";
+      g.fillText(`${workout.sets} ${t("Sets").toLowerCase()} · ${t("avg %lld", workout.average)}`, pad + 300, rewardY + 70);
+      rewardY += 150;
       if (workout.improvementMs) {
         g.fillStyle = "#c8ff21"; g.font = "800 42px -apple-system,system-ui,sans-serif";
         g.fillText(t("%lld sec faster", Math.round(workout.improvementMs / 1000)).toUpperCase(), pad, rewardY);
         rewardY += 88;
       }
     }
-    label(t("Potential reward"), rewardY); value(COIN_SYM + fmt(C.payout(c)), rewardY + 76, 58);
-    g.fillStyle = "#fff"; g.font = "900 58px -apple-system,system-ui,sans-serif"; g.fillText("REP", pad, H - 210);
-    const repW = g.measureText("REP").width; g.fillStyle = "#c8ff21"; g.fillText("ACT", pad + repW, H - 210);
-    g.fillStyle = "#c8ff21"; g.font = "700 38px -apple-system,system-ui,sans-serif"; g.fillText(t("Now it's your turn"), pad, H - 145);
+    label(t("Potential reward").toUpperCase(), rewardY); value(COIN_SYM + fmt(C.payout(c)), rewardY + 72, 64);
+    const ctaTop = H - 510;
+    g.fillStyle = "rgba(200,255,33,.72)"; g.fillRect(pad, ctaTop, W - pad * 2, 2); g.fillRect(pad, ctaTop + 210, W - pad * 2, 2);
+    g.fillStyle = "rgba(255,255,255,.7)"; g.font = "750 34px -apple-system,system-ui,sans-serif"; g.fillText(t("Now it's your turn").toUpperCase(), pad, ctaTop + 60);
+    g.fillStyle = "#c8ff21"; g.font = "950 112px -apple-system,system-ui,sans-serif"; g.fillText(t("Prove it").toUpperCase(), pad, ctaTop + 170);
+    g.fillStyle = "#fff"; g.font = "950 64px -apple-system,system-ui,sans-serif"; g.fillText("REP", pad, H - 125);
+    const repW = g.measureText("REP").width; g.fillStyle = "#c8ff21"; g.fillText("ACT", pad + repW, H - 125);
+    g.textAlign = "right"; g.fillStyle = "rgba(255,255,255,.65)"; g.font = "700 34px -apple-system,system-ui,sans-serif";
+    g.fillText(`${t("Day").toUpperCase()} ${c.currentDay} / ${c.durationDays}`, W - pad, H - 125); g.textAlign = "left";
   } else {
     // Minimal (Strava-style) — зеркало HTML-превью: sans без плашек, лайм-акцент.
     const ink = "#F4F2EC", sub = "rgba(244,242,236,.72)", lime = "#B8FF3D";
@@ -3181,8 +3197,15 @@ async function shareDayStory(c, options) {
     exLines.forEach((line, i) => g.fillText(line, padX, y + i * 54));
     y += (exLines.length - 1) * 54;
 
+    // Тонкая линия дневной цели связывает результат с челленджем, не превращаясь в карточку.
+    y += 62;
+    g.save(); g.shadowColor = "transparent";
+    g.fillStyle = "rgba(255,255,255,.22)"; roundRectPath(g, padX, y, W - padX * 2, 12, 6); g.fill();
+    g.fillStyle = lime; roundRectPath(g, padX, y, (W - padX * 2) * Math.min(1, C.myTodayTotal(c) / Math.max(C.repsNorm(c), 1)), 12, 6); g.fill();
+    g.restore();
+
     // Три метрики: значения сверху, подписи снизу, тонкие разделители
-    y += Math.round(96 * heroPx / 230);
+    y += Math.round(108 * heroPx / 230);
     const stats = shareDayStats(c, workout);
     const colW = (W - padX * 2) / 3;
     stats.forEach(([v, l], i) => {
@@ -3552,6 +3575,62 @@ function pickImage(camera) {
     i.click();
   });
 }
+
+function storyCrop(sourceWidth, sourceHeight) {
+  const target = 9 / 16, source = sourceWidth / sourceHeight;
+  if (source > target) {
+    const width = sourceHeight * target;
+    return { x: (sourceWidth - width) / 2, y: 0, width, height: sourceHeight };
+  }
+  const height = sourceWidth / target;
+  return { x: 0, y: (sourceHeight - height) / 2, width: sourceWidth, height };
+}
+
+function captureStoryPhoto() {
+  return new Promise(async (resolve) => {
+    const overlay = document.createElement("div");
+    overlay.className = "story-camera";
+    overlay.innerHTML = `<video autoplay muted playsinline></video>
+      <div class="story-camera-shade"></div>
+      <div class="story-camera-top">
+        <button class="cam-btn" data-camera="close" aria-label="${t("Close")}">${icon("xmark")}</button>
+        <span>9:16 · ${t("Story")}</span>
+        <button class="cam-btn" data-camera="flip" aria-label="${t("Switch camera")}">${icon("cameraFlip")}</button>
+      </div>
+      <div class="story-camera-bottom">
+        <span>${t("Fill the frame")}</span>
+        <button class="story-shutter" data-camera="capture" aria-label="${t("Take a photo")}"></button>
+      </div>`;
+    document.body.appendChild(overlay);
+    const video = overlay.querySelector("video");
+    let stream = null, facing = "environment", done = false;
+    const stop = () => { if (stream) stream.getTracks().forEach((track) => track.stop()); stream = null; };
+    const finish = (value) => { if (done) return; done = true; stop(); overlay.remove(); resolve(value); };
+    const open = async () => {
+      stop();
+      try {
+        stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: facing, width: { ideal: 1920 }, height: { ideal: 1080 } }, audio: false });
+        video.srcObject = stream;
+        await video.play();
+      } catch { finish(null); toast(t("Camera access is needed for the photo.")); }
+    };
+    overlay.addEventListener("click", async (event) => {
+      const button = event.target.closest("[data-camera]");
+      if (!button) return;
+      if (button.dataset.camera === "close") finish(null);
+      else if (button.dataset.camera === "flip") { facing = facing === "environment" ? "user" : "environment"; await open(); }
+      else if (button.dataset.camera === "capture" && video.videoWidth) {
+        const crop = storyCrop(video.videoWidth, video.videoHeight);
+        const canvas = document.createElement("canvas"); canvas.width = 1080; canvas.height = 1920;
+        const g = canvas.getContext("2d");
+        if (facing === "user") { g.translate(1080, 0); g.scale(-1, 1); }
+        g.drawImage(video, crop.x, crop.y, crop.width, crop.height, 0, 0, 1080, 1920);
+        finish(canvas.toDataURL("image/jpeg", .86));
+      }
+    });
+    await open();
+  });
+}
 // Ужимаем фото до 1000px JPEG: снимки с камеры (10+ МБ в base64) тормозят шер-карточку и не влезают в localStorage.
 function downscale(dataURL) {
   return new Promise((res) => {
@@ -3691,7 +3770,7 @@ root.addEventListener("click", async (e) => {
     case "shareBg": ui.form.background = arg; updateShareEditor(); return;
     case "shareTemplate": ui.form.template = arg; updateShareEditor(); return;
     case "pickSharePhoto": {
-      const img = await pickImage(arg === "camera");
+      const img = arg === "camera" ? await captureStoryPhoto() : await pickImage(false);
       if (img) { ui.form.photo = img; ui.form.background = "photo"; updateShareEditor(); }
       return;
     }
