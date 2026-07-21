@@ -4192,6 +4192,27 @@ ui.screen = store.onboarded ? "tabs" : "onboarding";
 if (store.onboarded && JOIN_INTENT) { ui.tab = "challenges"; ui.detailId = JOIN_ID; }
 render();
 
+// iOS PWA иногда открывается с временно укороченным layout viewport. Реальный свайп
+// исправляет его; делаем безопасный программный пересчёт, сохраняя текущий scrollY.
+// Проверять scrollHeight нельзя: асинхронные карточки делали страницу высокой раньше,
+// чем WebKit успевал уточнить viewport, и старый workaround из-за этого не запускался.
+function settleStandaloneViewport() {
+  const standalone = navigator.standalone === true || (window.matchMedia && window.matchMedia("(display-mode: standalone)").matches);
+  if (!standalone || ui.sheet || ui.full || liveSession) return;
+  const de = document.documentElement, y = window.scrollY;
+  const previousMinHeight = de.style.minHeight;
+  de.style.minHeight = Math.max(screen.height, window.innerHeight) + 2 + "px";
+  window.scrollTo(0, y + 1);
+  requestAnimationFrame(() => {
+    window.scrollTo(0, y);
+    de.style.minHeight = previousMinHeight;
+  });
+}
+requestAnimationFrame(() => requestAnimationFrame(settleStandaloneViewport));
+setTimeout(settleStandaloneViewport, 300);
+window.addEventListener("pageshow", () => setTimeout(settleStandaloneViewport, 60));
+window.addEventListener("orientationchange", () => setTimeout(settleStandaloneViewport, 300));
+
 // Живой общий прогресс: подписка на Firebase (если конфиг вставлен).
 // Несколько Firebase-узлов могут обновиться подряд — достаточно одного render за кадр.
 let syncRenderFrame = 0;
