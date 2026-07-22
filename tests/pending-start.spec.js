@@ -10,15 +10,21 @@ test.beforeEach(async ({ page }) => {
 });
 
 test("public and private challenges land in Pending; solo starts Active", async ({ page }) => {
-  const statuses = await page.evaluate(() => {
-    const mk = (access) => {
+  const statuses = await page.evaluate(async () => {
+    const originalCreate = Sync.createChallenge;
+    Sync.createChallenge = async () => true;
+    const mk = async (access) => {
       ui.form = newCreateForm();
       ui.form.access = access; ui.form.sel_pushups = true; ui.form.pushups = 50;
       ui.form.buyIn = 0; ui.form.minPlayers = 2;
-      saveChallengeForm();
+      await saveChallengeForm();
       return C.status(app.challenges[0]);
     };
-    return { solo: mk("solo"), priv: mk("private"), pub: mk("public") };
+    try {
+      return { solo: await mk("solo"), priv: await mk("private"), pub: await mk("public") };
+    } finally {
+      Sync.createChallenge = originalCreate;
+    }
   });
   expect(statuses).toEqual({ solo: "active", priv: "pending", pub: "pending" });
 });
