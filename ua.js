@@ -85,6 +85,8 @@ window.UA_TRANSLATIONS = {
 Object.assign(window.UA_TRANSLATIONS, {
   "Shared!": "Готово!", "Your result has been shared.": "Результатом поділилися.",
   "Back to result": "Повернутися до результату", "Go to Home": "На головну",
+  "Coins": "Монети", "Test coins for joining challenges. They have no cash value.": "Тестові монети для участі в челенджах. Вони не мають грошової цінності.",
+  "Restore test balance": "Відновити тестовий баланс", "Test balance restored": "Тестовий баланс відновлено",
   "%lld cm": "%lld см", "%lld days — finished": "%lld днів — завершено",
   "%lld in one set × %lld sets": "%lld за підхід × %lld підходів", "%lld kg": "%lld кг",
   "%lld of %lld already did it today": "%lld з %lld вже виконали сьогодні",

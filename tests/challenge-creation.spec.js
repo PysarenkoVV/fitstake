@@ -90,6 +90,18 @@ test("account screen exposes email and Google entry points", async ({ page }) =>
   await expect(page.getByRole("button", { name: "Sign up" })).toBeVisible();
 });
 
+test("Coins explains test currency and restores a low balance without a store", async ({ page }) => {
+  await page.evaluate(() => { app.balance = 50; app.transactions = []; render(); });
+  await page.getByRole("button", { name: "Profile", exact: true }).click();
+  await page.getByRole("button", { name: "Coins", exact: true }).click();
+  await expect(page.getByText("Test coins for joining challenges. They have no cash value.", { exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Buy coins", exact: true })).toHaveCount(0);
+  await page.getByRole("button", { name: "Restore test balance", exact: true }).click();
+  await expect(page.getByText("Test balance restored", { exact: true })).toBeVisible();
+  await expect(page.locator(".c-money").filter({ hasText: "1,000" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Restore test balance", exact: true })).toHaveCount(0);
+});
+
 test("invite link opens the requested challenge", async ({ page }) => {
   await page.goto("/?join=main");
   await expect(page.getByText("150 Push-ups + 50 Squats", { exact: true }).first()).toBeVisible();

@@ -4,7 +4,7 @@
 "use strict";
 
 // Версия оболочки — держать в синхроне с CACHE в sw.js; уходит в баг-репорты.
-const APP_VERSION = "v131";
+const APP_VERSION = "v132";
 // Последняя JS-ошибка — прикладываем к баг-репорту, чтобы сразу видеть причину.
 let lastError = "";
 window.addEventListener("error", (e) => {
@@ -398,6 +398,8 @@ const RU = {
   "We use PostHog and Firebase Analytics to understand product usage and improve the test app.": "Мы используем PostHog и Firebase Analytics, чтобы понимать использование продукта и улучшать тестовое приложение.",
   "Shared!": "Готово!", "Your result has been shared.": "Результат опубликован.",
   "Back to result": "Вернуться к результату", "Go to Home": "На главную",
+  "Coins": "Монеты", "Test coins for joining challenges. They have no cash value.": "Тестовые монеты для участия в челленджах. Они не имеют денежной ценности.",
+  "Restore test balance": "Восстановить тестовый баланс", "Test balance restored": "Тестовый баланс восстановлен",
 };
 
 // Перевод + подстановка %lld / %@ по порядку аргументов.
@@ -782,9 +784,11 @@ function mockHistory(joined) {
 // ==========================================================================
 // AppState
 // ==========================================================================
+const TEST_COIN_GRANT = 1000;
+const TEST_COIN_REFILL_THRESHOLD = 100;
 const app = {
-  balance: 50,
-  transactions: [{ id: uid(), kind: "start", amount: 50, date: Date.now() }],
+  balance: TEST_COIN_GRANT,
+  transactions: [{ id: uid(), kind: "start", amount: TEST_COIN_GRANT, date: Date.now() }],
   challenges: mockChallenges(),
   history: [],
   measurements: [],
@@ -987,8 +991,8 @@ function switchAppStorageOwner() {
   saveKey = storageKey(owner);
   let saved = null;
   try { saved = JSON.parse(localStorage.getItem(saveKey)); } catch {}
-  app.balance = 50;
-  app.transactions = [{ id: uid(), kind: "start", amount: 50, date: Date.now() }];
+  app.balance = TEST_COIN_GRANT;
+  app.transactions = [{ id: uid(), kind: "start", amount: TEST_COIN_GRANT, date: Date.now() }];
   app.challenges = mockChallenges();
   app.history = [];
   app.measurements = [];
@@ -1030,13 +1034,14 @@ function spend(amount, title) {
   return true;
 }
 
-// Пополнение баланса тестовыми коинами (не реальная оплата — валюта тестовая).
-function buyCoins(amount) {
-  app.balance += amount;
-  app.transactions.unshift({ id: uid(), kind: "topup", amount, date: Date.now() });
+function restoreTestCoins() {
+  if (app.balance >= TEST_COIN_REFILL_THRESHOLD) return;
+  const amount = TEST_COIN_GRANT - app.balance;
+  app.balance = TEST_COIN_GRANT;
+  app.transactions.unshift({ id: uid(), kind: "refill", amount, date: Date.now() });
   saveApp();
-  track("coins_bought", { amount });
-  closeSheet();
+  track("test_balance_restored", { amount });
+  render();
   toast(t("+%lld coins", amount));
 }
 
@@ -1311,7 +1316,7 @@ const NAV_CMDS = ["tab", "open", "back", "closeSheet", "closeFull", "closeSheetB
   "participant", "findChallenge", "startPick", "showResult", "join", "create", "addMeasure", "openBug", "askLeave"];
 function sfxFor(cmd, arg) {
   if (cmd === "toggle" || cmd === "seg") return "toggle";
-  if (cmd === "buyCoins" || cmd === "openBuyCoins") return "coin";
+  if (cmd === "restoreTestCoins") return "coin";
   if (cmd === "play") return "start";
   if (NAV_CMDS.includes(cmd)) return "soft";
   return "tap";
@@ -1949,16 +1954,6 @@ function currentScreenName() {
 
 function openBug() { ui.bug = { pick: null, note: "" }; ui.sheet = BugSheet; render(); }
 
-// Магазин коинов: тестовые пакеты (реальной оплаты нет — валюта тестовая).
-const COIN_PACKS = [500, 1500, 5000];
-function BuyCoinsSheet() {
-  const rows = COIN_PACKS.map((n) => `<button class="action-btn plain" data-act="buyCoins:${n}" style="justify-content:space-between">
-    <span class="row gap8"><span style="color:var(--money);display:flex">${iconF("plusCircle")}</span>${fmt(n)} ${t("coins")}</span>
-    <span class="c-money money" style="font-size:16px">+${fmt(n)}</span></button>`).join("");
-  return sheetShell(t("Buy coins"), `<div class="form-footer">${t("Test currency — no real money.")}</div><div class="stack">${rows}</div>`, true);
-}
-function openBuyCoins() { ui.sheet = BuyCoinsSheet; render(); }
-
 function ruleRow(ic, html) { return `<div class="rule-row">${icon(ic)}<div>${html}</div></div>`; }
 function rulesCard(c) {
   const rows = [ruleRow("flame", `<b>${t("Every day: ")}${esc(C.goalsText(c))}</b>`)];
@@ -2292,11 +2287,11 @@ function ProfileTab() {
     ${lbl(t("Before / After photos"), "tracking-1")}
     ${photosInner}</div>`;
 
-  const txLabel = (tx) => tx.kind === "start" ? t("Starting balance") : tx.kind === "topup" ? t("Coins purchased") : t("Buy-in: %@", esc(tx.challenge));
+  const txLabel = (tx) => tx.kind === "start" ? t("Starting balance") : (tx.kind === "topup" || tx.kind === "refill") ? t("Test balance restored") : t("Buy-in: %@", esc(tx.challenge));
   const wallet = `<div class="card" style="padding:16px;display:flex;flex-direction:column;gap:14px">
     <div class="between">${lbl(t("Balance"), "tracking-1")}<span class="c-money" style="font-size:24px">${coinCountUp(app.balance, "balance")}</span></div>
-    <div class="form-footer">${t("Test currency — no real money.")}</div>
-    <button class="action-btn" data-act="openBuyCoins">${icon("plus")}${t("Buy coins")}</button>
+    <div class="form-footer">${t("Test coins for joining challenges. They have no cash value.")}</div>
+    ${app.balance < TEST_COIN_REFILL_THRESHOLD ? `<button class="action-btn" data-act="restoreTestCoins">${iconF("plusCircle")}${t("Restore test balance")}</button>` : ""}
     <hr class="hr">
     ${app.transactions.map((tx) => `<div class="between" style="padding:6px 0">
       <span style="font-size:15px">${txLabel(tx)}</span>
@@ -2328,7 +2323,7 @@ function ProfileTab() {
   // Профиль разбит на разделы: меню → раздел. Крупный экран не смешивает разные сущности.
   const sections = {
     body: [t("Body & measurements"), bodyCard + measurements + photosCard],
-    wallet: [t("Wallet"), wallet],
+    wallet: [t("Coins"), wallet],
     account: [t("Account"), accountCard()],
     privacy: [t("Privacy & data"), privacyCard],
     settings: [t("Settings"), settingsCard],
@@ -2345,7 +2340,7 @@ function ProfileTab() {
     <span style="color:var(--text-secondary);display:flex">${icon("chevronRight")}</span></button>`;
   return screenHeader(t("Profile")) + `<div class="stack">${guestNotice}${summary}
     ${row("body", t("Body & measurements"))}
-    ${row("wallet", t("Wallet"))}
+    ${row("wallet", t("Coins"))}
     ${Sync.enabled ? row("account", t("Account")) : ""}
     ${row("privacy", t("Privacy & data"))}
     ${row("settings", t("Settings"))}
@@ -3960,8 +3955,7 @@ root.addEventListener("click", async (e) => {
       return;
     }
     case "bugPick": if (ui.bug) { ui.bug.pick = arg; render(); } return;
-    case "openBuyCoins": openBuyCoins(); return;
-    case "buyCoins": buyCoins(+arg); return;
+    case "restoreTestCoins": restoreTestCoins(); return;
     case "shareBg": ui.form.background = arg; updateShareEditor(); return;
     case "shareTemplate": ui.form.template = arg; updateShareEditor(); return;
     case "pickSharePhoto": {
