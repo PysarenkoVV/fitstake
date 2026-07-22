@@ -162,6 +162,16 @@ test("successful system share ends with a Home choice while cancellation stays i
   await page.getByRole("button", { name: "Back to result", exact: true }).click();
   await expect(page.getByText("Share your day", { exact: true })).toHaveCount(0);
 
+  const instagramReturn = await page.evaluate(async () => {
+    window.__fallbackDownloads = 0;
+    HTMLAnchorElement.prototype.click = function () { window.__fallbackDownloads++; };
+    Object.defineProperty(navigator, "share", { configurable: true, value: () => Promise.reject(new DOMException("Extension returned", "NotAllowedError")) });
+    const challenge = app.challenges.find((item) => item.id === "main");
+    const shared = await shareDayStory(challenge, { template: "minimal", dim: 45 });
+    return { shared, downloads: window.__fallbackDownloads };
+  });
+  expect(instagramReturn).toEqual({ shared: true, downloads: 0 });
+
   await page.evaluate(() => {
     window.openShareDay({ id: "main" });
     Object.defineProperty(navigator, "share", { configurable: true, value: () => Promise.reject(new DOMException("Abort", "AbortError")) });

@@ -4,7 +4,7 @@
 "use strict";
 
 // Версия оболочки — держать в синхроне с CACHE в sw.js; уходит в баг-репорты.
-const APP_VERSION = "v130";
+const APP_VERSION = "v131";
 // Последняя JS-ошибка — прикладываем к баг-репорту, чтобы сразу видеть причину.
 let lastError = "";
 window.addEventListener("error", (e) => {
@@ -3245,7 +3245,7 @@ async function shareCard(data) {
   const file = new File([blob], "repact-challenge.jpg", { type: "image/jpeg" });
   if (navigator.canShare && navigator.canShare({ files: [file] })) {
     try { await navigator.share({ files: [file], title: "Repact" }); return true; }
-    catch (err) { if (err && err.name === "AbortError") return false; }
+    catch (err) { return !(err && err.name === "AbortError"); }
   }
   const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = "repact-challenge.jpg"; a.click();
   return true;
@@ -3408,7 +3408,7 @@ async function shareDayStory(c, options) {
   const file = new File([blob], "repact-story.jpg", { type: "image/jpeg" });
   if (navigator.canShare && navigator.canShare({ files: [file] })) {
     try { await navigator.share({ files: [file], title: "Repact" }); return true; }
-    catch (err) { if (err && err.name === "AbortError") return false; }
+    catch (err) { return !(err && err.name === "AbortError"); }
   }
   const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = "repact-story.jpg"; a.click();
   return true;
