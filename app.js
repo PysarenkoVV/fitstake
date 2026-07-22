@@ -4,7 +4,7 @@
 "use strict";
 
 // Версия оболочки — держать в синхроне с CACHE в sw.js; уходит в баг-репорты.
-const APP_VERSION = "v128";
+const APP_VERSION = "v130";
 // Последняя JS-ошибка — прикладываем к баг-репорту, чтобы сразу видеть причину.
 let lastError = "";
 window.addEventListener("error", (e) => {
@@ -389,6 +389,15 @@ const RU = {
   "Challenge created": "Челлендж создан", "Invite people now or share it later from the challenge page.": "Пригласите людей сейчас или поделитесь позже со страницы челленджа.",
   "Share invite": "Поделиться приглашением", "Copy link": "Скопировать ссылку", "Open challenge": "Открыть челлендж",
   "Join my challenge": "Присоединяйся к моему челленджу",
+  "Publishing challenge…": "Публикуем челлендж…", "Couldn't publish challenge. Check your connection and try again.": "Не удалось опубликовать челлендж. Проверьте соединение и попробуйте снова.",
+  "Reset test data": "Сбросить тестовые данные", "Reset all test data?": "Сбросить все тестовые данные?",
+  "This removes your local profile, workouts, photos and test coins from this device. This cannot be undone.": "С устройства будут удалены локальный профиль, тренировки, фото и тестовые коины. Это действие нельзя отменить.",
+  "Cancel": "Отмена", "Reset and start over": "Сбросить и начать заново",
+  "Camera frames are processed on this device and are not uploaded to our servers.": "Кадры камеры обрабатываются на этом устройстве и не загружаются на наши серверы.",
+  "Video is recorded only when you tap Record and stays on your device unless you choose to share it.": "Видео записывается только после нажатия кнопки записи и остаётся на устройстве, пока вы сами им не поделитесь.",
+  "We use PostHog and Firebase Analytics to understand product usage and improve the test app.": "Мы используем PostHog и Firebase Analytics, чтобы понимать использование продукта и улучшать тестовое приложение.",
+  "Shared!": "Готово!", "Your result has been shared.": "Результат опубликован.",
+  "Back to result": "Вернуться к результату", "Go to Home": "На главную",
 };
 
 // Перевод + подстановка %lld / %@ по порядку аргументов.
@@ -905,34 +914,39 @@ function totalsByExercise(days) {
   return totals;
 }
 // ---- Персистентность: баланс, челленджи, история и замеры живут в localStorage ----
-const SAVE_KEY = "fs.state";
+const LEGACY_SAVE_KEY = "fs.state";
+let appStorageOwner = "guest";
+let saveKey = "fs.state.guest";
+function storageOwner() { return Sync.email && Sync.uid ? "user." + Sync.uid : "guest"; }
+function storageKey(owner) { return "fs.state." + owner; }
 function snapshotApp() {
   return { balance: app.balance, transactions: app.transactions, challenges: app.challenges,
     history: app.history, measurements: app.measurements, totalReps: app.totalReps, repsByExercise: app.repsByExercise, dayKey: app.dayKey, leftMain: app.leftMain, failedAt: app.failedAt };
 }
 let saveTimer = null;
 let lastSavedState = null;
-try { lastSavedState = localStorage.getItem(SAVE_KEY); } catch {}
+try {
+  if (!localStorage.getItem(saveKey) && localStorage.getItem(LEGACY_SAVE_KEY)) localStorage.setItem(saveKey, localStorage.getItem(LEGACY_SAVE_KEY));
+  lastSavedState = localStorage.getItem(saveKey);
+} catch {}
 function saveApp() {
   clearTimeout(saveTimer);
   saveTimer = setTimeout(() => {
     const serialized = JSON.stringify(snapshotApp());
     if (serialized === lastSavedState) return;
-    try { localStorage.setItem(SAVE_KEY, serialized); lastSavedState = serialized; }
+    try { localStorage.setItem(saveKey, serialized); lastSavedState = serialized; }
     catch {
       // квота переполнена — сохраняем без фото
       const slim = snapshotApp();
       slim.challenges = slim.challenges.map((c) => Object.assign({}, c, { beforePhoto: null, afterPhoto: null }));
       const slimSerialized = JSON.stringify(slim);
       if (slimSerialized === lastSavedState) return;
-      try { localStorage.setItem(SAVE_KEY, slimSerialized); lastSavedState = slimSerialized; } catch {}
+      try { localStorage.setItem(saveKey, slimSerialized); lastSavedState = slimSerialized; } catch {}
     }
   }, 250);
 }
-(function restoreApp() {
+function restoreAppState(saved) {
   app.dayKey = dateKey();
-  let saved = null;
-  try { saved = JSON.parse(localStorage.getItem(SAVE_KEY)); } catch {}
   if (!saved || !Array.isArray(saved.challenges) || !saved.challenges.length) return;
   app.balance = saved.balance != null ? saved.balance : app.balance;
   app.transactions = saved.transactions || app.transactions;
@@ -961,7 +975,31 @@ function saveApp() {
     Object.assign(main, { title: tpl.title, goals: tpl.goals, durationDays: tpl.durationDays, buyIn: tpl.buyIn, isPublic: tpl.isPublic });
     if (Sync.enabled) main.currentDay = currentDayFromStart(main.durationDays);
   }
-})();
+}
+try { restoreAppState(JSON.parse(localStorage.getItem(saveKey))); } catch {}
+
+function switchAppStorageOwner() {
+  const owner = storageOwner();
+  if (owner === appStorageOwner) return;
+  clearTimeout(saveTimer);
+  try { localStorage.setItem(saveKey, JSON.stringify(snapshotApp())); } catch {}
+  appStorageOwner = owner;
+  saveKey = storageKey(owner);
+  let saved = null;
+  try { saved = JSON.parse(localStorage.getItem(saveKey)); } catch {}
+  app.balance = 50;
+  app.transactions = [{ id: uid(), kind: "start", amount: 50, date: Date.now() }];
+  app.challenges = mockChallenges();
+  app.history = [];
+  app.measurements = [];
+  app.totalReps = 0;
+  app.repsByExercise = {};
+  app.dayKey = dateKey();
+  app.leftMain = false;
+  app.failedAt = {};
+  restoreAppState(saved);
+  lastSavedState = saved ? JSON.stringify(snapshotApp()) : null;
+}
 markFailures(); // пропуски могли накопиться, пока приложение было закрыто
 {
   const w = store["profile.weightKg"], m = store["profile.maxReps"];
@@ -1026,15 +1064,19 @@ function joinChallenge(ch, weight, maxReps, beforePhoto) {
   return true;
 }
 
-function createChallenge(o) {
-  if (!spend(o.buyIn, o.title)) return false;
+async function createChallenge(o) {
+  if (app.balance < o.buyIn) return false;
   const id = o.id || ("ch_" + (Sync.uid || "local") + "_" + Date.now().toString(36));
+  if (o.isPublic && Sync.enabled) {
+    const published = await Sync.createChallenge(id, { title: o.title, goals: o.goals, durationDays: o.durationDays, buyIn: o.buyIn,
+      type: o.type || "streak", access: o.access || "public", minPlayers: o.minPlayers || 0,
+      missPolicy: o.missPolicy, progressionStep: o.progression.step, progressionPeriod: o.progression.period }, store["profile.name"]);
+    if (!published) return "publish-failed";
+  }
+  spend(o.buyIn, o.title);
   app.challenges.unshift(newChallenge(Object.assign({ id, ownerId: o.isPublic ? Sync.uid : null, currentDay: 1, yesterdayDropouts: 0, startAt: startOfDay(Date.now()), participants: [{ id: Sync.uid || uid(), name: store["profile.name"] || "", isMe: true, state: "active", doneToday: false, todayReps: 0 }] }, o)));
   localStorage.setItem("fs.paid." + id, "1");
   ui.createdChallengeId = id;
-  if (o.isPublic && Sync.enabled) Sync.createChallenge(id, { title: o.title, goals: o.goals, durationDays: o.durationDays, buyIn: o.buyIn,
-    type: o.type || "streak", access: o.access || "public", minPlayers: o.minPlayers || 0,
-    missPolicy: o.missPolicy, progressionStep: o.progression.step, progressionPeriod: o.progression.period }, store["profile.name"]).then((ok) => { if (!ok) toast(t("Couldn't publish challenge")); });
   return true;
 }
 
@@ -2267,15 +2309,18 @@ function ProfileTab() {
     ${soundToggle("workoutSounds", t("Workout sounds"))}
     ${soundToggle("interfaceSounds", t("Interface sounds"))}
     <button class="action-btn plain" data-act="openBug">${icon("bug")}${t("Report a problem")}</button>
+    <button class="action-btn" data-act="askResetData" style="background:transparent;color:var(--red);box-shadow:inset 0 0 0 1px rgba(255,87,87,.35)">${t("Reset test data")}</button>
   </div>`;
 
   // Приватность и данные — честный текст о том, что происходит с видео/фото/замерами.
   const privacyRow = (txt) => `<div class="row gap8" style="align-items:flex-start"><span style="color:var(--money);font-weight:800">✓</span><span style="font-size:14px;line-height:1.45">${esc(txt)}</span></div>`;
   const privacyCard = `<div class="card" style="padding:16px;display:flex;flex-direction:column;gap:12px">
     ${lbl(t("Privacy & data"), "tracking-1")}
-    ${privacyRow(t("Video is processed on your device by the camera — not recorded and not sent to any server."))}
+    ${privacyRow(t("Camera frames are processed on this device and are not uploaded to our servers."))}
+    ${privacyRow(t("Video is recorded only when you tap Record and stays on your device unless you choose to share it."))}
     ${privacyRow(t("Before / After photos are stored on your device — the app doesn't upload them to our servers."))}
     ${privacyRow(t("Weight and measurements stay on this device."))}
+    ${privacyRow(t("We use PostHog and Firebase Analytics to understand product usage and improve the test app."))}
     ${privacyRow(t("Nothing is used to train any models."))}
     <div class="form-footer">${t("Test currency — no real money.")}</div>
   </div>`;
@@ -2332,6 +2377,14 @@ function accountCard() {
        <button class="action-btn" data-act="signOut" style="background:var(--white-08);color:#fff">${t("Log out")}</button>`
     : `<div class="form-footer">${t("Sign in to sync progress across your devices")}</div>${authForm()}`;
   return `<div class="card" style="padding:16px;display:flex;flex-direction:column;gap:12px">${header}${inner}</div>`;
+}
+
+function ResetDataSheet() {
+  return sheetShell(t("Reset all test data?"), `<div class="stack">
+    <div class="form-footer" style="font-size:15px;line-height:1.5">${t("This removes your local profile, workouts, photos and test coins from this device. This cannot be undone.")}</div>
+    <button class="action-btn" data-act="confirmResetData" style="background:var(--red);color:#fff">${t("Reset and start over")}</button>
+    <button class="text-btn" data-act="closeSheet">${t("Cancel")}</button>
+  </div>`, true);
 }
 
 function AuthGateFull() {
@@ -2709,7 +2762,7 @@ function CreateScreen() {
 }
 
 // Собрать goals из выбранных упражнений и создать челлендж. false — если нечем оплатить/ничего не выбрано.
-function saveChallengeForm() {
+async function saveChallengeForm() {
   if (!ui.form) return false; // второй тап после того как первый уже создал челлендж и обнулил форму
   const f = ui.form, sel = selectedExercises(f);
   if (!sel.length) { toast(t("Pick at least one exercise")); return false; }
@@ -2719,13 +2772,14 @@ function saveChallengeForm() {
   const access = f.access || "solo";
   const isPublic = access !== "solo";
   // solo стартует сразу; private ждёт кнопки создателя, public — набора участников (startAt=null → Pending).
-  const ok = createChallenge({
+  const ok = await createChallenge({
     title: f.title.trim() || defaultTitle(f), goals, type: f.type || "streak", access,
     minPlayers: access === "public" ? Math.min(Math.max(f.minPlayers, 2), 50) : 0,
     startAt: access === "solo" ? startOfDay(Date.now()) : null,
     durationDays: Math.min(Math.max(f.duration, 1), 365), buyIn: Math.max(f.buyIn, 0), isPublic, missPolicy: f.miss,
     progression: f.type === "streak" && f.progOn ? { step: f.progStep, period: f.progPeriod } : { step: 0, period: "day" },
   });
+  if (ok === "publish-failed") { toast(t("Couldn't publish challenge. Check your connection and try again.")); return false; }
   if (!ok) { toast(t("Not enough coins")); return false; }
   return true;
 }
@@ -2935,6 +2989,24 @@ function ShareDayEditorFull() {
       <button class="action-btn" data-act="publishDay:${c.id}">${iconF("share")}${t("Share story")}</button>
     </div>
   </div></div>`;
+}
+
+function ShareCompleteFull() {
+  return `<div class="fullscreen share-complete"><div class="celebrate">
+    <div class="share-complete-mark pop-in">${iconF("checkCircle")}</div>
+    <div class="display share-complete-title">${t("Shared!")}</div>
+    <div class="form-footer share-complete-copy">${t("Your result has been shared.")}</div>
+    <div class="spacer"></div>
+    <button class="action-btn" data-act="shareDoneHome">${iconF("home")}${t("Go to Home")}</button>
+    <button class="text-btn" data-act="shareDoneBack">${t("Back to result")}</button>
+  </div></div>`;
+}
+
+function openShareComplete(returnState) {
+  ui.shareReturnState = returnState || null;
+  ui.full = ShareCompleteFull;
+  ui.form = null;
+  render();
 }
 
 // Длительность для сторис: до часа — MM:SS, от часа — H:MM:SS.
@@ -3172,9 +3244,11 @@ async function shareCard(data) {
   const blob = await new Promise((res) => cv.toBlob(res, "image/jpeg", .92));
   const file = new File([blob], "repact-challenge.jpg", { type: "image/jpeg" });
   if (navigator.canShare && navigator.canShare({ files: [file] })) {
-    try { await navigator.share({ files: [file], title: "Repact" }); return; } catch {}
+    try { await navigator.share({ files: [file], title: "Repact" }); return true; }
+    catch (err) { if (err && err.name === "AbortError") return false; }
   }
   const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = "repact-challenge.jpg"; a.click();
+  return true;
 }
 
 async function shareDayStory(c, options) {
@@ -3333,9 +3407,11 @@ async function shareDayStory(c, options) {
   const blob = await new Promise((res) => cv.toBlob(res, "image/jpeg", .92));
   const file = new File([blob], "repact-story.jpg", { type: "image/jpeg" });
   if (navigator.canShare && navigator.canShare({ files: [file] })) {
-    try { await navigator.share({ files: [file], title: "Repact" }); return; } catch {}
+    try { await navigator.share({ files: [file], title: "Repact" }); return true; }
+    catch (err) { if (err && err.name === "AbortError") return false; }
   }
   const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = "repact-story.jpg"; a.click();
+  return true;
 }
 
 // SVG-иконку → data-URI, чтобы нарисовать её на canvas через drawImage с нужным цветом.
@@ -3772,6 +3848,18 @@ root.addEventListener("click", async (e) => {
 
   switch (cmd) {
     case "tab": go(arg); return;
+    case "shareDoneHome":
+      ui.shareReturnState = null; ui.full = null; ui.form = null; ui.workoutResult = null;
+      go("yours"); return;
+    case "shareDoneBack": {
+      const target = ui.shareReturnState;
+      ui.shareReturnState = null;
+      if (!target || target.type === "close") { closeFull(); return; }
+      if (target.type === "workoutResult") { ui.full = WorkoutResultFull; ui.form = null; render(); return; }
+      if (target.type === "dayComplete") { ui.fullId = target.challengeId; ui.full = DayCompleteFull; ui.form = null; render(); return; }
+      if (target.type === "challengeComplete") { ui.form = target.form; ui.full = ChallengeCompleteFull; render(); return; }
+      closeFull(); return;
+    }
     case "open": openDetail(arg); return;
     case "back": back(); return;
     case "play": { const startEx = act.split(":")[2]; if (ui.sheet) { ui.sheet = null; ui.form = null; } openCameraPrep(arg, startEx); return; }
@@ -3861,6 +3949,16 @@ root.addEventListener("click", async (e) => {
     case "confirmLeave": leaveChallenge(arg); ui.sheet = null; ui.form = null; ui.detailId = null; render(); return;
     case "restartFailed": restartFailed(arg); return;
     case "openBug": openBug(); return;
+    case "askResetData": ui.sheet = ResetDataSheet; render(); return;
+    case "confirmResetData": {
+      for (let i = localStorage.length - 1; i >= 0; i--) {
+        const key = localStorage.key(i);
+        if (key && key.startsWith("fs.")) localStorage.removeItem(key);
+      }
+      try { await Sync.signOutUser(); } catch {}
+      location.reload();
+      return;
+    }
     case "bugPick": if (ui.bug) { ui.bug.pick = arg; render(); } return;
     case "openBuyCoins": openBuyCoins(); return;
     case "buyCoins": buyCoins(+arg); return;
@@ -3963,14 +4061,15 @@ root.addEventListener("click", async (e) => {
     if (!ui.form) return; // второй тап: первый уже создал челлендж и обнулил форму
     const access = ui.form.access || "solo", synced = access !== "solo";
     if (synced && isGuest()) { openAuthGate("publicCreate"); return; }
-    if (saveChallengeForm()) {
+    setBtnLoading(el, true, synced ? t("Publishing challenge…") : t("Create challenge"));
+    if (await saveChallengeForm()) {
       ui.form = null;
       // solo стартует сразу (Active); private/public ещё не стартовали (Pending).
       ui.challengeTab = synced ? "pending" : "active";
       // Синканные (private/public) — показываем экран с инвайтом; solo — сразу к списку.
       if (synced) { ui.full = ChallengeCreatedFull; render(); }
       else { ui.full = null; go("challenges"); }
-    }
+    } else setBtnLoading(el, false);
     return;
   }
   if (cmd === "shareCreated") { shareInvite(); return; }
@@ -3985,13 +4084,16 @@ root.addEventListener("click", async (e) => {
     return;
   }
   if (cmd === "savePreset") {
-    if (saveChallengeForm()) { ui.full = null; ui.form = null; go("yours"); }
+    setBtnLoading(el, true, t("Publishing challenge…"));
+    if (await saveChallengeForm()) { ui.full = null; ui.form = null; go("yours"); }
+    else setBtnLoading(el, false);
     return;
   }
   if (cmd === "saveShareChallenge") {
     if (isGuest()) { openAuthGate("shareCreate"); return; }
     const f = ui.form;
-    if (!saveChallengeForm()) return;
+    setBtnLoading(el, true, t("Publishing challenge…"));
+    if (!(await saveChallengeForm())) { setBtnLoading(el, false); return; }
     ui.full = null; ui.form = null; go("yours");
     shareChallengeCard(f);
     return;
@@ -4088,7 +4190,9 @@ root.addEventListener("click", async (e) => {
   }
   if (cmd === "publishDay") {
     const c = app.challenges.find((x) => x.id === arg);
-    await shareDayStory(c, Object.assign({}, ui.form, { photo: ui.form.background === "photo" ? ui.form.photo : null }));
+    const shareForm = Object.assign({}, ui.form, { photo: ui.form.background === "photo" ? ui.form.photo : null });
+    const shared = await shareDayStory(c, shareForm);
+    if (shared) openShareComplete({ type: shareForm.shareReturn, challengeId: c.id });
     return;
   }
   if (cmd === "shareResult") {
@@ -4099,7 +4203,8 @@ root.addEventListener("click", async (e) => {
       const total = (c.myTotalByExercise && c.myTotalByExercise[g.exercise]) || c.myTodayReps[g.exercise] || 0;
       return `${fmt(total)} ${Exercise.displayName(g.exercise).toLowerCase()}`;
     }).join(" · ");
-    shareCard({ title: c.title, duration: c.durationDays, totalReps: c.myTotalReps, exerciseSummary, weight: wc, maxReps: mc, payout: C.payout(c), beforePhoto: c.beforePhoto, afterPhoto: f.photo });
+    const shared = await shareCard({ title: c.title, duration: c.durationDays, totalReps: c.myTotalReps, exerciseSummary, weight: wc, maxReps: mc, payout: C.payout(c), beforePhoto: c.beforePhoto, afterPhoto: f.photo });
+    if (shared) openShareComplete({ type: "challengeComplete", challengeId: c.id, form: Object.assign({}, f) });
     return;
   }
 
@@ -4483,6 +4588,7 @@ window.addEventListener("orientationchange", () => setTimeout(settleStandaloneVi
 // Несколько Firebase-узлов могут обновиться подряд — достаточно одного render за кадр.
 let syncRenderFrame = 0;
 Sync.init(() => {
+  switchAppStorageOwner();
   applySync();
   phIdentify(); // uid из auth готов — связываем аналитику с игроком
   // Без инкогнито: онбордился, но остался анонимом (или вышел) — на обязательный вход.

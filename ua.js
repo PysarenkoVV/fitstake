@@ -83,6 +83,8 @@ window.UA_TRANSLATIONS = {
 };
 
 Object.assign(window.UA_TRANSLATIONS, {
+  "Shared!": "Готово!", "Your result has been shared.": "Результатом поділилися.",
+  "Back to result": "Повернутися до результату", "Go to Home": "На головну",
   "%lld cm": "%lld см", "%lld days — finished": "%lld днів — завершено",
   "%lld in one set × %lld sets": "%lld за підхід × %lld підходів", "%lld kg": "%lld кг",
   "%lld of %lld already did it today": "%lld з %lld вже виконали сьогодні",
@@ -261,5 +263,13 @@ Object.assign(window.UA_TRANSLATIONS, {
   "One safety day": "Один запасний день", "You can miss once during the whole challenge.": "Можна один раз пропустити за весь челендж.",
   "Recurring protection": "Регулярний захист", "You can miss once in every 14 days.": "Можна пропускати один раз кожні 14 днів.",
   "Increase your daily target gradually as you get stronger.": "Поступово збільшуйте денну ціль, коли стаєте сильнішими.",
-  "Final daily target": "Ціль в останній день", "No increase — the daily target stays the same.": "Без збільшення — денна ціль залишиться незмінною."
+  "Final daily target": "Ціль в останній день", "No increase — the daily target stays the same.": "Без збільшення — денна ціль залишиться незмінною.",
+  "Publishing challenge…": "Публікуємо челендж…",
+  "Couldn't publish challenge. Check your connection and try again.": "Не вдалося опублікувати челендж. Перевірте з’єднання та спробуйте ще раз.",
+  "Reset test data": "Скинути тестові дані", "Reset all test data?": "Скинути всі тестові дані?",
+  "This removes your local profile, workouts, photos and test coins from this device. This cannot be undone.": "З пристрою буде видалено локальний профіль, тренування, фото й тестові монети. Цю дію не можна скасувати.",
+  "Reset and start over": "Скинути й почати спочатку",
+  "Camera frames are processed on this device and are not uploaded to our servers.": "Кадри камери обробляються на цьому пристрої та не завантажуються на наші сервери.",
+  "Video is recorded only when you tap Record and stays on your device unless you choose to share it.": "Відео записується лише після натискання кнопки запису й залишається на пристрої, доки ви самі ним не поділитеся.",
+  "We use PostHog and Firebase Analytics to understand product usage and improve the test app.": "Ми використовуємо PostHog і Firebase Analytics, щоб розуміти використання продукту та покращувати тестовий застосунок."
 });

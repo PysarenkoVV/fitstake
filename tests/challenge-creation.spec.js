@@ -144,9 +144,31 @@ test("day share editor offers a 9:16 story with photo and gradient backgrounds",
   const download = await downloadPromise;
   expect(download.suggestedFilename()).toBe("repact-story.jpg");
   await expect.poll(() => page.evaluate(() => window.__storyExport)).toEqual({ width: 1080, height: 1920, type: "image/jpeg" });
-  await page.getByRole("button", { name: "Back", exact: true }).click();
+  await expect(page.getByText("Shared!", { exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "Go to Home", exact: true }).click();
   await expect(page.getByText("Share your day", { exact: true })).toHaveCount(0);
   await expect(page.getByRole("heading", { name: "Home", exact: true })).toBeVisible();
+});
+
+test("successful system share ends with a Home choice while cancellation stays in the editor", async ({ page }) => {
+  await page.evaluate(() => {
+    window.openShareDay({ id: "main" });
+    Object.defineProperty(navigator, "canShare", { configurable: true, value: () => true });
+    Object.defineProperty(navigator, "share", { configurable: true, value: () => Promise.resolve() });
+  });
+  await page.getByRole("button", { name: "Share story", exact: true }).click();
+  await expect(page.getByText("Shared!", { exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Go to Home", exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "Back to result", exact: true }).click();
+  await expect(page.getByText("Share your day", { exact: true })).toHaveCount(0);
+
+  await page.evaluate(() => {
+    window.openShareDay({ id: "main" });
+    Object.defineProperty(navigator, "share", { configurable: true, value: () => Promise.reject(new DOMException("Abort", "AbortError")) });
+  });
+  await page.getByRole("button", { name: "Share story", exact: true }).click();
+  await expect(page.getByText("Share your day", { exact: true })).toBeVisible();
+  await expect(page.getByText("Shared!", { exact: true })).toHaveCount(0);
 });
 
 test("story camera fills the screen and crops captures to 9:16", async ({ page }) => {
