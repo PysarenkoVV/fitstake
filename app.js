@@ -2994,12 +2994,15 @@ function ShareDayEditorFull() {
 
 function ShareCompleteFull() {
   return `<div class="fullscreen share-complete"><div class="celebrate">
-    <div class="share-complete-mark pop-in">${iconF("checkCircle")}</div>
-    <div class="display share-complete-title">${t("Shared!")}</div>
-    <div class="form-footer share-complete-copy">${t("Your result has been shared.")}</div>
-    <div class="spacer"></div>
-    <button class="action-btn" data-act="shareDoneHome">${iconF("home")}${t("Go to Home")}</button>
-    <button class="text-btn" data-act="shareDoneBack">${t("Back to result")}</button>
+    <div class="share-complete-hero">
+      <div class="share-complete-mark pop-in">${iconF("checkCircle")}</div>
+      <div class="display share-complete-title">${t("Shared!")}</div>
+      <div class="form-footer share-complete-copy">${t("Your result has been shared.")}</div>
+    </div>
+    <div class="share-complete-actions">
+      <button class="action-btn" data-act="shareDoneHome">${iconF("home")}${t("Go to Home")}</button>
+      <button class="text-btn" data-act="shareDoneBack">${t("Back to result")}</button>
+    </div>
   </div></div>`;
 }
 
@@ -3380,12 +3383,12 @@ async function shareDayStory(c, options) {
     g.fillStyle = lime; g.font = sans(950, store.lang === "ua" ? 91 : 108);
     g.fillText(slogan.proof, padX, ctaTop + 168);
 
-    const footerY = H - 88, logoSize = 72;
+    const footerY = H - 88, logoSize = 58;
     if (brandLogo) {
-      g.save(); roundRectPath(g, padX, footerY - logoSize + 10, logoSize, logoSize, 16); g.clip();
-      g.drawImage(brandLogo, padX, footerY - logoSize + 10, logoSize, logoSize); g.restore();
+      g.save(); roundRectPath(g, padX, footerY - 51, logoSize, logoSize, 13); g.clip();
+      g.drawImage(brandLogo, padX, footerY - 51, logoSize, logoSize); g.restore();
     }
-    const wordX = brandLogo ? padX + logoSize + 18 : padX;
+    const wordX = brandLogo ? padX + logoSize + 14 : padX;
     g.fillStyle = ink; g.font = sans(950, 58); g.fillText("REP", wordX, footerY);
     const repW = g.measureText("REP").width; g.fillStyle = lime; g.fillText("ACT", wordX + repW, footerY);
     g.textAlign = "right"; g.fillStyle = "rgba(255,255,255,.65)"; g.font = sans(700, 32);
@@ -3463,12 +3466,12 @@ async function shareDayStory(c, options) {
     g.fillText(slogan.lead, padX, fy - 92);
     g.fillStyle = lime; g.font = sans(850, 32); g.fillText(slogan.proof, padX, fy - 50);
     try { g.letterSpacing = "0px"; } catch {}
-    const logoSize = 62;
+    const logoSize = 52;
     if (brandLogo) {
-      g.save(); roundRectPath(g, padX, fy - logoSize + 10, logoSize, logoSize, 14); g.clip();
-      g.drawImage(brandLogo, padX, fy - logoSize + 10, logoSize, logoSize); g.restore();
+      g.save(); roundRectPath(g, padX, fy - 47, logoSize, logoSize, 12); g.clip();
+      g.drawImage(brandLogo, padX, fy - 47, logoSize, logoSize); g.restore();
     }
-    const wordX = brandLogo ? padX + logoSize + 15 : padX;
+    const wordX = brandLogo ? padX + logoSize + 13 : padX;
     g.fillStyle = ink; g.font = sans(900, 56); g.fillText("REP", wordX, fy);
     const repW = g.measureText("REP").width;
     g.fillStyle = lime; g.fillText("ACT", wordX + repW, fy);

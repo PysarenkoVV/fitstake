@@ -198,6 +198,12 @@ test("successful system share ends with a Home choice while cancellation stays i
   await page.getByRole("button", { name: "Share story", exact: true }).click();
   await expect(page.getByText("Shared!", { exact: true })).toBeVisible();
   await expect(page.getByRole("button", { name: "Go to Home", exact: true })).toBeVisible();
+  const heroCenterRatio = await page.locator(".share-complete-hero").evaluate((el) => {
+    const rect = el.getBoundingClientRect();
+    return (rect.top + rect.height / 2) / window.innerHeight;
+  });
+  expect(heroCenterRatio).toBeGreaterThan(.34);
+  expect(heroCenterRatio).toBeLessThan(.56);
   await page.getByRole("button", { name: "Back to result", exact: true }).click();
   await expect(page.getByText("Share your day", { exact: true })).toHaveCount(0);
 
