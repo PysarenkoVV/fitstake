@@ -3021,6 +3021,11 @@ function shareDuration(ms) {
 // (реалистичный потолок при 4 упражнениях по ≤500/день) базовый размер помещается впритык.
 const SHARE_HERO_CQW = 32;
 const REPACT_SLOGAN = "DON’T JUST SAY IT. PROVE IT.";
+function shareSloganCopy() {
+  return store.lang === "ua"
+    ? { lead: "НЕ ПРОСТО КАЖИ.", proof: "ДОВЕДИ ЦЕ!" }
+    : { lead: "DON’T JUST SAY IT.", proof: "PROVE IT." };
+}
 function shareHeroCqw(total) { return String(total).length >= 5 ? 24 : SHARE_HERO_CQW; }
 // Три метрики minimal-оверлея: тренировка (время/сеты/среднее) или, без сетов, — день/повторы/процент цели.
 function shareDayStats(c, workout) {
@@ -3038,6 +3043,7 @@ function shareDayStats(c, workout) {
 }
 function shareStoryCopy(c, f) {
   const workout = workoutSummary(c);
+  const slogan = shareSloganCopy();
   if (f.template === "challenge") {
     const exercises = c.goals.map((g) => `${C.myToday(c, g.exercise)} ${Exercise.displayName(g.exercise).toLowerCase()}`).join(" · ");
     const workoutLine = workout.sets ? `<div class="share-session-line"><strong>${workout.time}</strong><span>${t("%lld sets", workout.sets)}</span><span>${t("avg %lld", workout.average)}</span></div>${workout.improvementMs ? `<div class="share-improvement">${t("%lld sec faster", Math.round(workout.improvementMs / 1000))}</div>` : ""}` : "";
@@ -3048,8 +3054,8 @@ function shareStoryCopy(c, f) {
     <div class="share-dare-exercises">${esc(exercises)}</div>
     ${workoutLine}
     <div class="share-reward"><span>${t("Potential reward")}</span><strong>${COIN_SYM}${fmt(C.payout(c))}</strong></div>
-    <div class="share-challenge-cta"><span>DON’T JUST SAY IT.</span><strong>PROVE IT.</strong></div>
-    <div class="share-brand">REP<span>ACT</span><small>${t("Day")} ${c.currentDay} / ${c.durationDays}</small></div>`;
+    <div class="share-challenge-cta"><span>${slogan.lead}</span><strong>${slogan.proof}</strong></div>
+    <div class="share-brand"><div class="share-brand-lockup"><img src="icons/icon-1024.png" alt=""><b>REP<span>ACT</span></b></div><small>${t("Day")} ${c.currentDay} / ${c.durationDays}</small></div>`;
   }
   // Minimal: Strava-style оверлей — статистика прямо на фото, без плашек.
   const exercisesCaps = c.goals.map((g) => `${C.myToday(c, g.exercise)} ${Exercise.displayName(g.exercise)}`).join(" · ");
@@ -3064,9 +3070,9 @@ function shareStoryCopy(c, f) {
     <div class="share-minimal-progress"><span style="width:${Math.min(100, Math.round(C.myTodayTotal(c) / Math.max(C.repsNorm(c), 1) * 100))}%"></span></div>
     <div class="share-stats">${stats.map(([v, l]) => `<div class="share-stat"><span class="share-stat-value">${esc(v)}</span><span class="share-stat-label">${esc(l)}</span></div>`).join(`<span class="share-stat-divider"></span>`)}</div>
     ${workout.improvementMs > 0 ? `<div class="share-insight">${shareDuration(workout.improvementMs)} ${t("faster than last time")}</div>` : ""}
-    <div class="share-slogan">DON’T JUST SAY IT. <strong>PROVE IT.</strong></div>
+    <div class="share-slogan">${slogan.lead} <strong>${slogan.proof}</strong></div>
     <div class="share-footer">
-      <div class="share-wordmark">REP<span>ACT</span></div>
+      <div class="share-wordmark"><img src="icons/icon-1024.png" alt="">REP<span>ACT</span></div>
       <div class="share-day">${t("Day")} ${c.currentDay} / ${c.durationDays}</div>
     </div>`;
 }
@@ -3260,7 +3266,10 @@ async function shareDayStory(c, options) {
   const W = 1080, H = 1920, pad = 92;
   const cv = document.createElement("canvas"); cv.width = W; cv.height = H;
   const g = cv.getContext("2d");
-  const bg = await loadImg(photo);
+  const [bg, brandLogo] = await Promise.all([
+    loadImg(photo),
+    loadImg("icons/icon-1024.png"),
+  ]);
   if (bg) {
     const scale = Math.max(W / bg.width, H / bg.height) * (options.photoZoom || 1);
     const drawW = bg.width * scale, drawH = bg.height * scale;
@@ -3278,9 +3287,18 @@ async function shareDayStory(c, options) {
   }
   const dim = Math.max(.1, Math.min(.85, ((options && options.dim) || 45) / 100));
   if (options.template === "challenge") {
-    const shade = g.createLinearGradient(0, 0, 0, H);
-    shade.addColorStop(0, `rgba(0,0,0,${Math.min(.94, dim + .32)})`); shade.addColorStop(.46, `rgba(0,0,0,${dim * .22})`); shade.addColorStop(1, `rgba(0,0,0,${Math.min(.92, dim + .25)})`);
-    g.fillStyle = shade; g.fillRect(0, 0, W, H);
+    // Точное зеркало .template-challenge .share-story-shade:
+    // плотная диагональная маска + усиление только внизу под CTA и брендом.
+    const diagonal = g.createLinearGradient(-280, 486, 1360, 1434);
+    diagonal.addColorStop(0, "rgba(0,0,0,.94)");
+    diagonal.addColorStop(.47, "rgba(0,0,0,.74)");
+    diagonal.addColorStop(1, "rgba(0,0,0,.18)");
+    g.fillStyle = diagonal; g.fillRect(0, 0, W, H);
+    const footerShade = g.createLinearGradient(0, 0, 0, H);
+    footerShade.addColorStop(0, "rgba(0,0,0,0)");
+    footerShade.addColorStop(.55, "rgba(0,0,0,0)");
+    footerShade.addColorStop(1, "rgba(0,0,0,.9)");
+    g.fillStyle = footerShade; g.fillRect(0, 0, W, H);
   } else {
     // Minimal: мягкий shade — фото остаётся видимым, центр почти прозрачный.
     // Формулы = .template-minimal .share-story-shade в styles.css.
@@ -3301,40 +3319,82 @@ async function shareDayStory(c, options) {
   const exercises = c.goals.map((goal) => `${C.myToday(c, goal.exercise)} ${Exercise.displayName(goal.exercise).toLowerCase()}`).join(" · ");
   const workout = workoutSummary(c);
   if (options.template === "challenge") {
-    // Challenge: плотный спортивный постер — лаймовая ось, огромный результат и CTA.
-    g.fillStyle = "#c8ff21"; g.fillRect(0, 0, 22, H);
-    g.fillStyle = "#c8ff21"; g.font = "850 30px -apple-system,system-ui,sans-serif";
-    g.fillText(`${t("AI verified").toUpperCase()} · ${t("Day").toUpperCase()} ${c.currentDay}`, pad, 128);
-    value(t("I did mine").toUpperCase(), 244, 82);
-    value(String(C.myTodayTotal(c)), 560, 310);
-    label(t("reps").toUpperCase(), 635);
-    g.font = "850 52px -apple-system,system-ui,sans-serif";
-    const lines = wrapLines(g, exercises, W - pad * 2, 2);
-    lines.forEach((line, i) => value(line.toUpperCase(), 760 + i * 62, 52));
-    let rewardY = 850 + lines.length * 62;
+    // Challenge: координаты и размеры равны CSS-превью (1cqw = 10.8px).
+    const lime = "#c8ff21", ink = "#fff", sub = "rgba(255,255,255,.7)";
+    const padX = 80, slogan = shareSloganCopy();
+    const sans = (w, s) => `${w} ${s}px -apple-system,system-ui,sans-serif`;
+    g.shadowColor = "rgba(0,0,0,.8)"; g.shadowBlur = 16; g.shadowOffsetY = 2;
+    g.fillStyle = lime; g.fillRect(0, 0, 24, H);
+
+    g.fillStyle = lime; g.font = sans(850, 29);
+    try { g.letterSpacing = "5px"; } catch {}
+    g.fillText(`${t("AI verified").toUpperCase()} · ${t("Day").toUpperCase()} ${c.currentDay}`, padX, 122);
+    try { g.letterSpacing = "0px"; } catch {}
+
+    g.fillStyle = ink; g.font = sans(950, 86); g.fillText(t("I did mine").toUpperCase(), padX, 250);
+    const total = String(C.myTodayTotal(c));
+    const totalSize = total.length >= 4 ? 410 : 497;
+    g.font = sans(950, totalSize);
+    try { g.letterSpacing = "-" + Math.round(totalSize * .05) + "px"; } catch {}
+    g.fillText(total, padX, 690);
+    try { g.letterSpacing = "0px"; } catch {}
+
+    g.fillStyle = sub; g.font = sans(850, 32);
+    try { g.letterSpacing = "7px"; } catch {}
+    g.fillText(t("reps").toUpperCase(), padX, 780);
+    try { g.letterSpacing = "0px"; } catch {}
+
+    g.fillStyle = ink; g.font = sans(850, 52);
+    const lines = wrapLines(g, exercises.toUpperCase(), W - padX * 2, 2);
+    lines.forEach((line, i) => g.fillText(line, padX, 900 + i * 56));
+    let rewardY = 900 + (lines.length - 1) * 56;
     if (workout.sets) {
-      value(workout.time, rewardY + 70, 82);
-      g.fillStyle = "rgba(255,255,255,.72)"; g.font = "750 34px -apple-system,system-ui,sans-serif";
-      g.fillText(`${workout.sets} ${t("Sets").toLowerCase()} · ${t("avg %lld", workout.average)}`, pad + 300, rewardY + 70);
-      rewardY += 150;
+      rewardY += 132;
+      g.fillStyle = ink; g.font = sans(900, 76); g.fillText(workout.time, padX, rewardY);
+      g.fillStyle = sub; g.font = sans(750, 31);
+      g.fillText(`${workout.sets} ${t("Sets").toLowerCase()} · ${t("avg %lld", workout.average)}`, padX + 270, rewardY);
       if (workout.improvementMs) {
-        g.fillStyle = "#c8ff21"; g.font = "800 42px -apple-system,system-ui,sans-serif";
-        g.fillText(t("%lld sec faster", Math.round(workout.improvementMs / 1000)).toUpperCase(), pad, rewardY);
-        rewardY += 88;
+        rewardY += 54;
+        g.fillStyle = lime; g.font = sans(800, 29);
+        g.fillText(t("%lld sec faster", Math.round(workout.improvementMs / 1000)).toUpperCase(), padX, rewardY);
       }
     }
-    label(t("Potential reward").toUpperCase(), rewardY); value(COIN_SYM + fmt(C.payout(c)), rewardY + 72, 64);
+
+    const rewardTop = rewardY + 58, rewardW = 680, rewardH = 94;
+    g.save(); g.shadowColor = "rgba(0,0,0,.75)"; g.shadowBlur = 12;
+    roundRectPath(g, padX, rewardTop, rewardW, rewardH, 28);
+    g.fillStyle = "rgba(0,0,0,.48)"; g.fill();
+    g.strokeStyle = "rgba(200,255,33,.62)"; g.lineWidth = 2; g.stroke();
+    g.restore();
+    g.fillStyle = sub; g.font = sans(700, 27);
+    g.fillText(t("Potential reward").toUpperCase(), padX + 32, rewardTop + 58);
+    g.fillStyle = "#45d483"; g.font = sans(900, 54);
+    g.fillText(COIN_SYM + fmt(C.payout(c)), padX + 466, rewardTop + 65);
+
     const ctaTop = H - 510;
-    g.fillStyle = "rgba(200,255,33,.72)"; g.fillRect(pad, ctaTop, W - pad * 2, 2); g.fillRect(pad, ctaTop + 210, W - pad * 2, 2);
-    g.fillStyle = "rgba(255,255,255,.7)"; g.font = "750 34px -apple-system,system-ui,sans-serif"; g.fillText("DON’T JUST SAY IT.", pad, ctaTop + 60);
-    g.fillStyle = "#c8ff21"; g.font = "950 112px -apple-system,system-ui,sans-serif"; g.fillText(t("Prove it").toUpperCase(), pad, ctaTop + 170);
-    g.fillStyle = "#fff"; g.font = "950 64px -apple-system,system-ui,sans-serif"; g.fillText("REP", pad, H - 125);
-    const repW = g.measureText("REP").width; g.fillStyle = "#c8ff21"; g.fillText("ACT", pad + repW, H - 125);
-    g.textAlign = "right"; g.fillStyle = "rgba(255,255,255,.65)"; g.font = "700 34px -apple-system,system-ui,sans-serif";
-    g.fillText(`${t("Day").toUpperCase()} ${c.currentDay} / ${c.durationDays}`, W - pad, H - 125); g.textAlign = "left";
+    g.fillStyle = "rgba(200,255,33,.72)"; g.fillRect(padX, ctaTop, W - padX * 2, 2); g.fillRect(padX, ctaTop + 210, W - padX * 2, 2);
+    g.fillStyle = sub; g.font = sans(750, 32);
+    try { g.letterSpacing = "3px"; } catch {}
+    g.fillText(slogan.lead, padX, ctaTop + 62);
+    try { g.letterSpacing = "0px"; } catch {}
+    g.fillStyle = lime; g.font = sans(950, store.lang === "ua" ? 91 : 108);
+    g.fillText(slogan.proof, padX, ctaTop + 168);
+
+    const footerY = H - 88, logoSize = 72;
+    if (brandLogo) {
+      g.save(); roundRectPath(g, padX, footerY - logoSize + 10, logoSize, logoSize, 16); g.clip();
+      g.drawImage(brandLogo, padX, footerY - logoSize + 10, logoSize, logoSize); g.restore();
+    }
+    const wordX = brandLogo ? padX + logoSize + 18 : padX;
+    g.fillStyle = ink; g.font = sans(950, 58); g.fillText("REP", wordX, footerY);
+    const repW = g.measureText("REP").width; g.fillStyle = lime; g.fillText("ACT", wordX + repW, footerY);
+    g.textAlign = "right"; g.fillStyle = "rgba(255,255,255,.65)"; g.font = sans(700, 32);
+    g.fillText(`${t("Day").toUpperCase()} ${c.currentDay} / ${c.durationDays}`, W - padX, footerY); g.textAlign = "left";
+    g.shadowColor = "transparent"; g.shadowBlur = 0; g.shadowOffsetY = 0;
   } else {
     // Minimal (Strava-style) — зеркало HTML-превью: sans без плашек, лайм-акцент.
     const ink = "#F4F2EC", sub = "rgba(244,242,236,.72)", lime = "#B8FF3D";
+    const slogan = shareSloganCopy();
     const padX = 80, padTop = 120, padBottom = 90;
     const sans = (w, s) => `${w} ${s}px -apple-system,system-ui,sans-serif`;
     g.shadowColor = "rgba(0,0,0,.65)"; g.shadowBlur = 18; g.shadowOffsetY = 2;
@@ -3400,12 +3460,18 @@ async function shareDayStory(c, options) {
     const fy = H - padBottom;
     g.fillStyle = sub; g.font = sans(700, 28);
     try { g.letterSpacing = "2px"; } catch {}
-    g.fillText("DON’T JUST SAY IT.", padX, fy - 92);
-    g.fillStyle = lime; g.font = sans(850, 32); g.fillText("PROVE IT.", padX, fy - 50);
+    g.fillText(slogan.lead, padX, fy - 92);
+    g.fillStyle = lime; g.font = sans(850, 32); g.fillText(slogan.proof, padX, fy - 50);
     try { g.letterSpacing = "0px"; } catch {}
-    g.fillStyle = ink; g.font = sans(900, 56); g.fillText("REP", padX, fy);
+    const logoSize = 62;
+    if (brandLogo) {
+      g.save(); roundRectPath(g, padX, fy - logoSize + 10, logoSize, logoSize, 14); g.clip();
+      g.drawImage(brandLogo, padX, fy - logoSize + 10, logoSize, logoSize); g.restore();
+    }
+    const wordX = brandLogo ? padX + logoSize + 15 : padX;
+    g.fillStyle = ink; g.font = sans(900, 56); g.fillText("REP", wordX, fy);
     const repW = g.measureText("REP").width;
-    g.fillStyle = lime; g.fillText("ACT", padX + repW, fy);
+    g.fillStyle = lime; g.fillText("ACT", wordX + repW, fy);
     g.textAlign = "right";
     g.fillStyle = sub; g.font = sans(600, 34);
     g.fillText(`${t("Day").toUpperCase()} ${c.currentDay} / ${c.durationDays}`, W - padX, fy);
@@ -4576,7 +4642,8 @@ async function shareInvite(id) {
   if (!c) return;
   const url = "https://pysarenkovv.github.io/fitstake/?join=" + encodeURIComponent(c.id);
   track("invite_shared", { challenge_id: c.id });
-  const text = REPACT_SLOGAN + "\n\n" + t("Join my challenge") + " — " + c.title;
+  const slogan = store.lang === "ua" ? "Не просто кажи. Доведи це! — Repact" : REPACT_SLOGAN;
+  const text = slogan + "\n\n" + t("Join my challenge") + " — " + c.title;
   if (navigator.share) {
     try { await navigator.share({ title: "Repact", text, url }); return; }
     catch (err) { if (err && err.name === "AbortError") return; }

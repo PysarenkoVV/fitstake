@@ -127,6 +127,7 @@ test("day share editor offers a 9:16 story with photo and gradient backgrounds",
   // Новый minimal: Strava-оверлей без «Potential reward», с AI verified и вордмарком REPACT.
   await expect(page.locator(".share-verified")).toBeVisible();
   await expect(page.locator(".share-wordmark")).toHaveText("REPACT");
+  await expect(page.locator(".share-wordmark img")).toHaveAttribute("src", "icons/icon-1024.png");
   await expect(page.locator(".share-slogan")).toHaveText("DON’T JUST SAY IT. PROVE IT.");
   await expect(page.locator(".share-stat")).toHaveCount(3);
   await expect(page.locator(".share-reward")).toHaveCount(0);
@@ -138,6 +139,7 @@ test("day share editor offers a 9:16 story with photo and gradient backgrounds",
   // «Potential reward» остаётся только в шаблоне Challenge.
   await expect(page.locator(".share-reward")).toContainText("Potential reward");
   await expect(page.locator(".share-challenge-cta")).toHaveText("DON’T JUST SAY IT.PROVE IT.");
+  await expect(page.locator(".share-brand img")).toHaveAttribute("src", "icons/icon-1024.png");
   await expect(page.locator(".share-reward")).toContainText(/🔥\d+/);
   await expect.poll(() => page.evaluate(() => document.querySelector(".share-editor") === window.__shareEditorNode)).toBe(true);
   const preview = page.locator(".share-story-preview");
@@ -151,7 +153,7 @@ test("day share editor offers a 9:16 story with photo and gradient backgrounds",
   await expect(page.getByRole("slider", { name: "Photo scale" })).toBeVisible();
   await page.getByRole("slider", { name: "Photo scale" }).fill("1.5");
   await page.getByRole("slider", { name: "Background dimming" }).fill("60");
-  await expect(preview.locator("img")).toHaveCSS("transform", /matrix/);
+  await expect(preview.locator(":scope > img")).toHaveCSS("transform", /matrix/);
 
   await page.evaluate(() => {
     const original = HTMLCanvasElement.prototype.toBlob;
@@ -170,6 +172,21 @@ test("day share editor offers a 9:16 story with photo and gradient backgrounds",
   await page.getByRole("button", { name: "Go to Home", exact: true }).click();
   await expect(page.getByText("Share your day", { exact: true })).toHaveCount(0);
   await expect(page.getByRole("heading", { name: "Home", exact: true })).toBeVisible();
+});
+
+test("Ukrainian share slogan is consistent in preview and invite text", async ({ page }) => {
+  const invite = await page.evaluate(async () => {
+    store.lang = "ua";
+    render();
+    openShareDay({ id: "main" });
+    let payload;
+    Object.defineProperty(navigator, "share", { configurable: true, value: async (data) => { payload = data; } });
+    await shareInvite("main");
+    return payload;
+  });
+  await page.getByRole("button", { name: "Челендж", exact: true }).click();
+  await expect(page.locator(".share-challenge-cta")).toHaveText("НЕ ПРОСТО КАЖИ.ДОВЕДИ ЦЕ!");
+  expect(invite.text).toContain("Не просто кажи. Доведи це! — Repact");
 });
 
 test("successful system share ends with a Home choice while cancellation stays in the editor", async ({ page }) => {

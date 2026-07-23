@@ -1034,20 +1034,24 @@ button:is(:active, .pressed):not(:disabled) { transform: scale(0.97); filter: br
 .share-stat-label { font-size: 2.5cqw; font-weight: 600; letter-spacing: 0.3cqw; text-transform: uppercase; color: rgba(244, 242, 236, 0.72); }
 .share-stat-divider { width: 1px; margin-right: 6.3cqw; background: rgba(255, 255, 255, 0.22); }
 .share-insight { margin-top: 5.6cqw; font-size: 2.9cqw; font-weight: 700; letter-spacing: 0.25cqw; text-transform: uppercase; color: #b8ff3d; }
-.share-footer { margin-top: auto; display: flex; align-items: baseline; justify-content: space-between; }
+.share-footer { margin-top: auto; display: flex; align-items: center; justify-content: space-between; }
 .share-slogan { margin-top: auto; color: rgba(244,242,236,.72); font-size: 2.5cqw; font-weight: 700; letter-spacing: .18cqw; }
 .share-slogan strong { color: #b8ff3d; font-weight: 850; }
 .share-slogan + .share-footer { margin-top: 2.2cqw; }
-.share-wordmark { font-size: 5.2cqw; font-weight: 900; letter-spacing: -0.1cqw; }
+.share-wordmark { display: flex; align-items: center; gap: 1.4cqw; font-size: 5.2cqw; font-weight: 900; letter-spacing: -0.1cqw; }
+.share-wordmark img { width: 6.2cqw; height: 6.2cqw; border-radius: 1.3cqw; object-fit: cover; }
 .share-wordmark > span { color: #b8ff3d; }
 .share-day { font-size: 3.2cqw; font-weight: 600; text-transform: uppercase; font-variant-numeric: tabular-nums; color: rgba(244, 242, 236, 0.72); }
 .template-challenge .share-story-shade { background: linear-gradient(120deg, rgba(0,0,0,.94) 0%, rgba(0,0,0,.74) 47%, rgba(0,0,0,.18) 100%), linear-gradient(180deg, transparent 55%, rgba(0,0,0,.9)); }
 .template-challenge .share-story-copy { padding: 8.5cqw 7.4cqw 7.4cqw; }
 .share-challenge-axis { position: absolute; top: 0; bottom: 0; left: 0; width: 2.2cqw; background: var(--accent); }
 .share-challenge-kicker { color: var(--accent); font-size: 2.7cqw; font-weight: 850; letter-spacing: .45cqw; text-transform: uppercase; }
-.share-brand { margin-top: 4cqw; font-size: 6.8cqw; font-weight: 950; letter-spacing: -.35cqw; text-shadow: 0 2px 12px rgba(0,0,0,.8); }
-.share-brand > span { color: var(--accent); }
-.share-brand small { float: right; margin-top: 2cqw; color: rgba(255,255,255,.68); font-size: 2.8cqw; font-weight: 700; letter-spacing: 0; }
+.share-brand { margin-top: 4cqw; display: flex; align-items: center; justify-content: space-between; text-shadow: 0 2px 12px rgba(0,0,0,.8); }
+.share-brand-lockup { display: flex; align-items: center; gap: 1.6cqw; }
+.share-brand-lockup img { width: 6.8cqw; height: 6.8cqw; border-radius: 1.5cqw; object-fit: cover; }
+.share-brand-lockup b { font-size: 6.8cqw; font-weight: 950; letter-spacing: -.35cqw; }
+.share-brand-lockup b > span { color: var(--accent); }
+.share-brand small { color: rgba(255,255,255,.68); font-size: 2.8cqw; font-weight: 700; letter-spacing: 0; }
 .share-dare { display: flex; flex-direction: column; text-shadow: 0 2px 16px rgba(0,0,0,.8); }
 .share-dare > span { margin-top: 5cqw; font-size: 8cqw; line-height: .9; font-weight: 950; text-transform: uppercase; }
 .share-dare > strong { margin-top: 4cqw; font-size: 46cqw; line-height: .72; font-weight: 950; letter-spacing: -2.5cqw; }
