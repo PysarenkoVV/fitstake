@@ -191,7 +191,7 @@ Object.assign(window.UA_TRANSLATIONS, {
 
 Object.assign(window.UA_TRANSLATIONS, {
   "Couldn't publish challenge": "Не вдалося опублікувати челендж",
-  "Couldn't leave challenge": "Не вдалося вийти з челенджу",
+  "Couldn't leave challenge": "Не вдалося вийти з челенджу", "Couldn't join challenge": "Не вдалося приєднатися до челенджу", "Joining…": "Приєднуємося…",
   "Creator": "Автор", "Joined": "Приєднався", "Loading public challenges…": "Завантажуємо публічні челенджі…",
   "Couldn't load public challenges. Check connection.": "Не вдалося завантажити публічні челенджі. Перевірте з’єднання.",
   "In progress": "Триває", "So your progress is saved and syncs across your devices.": "Щоб прогрес зберігався та синхронізувався між пристроями.",

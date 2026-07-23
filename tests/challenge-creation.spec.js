@@ -32,6 +32,7 @@ test("duration Custom превращает сам чип в поле ручно�
   await expect(days).toHaveValue("");
   await expect(days).toHaveAttribute("inputmode", "numeric");
   await expect(days).toHaveCSS("font-size", "16px");
+  await expect(chip14).not.toHaveClass(/selected/);
   expect(await bodyBefore.evaluate((node) => node.isConnected)).toBe(true);
   await expect(dur.getByRole("button", { name: "+", exact: true })).toHaveCount(0);
   await expect(dur.getByRole("button", { name: "Custom", exact: true })).toHaveCount(0);
@@ -44,6 +45,13 @@ test("duration Custom превращает сам чип в поле ручно�
   await dur.getByRole("textbox", { name: "Days" }).fill("900");
   await dur.getByRole("textbox", { name: "Days" }).blur();
   await expect(dur.getByRole("textbox", { name: "Days" })).toHaveValue("365");
+
+  const reps = form.locator(".create-section", { hasText: "DAILY MINIMUM REPS" });
+  const reps100 = reps.getByRole("button", { name: "100", exact: true });
+  await reps100.click();
+  await reps.getByRole("button", { name: "Custom", exact: true }).click();
+  await expect(reps100).not.toHaveClass(/selected/);
+  await expect(reps.getByRole("textbox", { name: "Push-ups" })).toHaveValue("");
 });
 
 test("create form keeps a usable scroll area after repeated choices", async ({ page }) => {
@@ -119,6 +127,7 @@ test("day share editor offers a 9:16 story with photo and gradient backgrounds",
   // Новый minimal: Strava-оверлей без «Potential reward», с AI verified и вордмарком REPACT.
   await expect(page.locator(".share-verified")).toBeVisible();
   await expect(page.locator(".share-wordmark")).toHaveText("REPACT");
+  await expect(page.locator(".share-slogan")).toHaveText("DON’T JUST SAY IT. PROVE IT.");
   await expect(page.locator(".share-stat")).toHaveCount(3);
   await expect(page.locator(".share-reward")).toHaveCount(0);
   await page.evaluate(() => { window.__shareEditorNode = document.querySelector(".share-editor"); });
@@ -128,6 +137,7 @@ test("day share editor offers a 9:16 story with photo and gradient backgrounds",
   await expect(page.getByRole("button", { name: "Challenge", exact: true })).toHaveClass(/active/);
   // «Potential reward» остаётся только в шаблоне Challenge.
   await expect(page.locator(".share-reward")).toContainText("Potential reward");
+  await expect(page.locator(".share-challenge-cta")).toHaveText("DON’T JUST SAY IT.PROVE IT.");
   await expect(page.locator(".share-reward")).toContainText(/🔥\d+/);
   await expect.poll(() => page.evaluate(() => document.querySelector(".share-editor") === window.__shareEditorNode)).toBe(true);
   const preview = page.locator(".share-story-preview");

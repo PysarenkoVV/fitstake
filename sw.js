@@ -1,14 +1,14 @@
 // Repact PWA — сеть первична, кэш как офлайн-запас оболочки.
-const CACHE = "repact-v133";
+const CACHE = "repact-v135";
 const SHELL = [
   ".",
   "index.html",
-  "styles.css?v=133",
-  "app.js?v=133",
-  "pose.js?v=133",
-  "sync.js?v=133",
-  "workout-session.js?v=133",
-  "ua.js?v=133",
+  "styles.css?v=135",
+  "app.js?v=135",
+  "pose.js?v=135",
+  "sync.js?v=135",
+  "workout-session.js?v=135",
+  "ua.js?v=135",
   "firebase-config.js",
   "manifest.json",
   "icons/icon-192.png",
@@ -33,8 +33,10 @@ self.addEventListener("fetch", (event) => {
   event.respondWith(
     fetch(request)
       .then((res) => {
-        const copy = res.clone();
-        caches.open(CACHE).then((c) => c.put(request, copy)).catch(() => {});
+        if (res.ok) {
+          const copy = res.clone();
+          caches.open(CACHE).then((c) => c.put(request, copy)).catch(() => {});
+        }
         return res;
       })
       // index.html как фолбэк — только для навигации, иначе js/css получили бы HTML вместо кода.

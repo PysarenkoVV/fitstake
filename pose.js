@@ -410,18 +410,29 @@ class PoseSession {
   setRecordingContext(context) { this.recordingContext = context || null; }
 
   async start(video, canvas) {
+    const generation = (this._startGeneration || 0) + 1;
+    this._startGeneration = generation;
     this._video = video;
     this._canvas = canvas;
     this._ctx = canvas.getContext("2d");
-    this._stream = await navigator.mediaDevices.getUserMedia({ video: this._videoConstraints(), audio: false });
+    const stream = await navigator.mediaDevices.getUserMedia({ video: this._videoConstraints(), audio: false });
+    if (this._startGeneration !== generation) {
+      stream.getTracks().forEach((track) => track.stop());
+      throw new DOMException("Workout startup cancelled", "AbortError");
+    }
+    this._stream = stream;
     video.srcObject = this._stream;
     await video.play().catch(() => {});
-    await new Promise((res) => {
-      if (video.videoWidth) return res();
-      video.onloadedmetadata = () => res();
+    await new Promise((resolve, reject) => {
+      if (video.videoWidth) return resolve();
+      const cleanup = () => { video.onloadedmetadata = null; this._cancelStart = null; };
+      video.onloadedmetadata = () => { cleanup(); resolve(); };
+      this._cancelStart = () => { cleanup(); reject(new DOMException("Workout startup cancelled", "AbortError")); };
     });
     await this._findLenses(); // узнать про задний ультра-ширик для кнопки 0.5×
+    if (this._startGeneration !== generation) throw new DOMException("Workout startup cancelled", "AbortError");
     this._landmarker = await getLandmarker();
+    if (this._startGeneration !== generation) throw new DOMException("Workout startup cancelled", "AbortError");
     this._running = true;
     this._loop();
   }
@@ -453,7 +464,10 @@ class PoseSession {
     const video = this._video;
     if (video && video.readyState >= 2 && video.videoWidth) {
       const size = { width: video.videoWidth, height: video.videoHeight };
-      if (this._canvas.width !== size.width) { this._canvas.width = size.width; this._canvas.height = size.height; }
+      if (this._canvas.width !== size.width || this._canvas.height !== size.height) {
+        this._canvas.width = size.width;
+        this._canvas.height = size.height;
+      }
 
       let points = {};
       let ts = performance.now();
@@ -740,6 +754,8 @@ class PoseSession {
   }
 
   stop() {
+    this._startGeneration = (this._startGeneration || 0) + 1;
+    if (this._cancelStart) this._cancelStart();
     this._running = false;
     if (this._recording && this._recorder) { try { this._recorder.stop(); } catch {} this._recording = false; }
     if (this._stream) this._stream.getTracks().forEach((t) => t.stop());
@@ -761,9 +777,11 @@ async function shareVideo(blob) {
     return;
   }
   const a = document.createElement("a");
-  a.href = URL.createObjectURL(blob);
+  const url = URL.createObjectURL(blob);
+  a.href = url;
   a.download = "repact." + ext;
   a.click();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
 window.PoseSession = PoseSession;

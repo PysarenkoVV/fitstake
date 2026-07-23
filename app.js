@@ -4,7 +4,7 @@
 "use strict";
 
 // Версия оболочки — держать в синхроне с CACHE в sw.js; уходит в баг-репорты.
-const APP_VERSION = "v133";
+const APP_VERSION = "v134";
 // Последняя JS-ошибка — прикладываем к баг-репорту, чтобы сразу видеть причину.
 let lastError = "";
 window.addEventListener("error", (e) => {
@@ -382,7 +382,7 @@ const RU = {
   "just now": "только что", "%lld min ago": "%lld мин назад", "%lld h ago": "%lld ч назад",
   "Couldn't update subscription": "Не удалось изменить подписку",
   "Couldn't publish challenge": "Не удалось опубликовать челлендж",
-  "Couldn't leave challenge": "Не удалось выйти из челленджа",
+  "Couldn't leave challenge": "Не удалось выйти из челленджа", "Couldn't join challenge": "Не удалось вступить в челлендж", "Joining…": "Вступаем…",
   "Creator": "Создатель", "Joined": "Участвует", "Loading public challenges…": "Загружаем публичные челленджи…",
   "Couldn't load public challenges. Check connection.": "Не удалось загрузить публичные челленджи. Проверьте соединение.",
   "In progress": "В процессе", "So your progress is saved and syncs across your devices.": "Чтобы прогресс сохранялся и синхронизировался между устройствами.",
@@ -424,7 +424,7 @@ const DEFAULTS = {
   // Мульти-выбор упражнений онбординга + максимум за подход на каждое.
   "profile.sel_pushups": true, "profile.sel_squats": false, "profile.sel_pullups": false, "profile.sel_dips": false,
   "profile.reps.pushups": 15, "profile.reps.squats": 15, "profile.reps.pullups": 15, "profile.reps.dips": 15,
-  workoutSounds: true, interfaceSounds: true, lang: (navigator.language || "en").startsWith("ru") ? "ru" : "en",
+  workoutSounds: true, interfaceSounds: true, lang: (navigator.language || "en").startsWith("ru") ? "ru" : (navigator.language || "en").startsWith("uk") ? "ua" : "en",
 };
 const store = new Proxy({}, {
   get(_, k) {
@@ -1056,15 +1056,21 @@ function logEntry(title, norm, reps, byEx) {
   } else last.entries.push({ id: uid(), title, norm, reps, byEx: byEx ? Object.assign({}, byEx) : undefined });
 }
 
-function joinChallenge(ch, weight, maxReps, beforePhoto) {
+function paidStorageKey(challengeId) {
+  return "fs.paid." + (Sync.uid || "guest") + "." + challengeId;
+}
+
+async function joinChallenge(ch, weight, maxReps, beforePhoto) {
   if (C.isJoined(ch)) return false;
-  const paidKey = "fs.paid." + ch.id;
-  if (!localStorage.getItem(paidKey) && !spend(ch.buyIn, ch.title)) return false;
+  const paidKey = paidStorageKey(ch.id);
+  const alreadyPaid = !!localStorage.getItem(paidKey);
+  if (!alreadyPaid && app.balance < ch.buyIn) return false;
+  if (ch.isPublic && Sync.enabled && !(await Sync.joinChallenge(ch.id, store["profile.name"]))) return null;
+  if (!alreadyPaid && !spend(ch.buyIn, ch.title)) return false;
   localStorage.setItem(paidKey, "1");
   ch.participants.unshift({ id: Sync.uid || uid(), name: "", isMe: true, state: "active", doneToday: false, todayReps: 0, _days: {}, _total: 0 });
   ch.startWeight = weight; ch.startMaxReps = maxReps; ch.beforePhoto = beforePhoto || null;
   if (ch.id === "main") Sync.join(store["profile.name"]);
-  else if (ch.isPublic) Sync.joinChallenge(ch.id, store["profile.name"]);
   track("challenge_joined", { challenge_id: ch.id, buy_in: ch.buyIn, exercises: ch.goals.map((g) => g.exercise).join(",") });
   return true;
 }
@@ -1092,7 +1098,7 @@ function leaveChallenge(id) {
   app.challenges = app.challenges.filter((c) => c.id !== id);
   if (id === "main") app.leftMain = true;
   else if (leaving && leaving.isPublic) Sync.leaveChallenge(id).then((ok) => { if (!ok) toast(t("Couldn't leave challenge")); });
-  localStorage.removeItem("fs.paid." + id);
+  localStorage.removeItem(paidStorageKey(id));
   saveApp();
   track("challenge_left", { challenge_id: id });
 }
@@ -1135,7 +1141,7 @@ function publishStartActivity(c, ts) {
 }
 
 // Плюсует подход; возвращает true, если дневная норма закрылась впервые.
-function addReps(ch, counts, sessionStats) {
+function addReps(ch, counts, sessionStats, sessionDayKey = dateKey()) {
   const total = Object.values(counts).reduce((a, b) => a + b, 0);
   if (total <= 0) return false;
   const me = C.me(ch);
@@ -1155,9 +1161,9 @@ function addReps(ch, counts, sessionStats) {
   if (C.isTodayDone(ch)) me.doneToday = true;
   if (C.isGoal(ch) && C.isFinished(ch)) ch.isCompleted = true; // цель достигнута → челлендж завершён
   const closed = !wasDone && C.isTodayDone(ch);
-  if (!wasDone && sessionStats && sessionStats.elapsedMs > 0) {
+  if (sessionStats && sessionStats.elapsedMs > 0) {
     ch.workoutStatsByDay = ch.workoutStatsByDay || {};
-    const key = dateKey();
+    const key = sessionDayKey;
     const day = ch.workoutStatsByDay[key] || { elapsedMs: 0, restMs: 0, setReps: [], reps: 0, completedAt: null };
     day.elapsedMs += Math.max(0, Math.round(sessionStats.elapsedMs));
     day.restMs += Math.max(0, Math.round(sessionStats.restMs || 0));
@@ -1166,10 +1172,10 @@ function addReps(ch, counts, sessionStats) {
     if (closed) day.completedAt = Date.now();
     ch.workoutStatsByDay[key] = day;
   }
-  if (ch.id === "main") Sync.report(dateKey(), ch.myTodayReps, ch.myTotalReps);
-  else if (ch.isPublic) Sync.reportChallenge(ch.id, dateKey(), ch.myTodayReps, ch.myTotalReps);
+  if (ch.id === "main") Sync.report(sessionDayKey, ch.myTodayReps, ch.myTotalReps);
+  else if (ch.isPublic) Sync.reportChallenge(ch.id, sessionDayKey, ch.myTodayReps, ch.myTotalReps);
   if (Sync.enabled && ch.participants.length > 1) {
-    const base = { actorName: store["profile.name"] || "Player", challengeId: ch.id, challengeTitle: ch.title, dateKey: dateKey() };
+    const base = { actorName: store["profile.name"] || "Player", challengeId: ch.id, challengeTitle: ch.title, dateKey: sessionDayKey };
     if (closed) Sync.publishActivity(Object.assign({}, base, { type: "day" }));
     else {
       for (const g of ch.goals) {
@@ -3014,6 +3020,7 @@ function shareDuration(ms) {
 // Подстраховка от переполнения safe-area на редких 5+-значных суммах — до 4 цифр
 // (реалистичный потолок при 4 упражнениях по ≤500/день) базовый размер помещается впритык.
 const SHARE_HERO_CQW = 32;
+const REPACT_SLOGAN = "DON’T JUST SAY IT. PROVE IT.";
 function shareHeroCqw(total) { return String(total).length >= 5 ? 24 : SHARE_HERO_CQW; }
 // Три метрики minimal-оверлея: тренировка (время/сеты/среднее) или, без сетов, — день/повторы/процент цели.
 function shareDayStats(c, workout) {
@@ -3041,7 +3048,7 @@ function shareStoryCopy(c, f) {
     <div class="share-dare-exercises">${esc(exercises)}</div>
     ${workoutLine}
     <div class="share-reward"><span>${t("Potential reward")}</span><strong>${COIN_SYM}${fmt(C.payout(c))}</strong></div>
-    <div class="share-challenge-cta"><span>${t("Now it's your turn")}</span><strong>${t("Prove it")}</strong></div>
+    <div class="share-challenge-cta"><span>DON’T JUST SAY IT.</span><strong>PROVE IT.</strong></div>
     <div class="share-brand">REP<span>ACT</span><small>${t("Day")} ${c.currentDay} / ${c.durationDays}</small></div>`;
   }
   // Minimal: Strava-style оверлей — статистика прямо на фото, без плашек.
@@ -3057,6 +3064,7 @@ function shareStoryCopy(c, f) {
     <div class="share-minimal-progress"><span style="width:${Math.min(100, Math.round(C.myTodayTotal(c) / Math.max(C.repsNorm(c), 1) * 100))}%"></span></div>
     <div class="share-stats">${stats.map(([v, l]) => `<div class="share-stat"><span class="share-stat-value">${esc(v)}</span><span class="share-stat-label">${esc(l)}</span></div>`).join(`<span class="share-stat-divider"></span>`)}</div>
     ${workout.improvementMs > 0 ? `<div class="share-insight">${shareDuration(workout.improvementMs)} ${t("faster than last time")}</div>` : ""}
+    <div class="share-slogan">DON’T JUST SAY IT. <strong>PROVE IT.</strong></div>
     <div class="share-footer">
       <div class="share-wordmark">REP<span>ACT</span></div>
       <div class="share-day">${t("Day")} ${c.currentDay} / ${c.durationDays}</div>
@@ -3234,7 +3242,8 @@ async function shareCard(data) {
   const rewardY = H - 390;
   label(t("You take home"), rewardY);
   value(COIN_SYM + fmt(data.payout), rewardY + 102, 92, "#45d483");
-  g.fillStyle = "#c8ff21"; g.font = `750 36px ${sans}`; g.fillText(t("Now it's your turn"), pad, H - 126);
+  g.fillStyle = "rgba(255,255,255,.72)"; g.font = `750 30px ${sans}`; g.fillText("DON’T JUST SAY IT.", pad, H - 174);
+  g.fillStyle = "#c8ff21"; g.font = `900 42px ${sans}`; g.fillText("PROVE IT.", pad, H - 120);
 
   const blob = await new Promise((res) => cv.toBlob(res, "image/jpeg", .92));
   const file = new File([blob], "repact-challenge.jpg", { type: "image/jpeg" });
@@ -3317,7 +3326,7 @@ async function shareDayStory(c, options) {
     label(t("Potential reward").toUpperCase(), rewardY); value(COIN_SYM + fmt(C.payout(c)), rewardY + 72, 64);
     const ctaTop = H - 510;
     g.fillStyle = "rgba(200,255,33,.72)"; g.fillRect(pad, ctaTop, W - pad * 2, 2); g.fillRect(pad, ctaTop + 210, W - pad * 2, 2);
-    g.fillStyle = "rgba(255,255,255,.7)"; g.font = "750 34px -apple-system,system-ui,sans-serif"; g.fillText(t("Now it's your turn").toUpperCase(), pad, ctaTop + 60);
+    g.fillStyle = "rgba(255,255,255,.7)"; g.font = "750 34px -apple-system,system-ui,sans-serif"; g.fillText("DON’T JUST SAY IT.", pad, ctaTop + 60);
     g.fillStyle = "#c8ff21"; g.font = "950 112px -apple-system,system-ui,sans-serif"; g.fillText(t("Prove it").toUpperCase(), pad, ctaTop + 170);
     g.fillStyle = "#fff"; g.font = "950 64px -apple-system,system-ui,sans-serif"; g.fillText("REP", pad, H - 125);
     const repW = g.measureText("REP").width; g.fillStyle = "#c8ff21"; g.fillText("ACT", pad + repW, H - 125);
@@ -3387,8 +3396,13 @@ async function shareDayStory(c, options) {
       g.fillText(`${shareDuration(workout.improvementMs)} ${t("faster than last time")}`.toUpperCase(), padX, y);
     }
 
-    // Низ: слева REPACT, справа день челленджа
+    // Низ: слоган, затем слева REPACT и справа день челленджа
     const fy = H - padBottom;
+    g.fillStyle = sub; g.font = sans(700, 28);
+    try { g.letterSpacing = "2px"; } catch {}
+    g.fillText("DON’T JUST SAY IT.", padX, fy - 92);
+    g.fillStyle = lime; g.font = sans(850, 32); g.fillText("PROVE IT.", padX, fy - 50);
+    try { g.letterSpacing = "0px"; } catch {}
     g.fillStyle = ink; g.font = sans(900, 56); g.fillText("REP", padX, fy);
     const repW = g.measureText("REP").width;
     g.fillStyle = lime; g.fillText("ACT", padX + repW, fy);
@@ -3423,6 +3437,7 @@ function hexPath(g, cx, cy, r) {
 // Промо-карточка челленджа для шеринга (сторис-формат, тёмный full-bleed постер под инсту).
 async function shareChallengePoster(data) {
   const ru = store.lang === "ru";
+  const ua = store.lang === "ua";
   const LIME = "#c8ff21";
   const single = data.exercises.length === 1;
   const ex0 = data.exercises[0];
@@ -3436,6 +3451,16 @@ async function shareChallengePoster(data) {
     fOpen: "Открой ", fEnd: " и прими вызов.",
     micro: "СОРЕВНУЙСЯ · НЕ СЛИВАЙСЯ · ПОБЕЖДАЙ",
     sub: single ? `Мой челлендж: ${ex0.reps} ${ex0.name.toLowerCase()} каждый день, ${data.duration} дн.` : `Мой челлендж: это комбо каждый день, ${data.duration} дн.`,
+  } : ua ? {
+    badge: `ЧЕЛЕНДЖ · ${data.duration} ДН.`, aDay: "НА ДЕНЬ",
+    combo: "КОМБО", exCount: `${data.exercises.length} ВПРАВИ`,
+    stakeT: "СТАВКА", stakeS: "Монети на кону.",
+    missT: "ДОЗВОЛЕНІ ПРОПУСКИ", missS: "Тримай ритм щодня.",
+    camT: "ПЕРЕВІРЕНО КАМЕРОЮ", camS: "Кожен повтор перевіряється.",
+    keep: "ЗМОЖЕШ ПОВТОРИТИ?", cta: "ПРИЙНЯТИ ВИКЛИК",
+    fOpen: "Відкрий ", fEnd: " і прийми виклик.",
+    micro: "ЗМАГАЙСЯ · НЕ ЗДАВАЙСЯ · ПЕРЕМАГАЙ",
+    sub: single ? `Мій челендж: ${ex0.reps} ${ex0.name.toLowerCase()} щодня, ${data.duration} дн.` : `Мій челендж: це комбо щодня, ${data.duration} дн.`,
   } : {
     badge: `${data.duration}-DAY CHALLENGE`, aDay: "A DAY",
     combo: "COMBO", exCount: `${data.exercises.length} EXERCISES`,
@@ -4046,6 +4071,8 @@ root.addEventListener("click", async (e) => {
     inp.dataset.min = el.dataset.min || "1"; inp.dataset.max = el.dataset.max || "5000";
     inp.value = "";
     inp.setAttribute("aria-label", el.dataset.label || t("Custom"));
+    const group = el.closest(".create-chips");
+    if (group) group.querySelectorAll(".create-chip").forEach((chip) => chip.classList.remove("selected"));
     el.replaceWith(inp);
     inp.focus({ preventScroll: true });
     const end = inp.value.length; try { inp.setSelectionRange(end, end); } catch {}
@@ -4096,8 +4123,13 @@ root.addEventListener("click", async (e) => {
     const f = ui.form, c = app.challenges.find((x) => x.id === f.challengeId);
     if (isGuest()) { ui.sheet = null; openAuthGate("join", c.id); return; }
     if (C.isJoined(c)) { closeSheet(); return; } // уже вступил (повторный заход по ссылке)
-    const ok = joinChallenge(c, f.weight, f.maxReps, f.photo);
-    if (ok) closeSheet(); else toast(t("Not enough coins"));
+    setBtnLoading(el, true, t("Joining…"));
+    const ok = await joinChallenge(c, f.weight, f.maxReps, f.photo);
+    if (ok) closeSheet();
+    else {
+      setBtnLoading(el, false);
+      toast(ok === null ? t("Couldn't join challenge") : t("Not enough coins"));
+    }
     return;
   }
   if (cmd === "submitAuth") {
@@ -4305,6 +4337,12 @@ function afterRender() {
   // на перерисовках (шаги мастера, драг фото) — глушим.
   const _full = document.querySelector(".fullscreen");
   const _fullJustOpened = _full && !afterRender._fullOpen;
+  if (_full) {
+    _full.setAttribute("role", "dialog");
+    _full.setAttribute("aria-modal", "true");
+    _full.tabIndex = -1;
+  }
+  if (_fullJustOpened) _full.focus();
   if (_full && afterRender._fullOpen) _full.classList.add("no-enter");
   afterRender._fullOpen = !!_full;
   // Count-up цифр — только при первом появлении экрана (не на каждой перерисовке).
@@ -4516,15 +4554,16 @@ document.addEventListener("pointercancel", pressCancel, { capture: true, passive
 
 // Escape закрывает открытый лист — тот же выход, что и тап по фону.
 document.addEventListener("keydown", (e) => {
-  if (e.key === "Escape" && ui.sheet) { closeSheet(); }
-  if (e.key === "Tab" && ui.sheet) {
-    const sheet = document.querySelector(".sheet");
-    if (!sheet) return;
-    const focusable = Array.from(sheet.querySelectorAll('button:not(:disabled), input:not(:disabled), select:not(:disabled), textarea:not(:disabled), [tabindex]:not([tabindex="-1"])'))
+  if (e.key === "Escape" && ui.sheet) { closeSheet(); return; }
+  if (e.key === "Escape" && ui.full) { closeFull(); return; }
+  if (e.key === "Tab" && (ui.sheet || ui.full)) {
+    const dialog = document.querySelector(ui.sheet ? ".sheet" : ".fullscreen");
+    if (!dialog) return;
+    const focusable = Array.from(dialog.querySelectorAll('button:not(:disabled), input:not(:disabled), select:not(:disabled), textarea:not(:disabled), [tabindex]:not([tabindex="-1"])'))
       .filter((el) => !el.hidden && el.getClientRects().length);
-    if (!focusable.length) { e.preventDefault(); sheet.focus(); return; }
+    if (!focusable.length) { e.preventDefault(); dialog.focus(); return; }
     const first = focusable[0], last = focusable[focusable.length - 1];
-    if (e.shiftKey && (document.activeElement === first || document.activeElement === sheet)) { e.preventDefault(); last.focus(); }
+    if (e.shiftKey && (document.activeElement === first || document.activeElement === dialog)) { e.preventDefault(); last.focus(); }
     else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
   }
 });
@@ -4537,9 +4576,10 @@ async function shareInvite(id) {
   if (!c) return;
   const url = "https://pysarenkovv.github.io/fitstake/?join=" + encodeURIComponent(c.id);
   track("invite_shared", { challenge_id: c.id });
-  const text = t("Join my challenge") + " — " + c.title;
+  const text = REPACT_SLOGAN + "\n\n" + t("Join my challenge") + " — " + c.title;
   if (navigator.share) {
-    try { await navigator.share({ title: "Repact", text, url }); return; } catch {}
+    try { await navigator.share({ title: "Repact", text, url }); return; }
+    catch (err) { if (err && err.name === "AbortError") return; }
   }
   try { await navigator.clipboard.writeText(url); toast(t("Link copied")); }
   catch { prompt("URL", url); }
@@ -4556,6 +4596,23 @@ ui.screen = store.onboarded ? "tabs" : "onboarding";
 // Уже онбордился — открываем общий челлендж (там кнопка вступления, если ещё не внутри).
 if (store.onboarded && JOIN_INTENT) { ui.tab = "challenges"; ui.detailId = JOIN_ID; }
 render();
+
+// В PWA/Android системная кнопка Back сначала закрывает верхний слой приложения.
+// Guard-запись остаётся поверх базовой и восстанавливается после каждого закрытия слоя.
+if (history.pushState && history.replaceState) {
+  history.replaceState(Object.assign({}, history.state, { repactBase: true }), "", location.href);
+  history.pushState({ repactGuard: true }, "", location.href);
+  window.addEventListener("popstate", () => {
+    let handled = false;
+    if (ui.sheet) { ui.sheet = null; ui.form = null; handled = true; }
+    else if (ui.full) { ui.full = null; ui.form = null; ui.workoutResult = null; handled = true; }
+    else if (ui.detailId) { ui.detailId = null; handled = true; }
+    if (handled) {
+      render();
+      history.pushState({ repactGuard: true }, "", location.href);
+    } else history.back();
+  });
+}
 
 // iOS PWA иногда открывается с временно укороченным layout viewport. Реальный свайп
 // исправляет его; делаем безопасный программный пересчёт, сохраняя текущий scrollY.
@@ -4598,5 +4655,5 @@ Sync.init(() => {
 if (store.onboarded && store["profile.name"]) Sync.registerUser(store["profile.name"]);
 
 // Сторожок смены дня: интервал + возврат PWA из фона.
-setInterval(() => { if (rolloverIfNeeded() && !ui.sheet && !ui.full && !liveSession) render(); }, 30000);
-document.addEventListener("visibilitychange", () => { if (!document.hidden && rolloverIfNeeded() && !ui.sheet && !ui.full && !liveSession) render(); });
+setInterval(() => { if (!liveSession && rolloverIfNeeded() && !ui.sheet && !ui.full) render(); }, 30000);
+document.addEventListener("visibilitychange", () => { if (!document.hidden && !liveSession && rolloverIfNeeded() && !ui.sheet && !ui.full) render(); });

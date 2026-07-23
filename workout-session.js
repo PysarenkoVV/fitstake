@@ -9,6 +9,7 @@ let liveSession = null;
 async function openSession(challengeId, startExercise) {
   const isDemo = challengeId === "demo";
   const c = isDemo ? null : app.challenges.find((x) => x.id === challengeId);
+  const sessionDayKey = dateKey();
   if ((!isDemo && !c) || liveSession) return;
   const goals = isDemo
     ? [{ exercise: startExercise || "pushups", target: 5, start: 0 }]
@@ -96,10 +97,14 @@ async function openSession(challengeId, startExercise) {
     if (!tk2 || tk2.readyState === "ended" || tk2.muted) await sess.restartCamera();
   }
   // Единый teardown — снимает слушатели (без утечки), стопает камеру, убирает оверлей.
+  let destroyed = false;
   function destroySession() {
+    if (destroyed) return;
+    destroyed = true;
     document.removeEventListener("visibilitychange", onVisible);
     window.removeEventListener("focus", onVisible);
-    sess.stop(); overlay.remove(); liveSession = null;
+    sess.stop(); overlay.remove();
+    if (liveSession && liveSession.sess === sess) liveSession = null;
   }
 
   // Индикатор загрузки: перекрывает экран, пока открывается камера и грузится MediaPipe.
@@ -110,14 +115,16 @@ async function openSession(challengeId, startExercise) {
 
   try {
     await sess.start(video, canvas);
+    if (destroyed || !liveSession || liveSession.sess !== sess) { sess.stop(); return; }
     loader.remove();
     document.addEventListener("visibilitychange", onVisible);
     // focus ловит возврат из share sheet / встроенного превью, когда visibilitychange не пришёл.
     window.addEventListener("focus", onVisible);
   } catch (err) {
     // Ошибка камеры/модели: завершаем сессию, чистим и предлагаем повтор — приложение не виснет.
+    const cancelled = destroyed || (err && err.name === "AbortError");
     destroySession();
-    showCameraError(cameraError(err), challengeId, startExercise);
+    if (!cancelled) showCameraError(cameraError(err), challengeId, startExercise);
     return;
   }
 
@@ -251,6 +258,8 @@ async function openSession(challengeId, startExercise) {
     restEl.classList.remove("complete");
     overlay.classList.remove("resting");
     setStartTotal = sessionRepTotal();
+    if (workoutStartedAt && workoutStoppedAt) workoutStartedAt += Math.max(0, performance.now() - workoutStoppedAt);
+    workoutStoppedAt = 0;
     sess.setCountingEnabled(true);
     prevBottomKey = "";
   }
@@ -419,9 +428,10 @@ async function openSession(challengeId, startExercise) {
         return;
       }
       let closed;
-      try { closed = addReps(c, counts, sessionStats); }
+      try { closed = addReps(c, counts, sessionStats, sessionDayKey); }
       catch (e) { finishing = false; toast(t("Couldn't save. Try again.")); return; } // разблокируем — можно повторить
       destroySession();
+      rolloverIfNeeded();
       render();
       if (closed && C.isFinished(c)) openChallengeComplete(c);
       else openWorkoutResult(c, counts, sessionStats, closed);
