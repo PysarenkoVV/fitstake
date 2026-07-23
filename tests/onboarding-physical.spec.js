@@ -77,5 +77,7 @@ test("full onboarding walk still reaches the app after merging steps", async ({ 
   await expect(page.locator(".wheel")).toHaveCount(0); // колесо удалено
   await next.click(); // → вход (Sync включён в тестовом окружении)
   await page.getByRole("button", { name: "Continue as guest", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "Workouts you have to prove", exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "Skip", exact: true }).click();
   await expect(page.getByRole("button", { name: "Challenges", exact: true })).toBeVisible();
 });

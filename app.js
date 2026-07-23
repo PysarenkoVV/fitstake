@@ -4,7 +4,7 @@
 "use strict";
 
 // Версия оболочки — держать в синхроне с CACHE в sw.js; уходит в баг-репорты.
-const APP_VERSION = "v134";
+const APP_VERSION = "v139";
 // Последняя JS-ошибка — прикладываем к баг-репорту, чтобы сразу видеть причину.
 let lastError = "";
 window.addEventListener("error", (e) => {
@@ -116,6 +116,21 @@ const RU = {
   "Open challenges": "Открытые челленджи",
   "See all": "Смотреть все",
   "How it works": "Как это работает",
+  "How Repact works": "Как работает Repact", "Workouts you have to prove": "Тренировки, которые нужно доказать",
+  "Repact counts your reps with the camera and verifies every result.": "Repact считает повторения камерой и подтверждает каждый результат.",
+  "Do the exercise": "Выполни упражнение", "Get a verified result": "Получи подтверждённый результат",
+  "The camera is your counter": "Камера — твой счётчик", "The app will tell you when to step back or add light.": "Приложение подскажет, когда нужно отойти дальше или добавить света.",
+  "Set the phone down and step back until your whole body is visible.": "Поставь телефон и отойди так, чтобы всё тело было видно.",
+  "Sound cues": "Звуковые подсказки", "Processed on your device": "Обработка на устройстве",
+  "Choose how to start": "Выбери, как начать", "Start with the path that fits you. You can try everything later.": "Начни с подходящего варианта. Остальное можно попробовать позже.",
+  "Join a challenge": "Вступить в челлендж", "Pick a ready-made goal and start training.": "Выбери готовую цель и начни тренировку.",
+  "Create your own": "Создать свой", "Choose exercises, rules and invite friends.": "Выбери упражнения, правила и пригласи друзей.",
+  "Accept a friend's invite": "Принять приглашение друга", "Your invitation is saved.": "Твоё приглашение сохранено.", "Open a link sent by a friend.": "Открой ссылку, которую прислал друг.",
+  "Your testing checklist": "Твой чек-лист тестирования", "You don't have to finish everything at once. Your progress is saved.": "Не обязательно делать всё сразу. Прогресс сохранится.",
+  "Test the camera": "Протестировать камеру", "Join or create a challenge": "Вступить или создать челлендж", "Invite a friend": "Пригласить друга",
+  "Complete a workout": "Выполнить тренировку", "Close your daily goal": "Закрыть дневную цель", "Share your result": "Поделиться результатом", "View your progress": "Посмотреть прогресс",
+  "Found a problem?": "Нашёл проблему?", "Send a report from any screen.": "Отправь отчёт с любого экрана.", "View invitation": "Посмотреть приглашение", "Go to the app": "Перейти в приложение",
+  "Don't just say it.": "Не просто говори.", "Prove it.": "Докажи это!", "Test Repact": "Тест Repact", "Skip": "Пропустить",
   "Choose a goal": "Выбери цель",
   "Train with camera": "Тренируйся с камерой",
   "Keep your streak": "Держи серию",
@@ -425,6 +440,7 @@ const DEFAULTS = {
   "profile.sel_pushups": true, "profile.sel_squats": false, "profile.sel_pullups": false, "profile.sel_dips": false,
   "profile.reps.pushups": 15, "profile.reps.squats": 15, "profile.reps.pullups": 15, "profile.reps.dips": 15,
   workoutSounds: true, interfaceSounds: true, lang: (navigator.language || "en").startsWith("ru") ? "ru" : (navigator.language || "en").startsWith("uk") ? "ua" : "en",
+  testerGuide: null, testerProgress: null, pendingInvite: null,
 };
 const store = new Proxy({}, {
   get(_, k) {
@@ -1219,7 +1235,7 @@ function goalForChoice(level, maxReps, choice) {
 // ==========================================================================
 // UI-состояние и рендер (см. app-ui.js — экраны ниже в этом же файле)
 // ==========================================================================
-const ui = { screen: "onboarding", tab: "yours", detailId: null, sheet: null, full: null, onbStep: 0, form: null, profileSection: null, workoutResult: null };
+const ui = { screen: "onboarding", tab: "yours", detailId: null, sheet: null, full: null, onbStep: 0, guideReplay: false, form: null, profileSection: null, workoutResult: null };
 
 function isGuest() { return !Sync.enabled || Sync.isAnonymous || !Sync.email; }
 
@@ -1331,6 +1347,7 @@ function render() {
   rolloverIfNeeded();
   document.documentElement.lang = store.lang === "ua" ? "uk" : store.lang;
   if (ui.screen === "onboarding") { root.innerHTML = Onboarding() + (ui.sheet ? ui.sheet() : "") + (ui.full ? ui.full() : ""); afterRender(); return; }
+  if (ui.screen === "guide") { root.innerHTML = TesterGuide() + (ui.sheet ? ui.sheet() : "") + (ui.full ? ui.full() : ""); afterRender(); return; }
   let html = "";
   if (ui.detailId) html = DetailScreen(ui.detailId);
   else {
@@ -1542,6 +1559,26 @@ function PendingCard(c) {
 // ==========================================================================
 // Вкладка «Твои»
 // ==========================================================================
+function TesterChecklistCard() {
+  const progress = store.testerProgress;
+  if (!progress || progress.dismissed) return "";
+  const checks = [
+    [progress.cameraTested || app.totalReps > 0, t("Test the camera")],
+    [app.challenges.some(C.isJoined), t("Join or create a challenge")],
+    [progress.inviteShared, t("Invite a friend")],
+    [app.totalReps > 0, t("Complete a workout")],
+    [app.challenges.some((c) => C.isJoined(c) && C.isTodayDone(c)), t("Close your daily goal")],
+    [progress.resultShared, t("Share your result")],
+    [progress.progressViewed, t("View your progress")],
+  ];
+  const done = checks.filter(([value]) => value).length;
+  return `<section class="card tester-check-card">
+    <div class="between"><div><span class="home-eyebrow">${t("Test Repact")}</span><h2>${t("Your testing checklist")}</h2></div><button data-act="dismissTesterChecklist" aria-label="${t("Close")}">${icon("xmark")}</button></div>
+    <div class="tester-check-progress">${bar(done / checks.length)}<span>${done}/${checks.length}</span></div>
+    <div class="tester-check-items">${checks.map(([value, label]) => `<div class="${value ? "done" : ""}">${value ? iconF("checkCircle") : icon("plusCircleLine")}<span>${label}</span></div>`).join("")}</div>
+    <div class="row gap8"><button class="action-btn plain" data-act="openTesterGuide">${t("How Repact works")}</button><button class="action-btn plain" data-act="openBug">${icon("bug")}${t("Report a problem")}</button></div>
+  </section>`;
+}
 function YoursTab() {
   const mine = app.challenges.filter(C.isJoined);
   const active = mine.filter((c) => !challengeEnded(c) && !c.isCompleted && !myFailed(c));
@@ -1621,6 +1658,7 @@ function YoursTab() {
     : `<section class="home-section"><div class="home-section-head"><span>${t("Today in Repact")}</span></div><div class="card card-soft home-quiet">${icon("bolt")}<span>${t("No activity yet — be the first to train today.")}</span></div></section>`;
 
   return screenHeader(t("Home")) + `<div class="stack">
+    ${TesterChecklistCard()}
     ${active.length ? todayHero : (mine.length ? "" : discovery)}
     ${feed}
     <button class="card home-invite" data-act="invite"><span>${icon("share")}</span><span><strong>${t("Challenge a friend")}</strong><small>${t("Create a shared goal and send one link.")}</small></span>${icon("chevronRight")}</button>
@@ -2345,6 +2383,7 @@ function ProfileTab() {
     <span style="flex:1;font-weight:600;font-size:16px">${esc(label)}</span>
     <span style="color:var(--text-secondary);display:flex">${icon("chevronRight")}</span></button>`;
   return screenHeader(t("Profile")) + `<div class="stack">${guestNotice}${summary}
+    ${row("guide", t("How Repact works")).replace('data-act="profileSection:guide"', 'data-act="openTesterGuide"')}
     ${row("body", t("Body & measurements"))}
     ${row("wallet", t("Coins"))}
     ${Sync.enabled ? row("account", t("Account")) : ""}
@@ -2435,6 +2474,114 @@ const STEP = {
   name: 1, physical: 2, exercises: 3, fitness: 4, goal: 5,
   auth: SYNC_ON ? 6 : -1,
 };
+
+const GUIDE_VERSION = 1;
+function guideState() {
+  return store.testerGuide || { version: GUIDE_VERSION, status: "not_started", step: 0, startIntent: store.pendingInvite ? "invite" : "join", updatedAt: Date.now() };
+}
+function saveGuide(next) {
+  store.testerGuide = Object.assign({}, guideState(), next, { version: GUIDE_VERSION, updatedAt: Date.now() });
+}
+function testerProgress() {
+  return store.testerProgress || { startedAt: Date.now(), cameraTested: false, inviteShared: false, resultShared: false, progressViewed: false, dismissed: false };
+}
+function markTesterProgress(key) {
+  const progress = testerProgress();
+  if (progress[key]) return;
+  progress[key] = true;
+  store.testerProgress = progress;
+  track("tester_checklist_item_completed", { item: key });
+}
+function startTesterGuide(replay) {
+  ui.guideReplay = !!replay;
+  if (!replay) {
+    const state = guideState();
+    saveGuide({ status: state.status === "not_started" ? "in_progress" : state.status, step: state.step || 0 });
+    if (!store.testerProgress) store.testerProgress = testerProgress();
+    track("tester_guide_started", { source: store.pendingInvite ? "invite" : "organic" });
+  } else track("tester_guide_reopened");
+  ui.screen = "guide";
+  render();
+}
+function routeAfterGuide() {
+  const state = guideState();
+  const pending = store.pendingInvite;
+  ui.screen = "tabs"; ui.full = null; ui.sheet = null; ui.form = null;
+  if (state.startIntent === "create") { ui.tab = "challenges"; render(); openCreate(); return; }
+  if (state.startIntent === "invite" && pending && pending.challengeId) {
+    ui.tab = "challenges"; ui.detailId = pending.challengeId; render();
+    const challenge = app.challenges.find((c) => c.id === pending.challengeId);
+    if (challenge && !C.isJoined(challenge)) {
+      if (isGuest()) openAuthGate("join", pending.challengeId); else openJoin(pending.challengeId);
+    }
+    return;
+  }
+  ui.tab = "challenges"; ui.detailId = null; render();
+}
+function finishTesterGuide(skipped) {
+  if (ui.guideReplay) {
+    ui.guideReplay = false; ui.screen = "tabs"; ui.tab = "profile"; render(); return;
+  }
+  const state = guideState();
+  saveGuide({ status: skipped ? "skipped" : "completed", step: 3 });
+  track(skipped ? "tester_guide_skipped" : "tester_guide_completed", { step: state.step, path: state.startIntent });
+  routeAfterGuide();
+}
+function guideStepVisual(step) {
+  if (step === 0) return `<div class="guide-proof">
+    <div>${iconF("camera")}<span>${t("Set your phone down")}</span></div><i></i>
+    <div>${iconF("person")}<span>${t("Do the exercise")}</span></div><i></i>
+    <div>${iconF("seal")}<span>${t("Get a verified result")}</span></div>
+  </div>`;
+  if (step === 1) return `<div class="guide-camera-card">
+    <div class="guide-phone">${iconF("person")}<span></span></div>
+    <div class="guide-camera-copy"><strong>${t("Fit your whole body in frame")}</strong><span>${t("The app will tell you when to step back or add light.")}</span></div>
+  </div><div class="guide-feature-row"><span>${icon("bell")}${t("Sound cues")}</span><span>${icon("lock")}${t("Processed on your device")}</span></div>`;
+  if (step === 2) {
+    const selected = guideState().startIntent;
+    const choices = [
+      ["join", "flame", t("Join a challenge"), t("Pick a ready-made goal and start training.")],
+      ["create", "plusCircle", t("Create your own"), t("Choose exercises, rules and invite friends.")],
+      ["invite", "share", t("Accept a friend's invite"), store.pendingInvite ? t("Your invitation is saved.") : t("Open a link sent by a friend.")],
+    ];
+    return `<div class="guide-paths">${choices.map(([key, ic, title, copy]) => `<button class="${selected === key ? "selected" : ""}" data-act="guidePath:${key}" aria-pressed="${selected === key}"><span>${iconF(ic)}</span><div><strong>${title}</strong><small>${copy}</small></div>${selected === key ? iconF("checkCircle") : icon("chevronRight")}</button>`).join("")}</div>`;
+  }
+  const items = [
+    ["camera", t("Test the camera")], ["flame", t("Join or create a challenge")],
+    ["share", t("Invite a friend")], ["person", t("Complete a workout")],
+    ["checkCircle", t("Close your daily goal")], ["share", t("Share your result")],
+    ["chartBar", t("View your progress")],
+  ];
+  return `<div class="guide-checklist">${items.map(([ic, text], i) => `<div><span>${i + 1}</span>${icon(ic)}<strong>${text}</strong></div>`).join("")}</div>
+    <button class="guide-report" data-act="openBug">${icon("bug")}<span><strong>${t("Found a problem?")}</strong><small>${t("Send a report from any screen.")}</small></span>${icon("chevronRight")}</button>`;
+}
+function TesterGuide() {
+  const state = guideState(), step = ui.guideReplay ? (ui.guideStep || 0) : state.step;
+  const titles = [t("Workouts you have to prove"), t("The camera is your counter"), t("Choose how to start"), t("Your testing checklist")];
+  const copies = [
+    t("Repact counts your reps with the camera and verifies every result."),
+    t("Set the phone down and step back until your whole body is visible."),
+    t("Start with the path that fits you. You can try everything later."),
+    t("You don't have to finish everything at once. Your progress is saved."),
+  ];
+  const last = step === 3;
+  const back = step > 0 ? `<button data-act="guideBack" class="guide-top-btn" aria-label="${t("Back")}">${icon("chevronLeft")}</button>` : `<span class="guide-top-btn"></span>`;
+  return `<div class="tester-guide">
+    <div class="guide-top">${back}<div class="guide-progress">${[0,1,2,3].map((n) => `<i class="${n <= step ? "active" : ""}"></i>`).join("")}</div><span>${step + 1}/4</span></div>
+    <main class="guide-main">
+      <div class="guide-kicker">${step === 0 ? "REPACT" : t("How Repact works")}</div>
+      <h1>${titles[step]}</h1><p>${copies[step]}</p>
+      <div class="guide-visual">${guideStepVisual(step)}</div>
+      ${step === 0 ? `<div class="guide-slogan"><span>${t("Don't just say it.")}</span><strong>${t("Prove it.")}</strong></div>` : ""}
+    </main>
+    <div class="guide-actions">
+      ${last ? `<button class="action-btn" data-act="guideCamera">${iconF("camera")}${t("Test the camera")}</button>
+        <button class="text-btn" data-act="guideFinish">${store.pendingInvite ? t("View invitation") : t("Go to the app")}</button>` :
+        `<button class="action-btn" data-act="guideNext">${t("Continue")}</button><button class="text-btn" data-act="guideSkip">${t("Skip")}</button>`}
+    </div>
+  </div>`;
+}
+
 // Шаг «Твои параметры»: пол карточками, возраст/рост/вес ползунками с кнопками −/+.
 // Драг обновляет значение и заливку без render() (ветка data-slider в input-слушателе).
 function OnbPhysical() {
@@ -2563,15 +2710,7 @@ function finishOnboarding() {
   Sync.registerUser(store["profile.name"]);
   phIdentify();
   track("onboarding_completed", { level: store["profile.level"], daily_goal: store.dailyGoal });
-  ui.screen = "tabs";
-  // Пришёл по ссылке-приглашению — сразу открываем нужный публичный челлендж.
-  if (JOIN_INTENT) {
-    ui.tab = "challenges";
-    render();
-    if (isGuest()) openAuthGate("join", JOIN_ID); else if (app.challenges.some((c) => c.id === JOIN_ID)) openJoin(JOIN_ID);
-    return;
-  }
-  render();
+  startTesterGuide(false);
 }
 
 // ==========================================================================
@@ -3140,17 +3279,19 @@ function ChallengeCompleteFull() {
 function DemoCompleteFull() {
   const reps = (ui.form && ui.form.demoReps) || 5;
   const onboarding = ui.screen === "onboarding";
+  const guide = !!ui.guideCamera;
   return `<div class="fullscreen">${confetti()}<div class="celebrate">
     <div class="c-money pop-in" style="font-size:84px;display:flex">${iconF("checkCircle")}</div>
     <div class="display" style="font-size:38px">${t("Camera check complete")}</div>
     <div class="money" style="font-size:64px">${reps}</div>
     <div class="form-footer" style="max-width:340px;font-size:15px">${t("Your reps were recognized correctly. Join a challenge to start saving progress.")}</div>
     <div class="spacer"></div>
-    <button class="action-btn" data-act="${onboarding ? "onbFromDemo" : "findChallengeDemo"}" style="max-width:340px">${icon(onboarding ? "flame" : "search")}${t(onboarding ? "Get started" : "Find a challenge")}</button>
+    <button class="action-btn" data-act="${guide ? "guideDemoDone" : onboarding ? "onbFromDemo" : "findChallengeDemo"}" style="max-width:340px">${icon(guide ? "chevronRight" : onboarding ? "flame" : "search")}${t(guide ? "Continue" : onboarding ? "Get started" : "Find a challenge")}</button>
     <button class="text-btn" data-act="demoAgain">${t("Try again")}</button>
   </div></div>`;
 }
 function openDemoComplete(reps) {
+  if (reps > 0) markTesterProgress("cameraTested");
   ui.form = { demoReps: reps };
   ui.full = DemoCompleteFull;
   render();
@@ -3936,7 +4077,34 @@ root.addEventListener("click", async (e) => {
   if (act === "closeSheetBg") { if (e.target.classList.contains("sheet-backdrop")) closeSheet(); return; }
 
   switch (cmd) {
-    case "tab": go(arg); return;
+    case "tab": if (arg === "stats") markTesterProgress("progressViewed"); go(arg); return;
+    case "guideNext": {
+      const step = ui.guideReplay ? (ui.guideStep || 0) : guideState().step;
+      if (ui.guideReplay) ui.guideStep = Math.min(3, step + 1);
+      else saveGuide({ status: "in_progress", step: Math.min(3, step + 1) });
+      track("tester_guide_step_viewed", { step: Math.min(3, step + 1) });
+      render(); return;
+    }
+    case "guideBack": {
+      const step = ui.guideReplay ? (ui.guideStep || 0) : guideState().step;
+      if (ui.guideReplay) ui.guideStep = Math.max(0, step - 1);
+      else saveGuide({ step: Math.max(0, step - 1) });
+      render(); return;
+    }
+    case "guidePath": saveGuide({ startIntent: arg }); track("tester_guide_path_selected", { path: arg }); render(); return;
+    case "guideSkip": finishTesterGuide(true); return;
+    case "guideFinish": finishTesterGuide(false); return;
+    case "guideCamera":
+      if (!ui.guideReplay) saveGuide({ status: "completed", step: 3 });
+      ui.guideCamera = true;
+      track("camera_demo_started", { source: "tester_guide" });
+      openCameraPrep("demo", "pushups"); return;
+    case "guideDemoDone":
+      ui.guideCamera = false; markTesterProgress("cameraTested");
+      track("camera_demo_completed", { source: "tester_guide", reps: (ui.form && ui.form.demoReps) || 0 });
+      if (ui.guideReplay) { ui.guideReplay = false; ui.screen = "tabs"; ui.tab = "profile"; ui.full = null; ui.form = null; render(); }
+      else routeAfterGuide();
+      return;
     case "shareDoneHome":
       ui.shareReturnState = null; ui.full = null; ui.form = null; ui.workoutResult = null;
       go("yours"); return;
@@ -3987,6 +4155,11 @@ root.addEventListener("click", async (e) => {
     case "openFriends": ui.sheet = FriendsSheet; render(); return;
     case "openNotifications": localStorage.setItem(ACTIVITY_SEEN_KEY, String(Date.now())); ui.sheet = NotificationsSheet; render(); return;
     case "profileSection": ui.profileSection = arg; navRender(() => window.scrollTo(0, 0)); return;
+    case "openTesterGuide": ui.guideStep = 0; startTesterGuide(true); return;
+    case "dismissTesterChecklist": {
+      const progress = testerProgress(); progress.dismissed = true; store.testerProgress = progress;
+      track("tester_checklist_dismissed"); render(); return;
+    }
     case "profileHome": ui.profileSection = null; navRender(() => window.scrollTo(0, 0)); return;
     case "editProfile": profileEditing = true; profileNameDraft = null; render(); return;
     case "saveProfile": {
@@ -4194,7 +4367,10 @@ root.addEventListener("click", async (e) => {
     if (C.isJoined(c)) { closeSheet(); return; } // уже вступил (повторный заход по ссылке)
     setBtnLoading(el, true, t("Joining…"));
     const ok = await joinChallenge(c, f.weight, f.maxReps, f.photo);
-    if (ok) closeSheet();
+    if (ok) {
+      if (store.pendingInvite && store.pendingInvite.challengeId === c.id) store.pendingInvite = null;
+      closeSheet();
+    }
     else {
       setBtnLoading(el, false);
       toast(ok === null ? t("Couldn't join challenge") : t("Not enough coins"));
@@ -4287,7 +4463,7 @@ root.addEventListener("click", async (e) => {
     const c = app.challenges.find((x) => x.id === arg);
     const shareForm = Object.assign({}, ui.form, { photo: ui.form.background === "photo" ? ui.form.photo : null });
     const shared = await shareDayStory(c, shareForm);
-    if (shared) openShareComplete({ type: shareForm.shareReturn, challengeId: c.id });
+    if (shared) { markTesterProgress("resultShared"); openShareComplete({ type: shareForm.shareReturn, challengeId: c.id }); }
     return;
   }
   if (cmd === "shareResult") {
@@ -4299,7 +4475,7 @@ root.addEventListener("click", async (e) => {
       return `${fmt(total)} ${Exercise.displayName(g.exercise).toLowerCase()}`;
     }).join(" · ");
     const shared = await shareCard({ title: c.title, duration: c.durationDays, totalReps: c.myTotalReps, exerciseSummary, weight: wc, maxReps: mc, payout: C.payout(c), beforePhoto: c.beforePhoto, afterPhoto: f.photo });
-    if (shared) openShareComplete({ type: "challengeComplete", challengeId: c.id, form: Object.assign({}, f) });
+    if (shared) { markTesterProgress("resultShared"); openShareComplete({ type: "challengeComplete", challengeId: c.id, form: Object.assign({}, f) }); }
     return;
   }
 
@@ -4648,10 +4824,10 @@ async function shareInvite(id) {
   const slogan = store.lang === "ua" ? "Не просто кажи. Доведи це! — Repact" : REPACT_SLOGAN;
   const text = slogan + "\n\n" + t("Join my challenge") + " — " + c.title;
   if (navigator.share) {
-    try { await navigator.share({ title: "Repact", text, url }); return; }
+    try { await navigator.share({ title: "Repact", text, url }); markTesterProgress("inviteShared"); return; }
     catch (err) { if (err && err.name === "AbortError") return; }
   }
-  try { await navigator.clipboard.writeText(url); toast(t("Link copied")); }
+  try { await navigator.clipboard.writeText(url); markTesterProgress("inviteShared"); toast(t("Link copied")); }
   catch { prompt("URL", url); }
 }
 
@@ -4661,10 +4837,12 @@ async function shareInvite(id) {
 // Пришли по ссылке-приглашению: запоминаем и чистим URL, чтобы обновление страницы не повторяло действие.
 const JOIN_ID = new URLSearchParams(location.search).get("join") || null;
 const JOIN_INTENT = !!JOIN_ID;
+if (JOIN_ID) store.pendingInvite = { challengeId: JOIN_ID, receivedAt: Date.now() };
 if (JOIN_INTENT && history.replaceState) history.replaceState(null, "", location.pathname);
 ui.screen = store.onboarded ? "tabs" : "onboarding";
+if (store.onboarded && store.testerGuide && store.testerGuide.status === "in_progress") ui.screen = "guide";
 // Уже онбордился — открываем общий челлендж (там кнопка вступления, если ещё не внутри).
-if (store.onboarded && JOIN_INTENT) { ui.tab = "challenges"; ui.detailId = JOIN_ID; }
+if (store.onboarded && JOIN_INTENT && ui.screen !== "guide") { ui.tab = "challenges"; ui.detailId = JOIN_ID; }
 render();
 
 // В PWA/Android системная кнопка Back сначала закрывает верхний слой приложения.
