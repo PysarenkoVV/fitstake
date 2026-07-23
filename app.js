@@ -4,7 +4,7 @@
 "use strict";
 
 // Версия оболочки — держать в синхроне с CACHE в sw.js; уходит в баг-репорты.
-const APP_VERSION = "v142";
+const APP_VERSION = "v143";
 // Последняя JS-ошибка — прикладываем к баг-репорту, чтобы сразу видеть причину.
 let lastError = "";
 window.addEventListener("error", (e) => {
@@ -268,6 +268,8 @@ const RU = {
   "This week": "На этой неделе", "Last 30 days": "Последние 30 дней", "Active days": "Активных дней",
   "Best streak": "Лучшая серия", "Current streak": "Текущая серия", "Personal records": "Личные рекорды",
   "Recent workouts": "Последние тренировки", "Daily best": "Лучший день", "No reps yet": "Пока нет повторов",
+  "Show all workouts": "Показать все тренировки", "Collapse workouts": "Свернуть тренировки",
+  "Push-ups short": "Отжимания", "Squats short": "Приседания", "Pull-ups short": "Подтягивания", "Dips short": "Брусья",
   "Reps · 30 days": "Повторы · 30 дней", "Completion": "Выполнено", "All": "Все",
   "%lld of %lld": "%lld из %lld",
   "reps": "повторов", "Exercises": "Упражнения",
@@ -873,14 +875,14 @@ function applySync() {
 }
 
 // Старт remote-челленджа: private задаёт создатель (узел startAt); public стартует
-// автоматически на следующий день после того, как собралось ≥ minPlayers и все нажали
+// автоматически сразу после того, как собралось ≥ minPlayers и все нажали
 // «Готов!». null = ещё Pending (стартовать нельзя).
 function remoteStartAt(rec, m) {
   if (m.access === "private") return typeof rec.startAt === "number" ? rec.startAt : null;
   if (m.access === "public") {
     const parts = Object.values(rec.participants || {}), minP = m.minPlayers || 0;
     if (minP >= 2 && parts.length >= minP && parts.every((p) => typeof p.ready === "number")) {
-      return startOfDay(Math.max(...parts.map((p) => p.ready))) + DAY;
+      return Math.max(...parts.map((p) => p.ready));
     }
     return null;
   }
@@ -1136,15 +1138,26 @@ function startChallengeNow(id, ts) {
 
 // Участник public-челленджа нажал «Готов!». Если моим действием сбор завершился
 // (собрано ≥ minPlayers и все готовы) — я публикую уведомление о старте.
-function markReady(id) {
+async function markReady(id) {
   const c = app.challenges.find((x) => x.id === id);
   if (!c) return;
   const me = C.me(c);
-  if (me) me._ready = Date.now();
-  if (Sync.enabled) Sync.setReady(id).then((ok) => { if (!ok) toast(t("Couldn't mark ready")); });
+  const readyAt = Date.now();
+  if (me) me._ready = readyAt;
+  render();
+  if (Sync.enabled && !(await Sync.setReady(id))) {
+    if (me) me._ready = null;
+    toast(t("Couldn't mark ready"));
+    render();
+    return;
+  }
   const readyCount = c.participants.filter((p) => p._ready).length;
   if (c.access === "public" && c.participants.length >= c.minPlayers && readyCount >= c.participants.length) {
-    publishStartActivity(c, startOfDay(Date.now()) + DAY);
+    c.startAt = readyAt;
+    c.currentDay = 1;
+    ui.challengeTab = "active";
+    saveApp();
+    publishStartActivity(c, readyAt);
   }
   render();
 }
@@ -1236,6 +1249,7 @@ function goalForChoice(level, maxReps, choice) {
 // UI-состояние и рендер (см. app-ui.js — экраны ниже в этом же файле)
 // ==========================================================================
 const ui = { screen: "onboarding", tab: "yours", detailId: null, sheet: null, full: null, onbStep: 0, guideReplay: false, form: null, profileSection: null, workoutResult: null };
+ui.recentWorkoutsExpanded = false;
 
 function isGuest() { return !Sync.enabled || Sync.isAnonymous || !Sync.email; }
 
@@ -1581,7 +1595,7 @@ function TesterChecklistCard() {
 }
 function YoursTab() {
   const mine = app.challenges.filter(C.isJoined);
-  const active = mine.filter((c) => !challengeEnded(c) && !c.isCompleted && !myFailed(c));
+  const active = mine.filter((c) => C.status(c) === "active" && !myFailed(c));
   const availableToday = active.filter((c) => !C.isTodayDone(c));
 
   // Блок «Сегодня» — дневная норма только у streak-челленджей; goal-цели (общий счёт) в сумму не входят.
@@ -1718,7 +1732,7 @@ const ACTIVITY_SEEN_KEY = "fs.activity.seen";
 function sharedActivity() {
   const joined = new Set(app.challenges.filter(C.isJoined).map((c) => c.id));
   return Object.entries(Sync.state.activity || {}).map(([id, e]) => Object.assign({ id }, e))
-    .filter((e) => e.actorId !== Sync.uid && joined.has(e.challengeId))
+    .filter((e) => (e.type === "start" || e.actorId !== Sync.uid) && joined.has(e.challengeId))
     .sort((a, b) => (b.ts || 0) - (a.ts || 0)).slice(0, 50);
 }
 function unreadActivityCount() {
@@ -1927,7 +1941,7 @@ function StartPicker() {
 }
 
 function availableWorkoutsToday() {
-  return app.challenges.filter((c) => C.isJoined(c) && !challengeEnded(c) && !c.isCompleted && !myFailed(c) && !C.isTodayDone(c));
+  return app.challenges.filter((c) => C.isJoined(c) && C.status(c) === "active" && !myFailed(c) && !C.isTodayDone(c));
 }
 
 function WorkoutPickerSheet() {
@@ -2206,19 +2220,34 @@ function StatsTab() {
   const past = app.history.filter((d) => startOfDay(d.date) !== today && d.entries.length).slice(-7).reverse();
   const last = app.history[app.history.length - 1];
   const todayPractice = last && startOfDay(last.date) === today ? last.entries.filter((e) => e.title == null) : [];
-  const entryRow = (title, reps, norm, done) => `<div class="entry-row">
+  const entryRow = (title, reps, norm, done, hidden) => `<div class="entry-row${hidden ? " recent-workout-extra" : ""}">
     <span style="color:${done ? "var(--money)" : "var(--text-secondary)"};display:flex">${iconF(done ? "checkCircle" : "flame")}</span>
     <span style="flex:1;font-weight:500;font-size:15px">${esc(title)}</span>
     <span class="money ${done ? "c-money" : ""}" style="font-size:14px;color:${done ? "" : "rgba(255,255,255,.85)"}">${norm != null ? `${reps} / ${norm}` : `+${reps}`}</span></div>`;
-  const dayChip = (txt) => `<span class="day-chip">${esc(txt)}</span>`;
-  let journal = `<div class="progress-section-title">${t("Recent workouts")}</div>` + dayChip(t("Today"));
-  journal += joined.map((c) => entryRow(c.title, C.myTodayTotal(c), C.repsNorm(c), C.isTodayDone(c))).join("");
-  journal += todayPractice.map((e) => entryRow(t("Practice"), e.reps, null, false)).join("");
-  for (const d of past) {
-    journal += dayChip(new Date(d.date).toLocaleDateString(localeCode(), { day: "numeric", month: "short" }));
-    journal += d.entries.map((e) => entryRow(e.title || t("Practice"), e.reps, e.norm, e.norm != null && e.reps >= e.norm)).join("");
+  const groups = [{
+    label: t("Today"),
+    entries: [
+      ...joined.map((c) => ({ title: c.title, reps: C.myTodayTotal(c), norm: C.repsNorm(c), done: C.isTodayDone(c) })),
+      ...todayPractice.map((e) => ({ title: t("Practice"), reps: e.reps, norm: null, done: false })),
+    ],
+  }, ...past.map((d) => ({
+    label: new Date(d.date).toLocaleDateString(localeCode(), { day: "numeric", month: "short" }),
+    entries: d.entries.map((e) => ({ title: e.title || t("Practice"), reps: e.reps, norm: e.norm, done: e.norm != null && e.reps >= e.norm })),
+  }))].filter((group) => group.entries.length);
+  const totalRecent = groups.reduce((sum, group) => sum + group.entries.length, 0);
+  let shown = 0;
+  let journal = `<div class="progress-journal-head"><div class="progress-section-title">${t("Recent workouts")}</div>
+    ${totalRecent > 3 ? `<button data-act="toggleRecentWorkouts" aria-expanded="${ui.recentWorkoutsExpanded}" aria-label="${t(ui.recentWorkoutsExpanded ? "Collapse workouts" : "Show all workouts")}">${icon("chevronRight")}</button>` : ""}</div>`;
+  for (const group of groups) {
+    const wholeGroupHidden = !ui.recentWorkoutsExpanded && shown >= 3;
+    journal += `<span class="day-chip${wholeGroupHidden ? " recent-workout-extra" : ""}">${esc(group.label)}</span>`;
+    for (const entry of group.entries) {
+      const hidden = !ui.recentWorkoutsExpanded && shown >= 3;
+      journal += entryRow(entry.title, entry.reps, entry.norm, entry.done, hidden);
+      shown++;
+    }
   }
-  const journalCard = `<section class="progress-section card progress-journal">${journal}</section>`;
+  const journalCard = `<section class="progress-section card progress-journal ${ui.recentWorkoutsExpanded ? "expanded" : ""}">${journal}</section>`;
 
   return screenHeader(t("Progress")) + `<div class="stack progress-stack">${heroCard}${disciplineCard}${recordsCard}${weeklyCard}${allTimeCard}${insightsCard}${journalCard}</div>`;
 }
@@ -2747,10 +2776,24 @@ function fieldStepper(label, key, min, max, by) {
 const CREATE_EX = ["pushups", "squats", "pullups", "dips"];
 const CREATE_LAST = 3;
 function selectedExercises(f) { return CREATE_EX.filter((e) => f["sel_" + e]); }
+function shortExerciseName(exercise) {
+  const keys = { pushups: "Push-ups short", squats: "Squats short", pullups: "Pull-ups short", dips: "Dips short" };
+  const english = { pushups: "Push-ups", squats: "Squats", pullups: "Pull-ups", dips: "Dips" };
+  return store.lang === "en" ? english[exercise] : t(keys[exercise]);
+}
 function defaultTitle(f) {
   const sel = selectedExercises(f);
   if (!sel.length) return t("New challenge");
-  return sel.map((e) => `${f[e]} ${Exercise.displayName(e)}`).join(" + ");
+  return sel.map(shortExerciseName).join(" + ");
+}
+function publishableChallengeTitle(f) {
+  const custom = f.title.trim();
+  const full = custom || defaultTitle(f);
+  if (full.length <= 40) return full;
+  // Firebase ограничивает название 40 символами; пользовательское название
+  // аккуратно обрезаем, а автоматическое уже использует короткие имена.
+  const compact = custom || defaultTitle(f);
+  return compact.slice(0, 40).trim();
 }
 
 function createSummary(f) {
@@ -2915,7 +2958,7 @@ async function saveChallengeForm() {
   const isPublic = access !== "solo";
   // solo стартует сразу; private ждёт кнопки создателя, public — набора участников (startAt=null → Pending).
   const ok = await createChallenge({
-    title: f.title.trim() || defaultTitle(f), goals, type: f.type || "streak", access,
+    title: publishableChallengeTitle(f), goals, type: f.type || "streak", access,
     minPlayers: access === "public" ? Math.min(Math.max(f.minPlayers, 2), 50) : 0,
     startAt: access === "solo" ? startOfDay(Date.now()) : null,
     durationDays: Math.min(Math.max(f.duration, 1), 365), buyIn: Math.max(f.buyIn, 0), isPublic, missPolicy: f.miss,
@@ -4140,6 +4183,7 @@ root.addEventListener("click", async (e) => {
     case "findChallenge": go("challenges"); return;
     case "create": openCreate(); return;
     case "challengeTab": ui.challengeTab = arg; render(); return;
+    case "toggleRecentWorkouts": ui.recentWorkoutsExpanded = !ui.recentWorkoutsExpanded; render(); return;
     case "openAccountGate": openAuthGate("account"); return;
     case "closeAuthGate": closeAuthGate(); return;
     case "useTemplate": {
@@ -4210,7 +4254,7 @@ root.addEventListener("click", async (e) => {
     case "showResult": openChallengeComplete(app.challenges.find((c) => c.id === arg)); return;
     case "startToday": case "startSolo": startChallengeNow(arg, startOfDay(Date.now())); return;
     case "startTomorrow": startChallengeNow(arg, startOfDay(Date.now()) + DAY); return;
-    case "setReady": markReady(arg); return;
+    case "setReady": await markReady(arg); return;
     case "invitePending": shareInvite(arg); return;
     case "askLeave": openLeave(arg); return;
     case "confirmLeave": leaveChallenge(arg); ui.sheet = null; ui.form = null; ui.detailId = null; render(); return;

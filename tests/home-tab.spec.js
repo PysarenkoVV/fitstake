@@ -59,6 +59,28 @@ test("Progress highlights weekly growth, discipline, records, and recent workout
   await expect(page.locator(".record-row")).toHaveCount(2);
 });
 
+test("Recent workouts shows three entries until expanded", async ({ page }) => {
+  await page.evaluate(() => {
+    const today = startOfDay(Date.now());
+    app.challenges = [];
+    app.history = Array.from({ length: 5 }, (_, i) => ({
+      id: "recent-" + i,
+      date: today - i * DAY,
+      entries: [{ title: i === 0 ? null : "Workout " + (i + 1), reps: 20 + i, norm: i === 0 ? null : 20, byEx: { pushups: 20 + i } }],
+    })).reverse();
+    ui.tab = "stats";
+    ui.recentWorkoutsExpanded = false;
+    render();
+  });
+  const journal = page.locator(".progress-journal");
+  await expect(journal.locator(".entry-row:visible")).toHaveCount(3);
+  const toggle = journal.getByRole("button", { name: "Show all workouts" });
+  await expect(toggle).toHaveAttribute("aria-expanded", "false");
+  await toggle.click();
+  await expect(journal.locator(".entry-row:visible")).toHaveCount(5);
+  await expect(journal.getByRole("button", { name: "Collapse workouts" })).toHaveAttribute("aria-expanded", "true");
+});
+
 test("play button on an active challenge card opens workout setup", async ({ page }) => {
   await page.evaluate(() => {
     const c = newChallenge({
@@ -94,6 +116,19 @@ test("Continue workout offers only challenges that are not completed today", asy
   await page.getByRole("button", { name: /Dip day/ }).click();
   await expect(page.getByText("Camera setup", { exact: true })).toBeVisible();
   expect(await page.evaluate(() => ui.form.challengeId)).toBe("todo-b");
+});
+
+test("Continue workout excludes pending challenges", async ({ page }) => {
+  await page.evaluate(() => {
+    app.challenges = [
+      newChallenge({ id: "active", title: "Active workout", access: "solo", goals: [{ exercise: "pushups", repsPerDay: 50 }], durationDays: 7, buyIn: 0, startAt: startOfDay(Date.now()), participants: [{ id: "me", isMe: true, state: "active" }] }),
+      newChallenge({ id: "pending", title: "Pending workout", access: "private", goals: [{ exercise: "dips", repsPerDay: 30 }], durationDays: 7, buyIn: 0, startAt: null, participants: [{ id: "me", isMe: true, state: "active" }] }),
+    ];
+    ui.tab = "yours"; render();
+  });
+  await page.getByRole("button", { name: "Continue workout", exact: true }).click();
+  await expect(page.getByText("Active workout", { exact: true })).toBeVisible();
+  await expect(page.getByText("Pending workout", { exact: true })).toHaveCount(0);
 });
 
 test("remote cleanup removes cached Browse challenges but keeps the main challenge", async ({ page }) => {

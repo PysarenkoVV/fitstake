@@ -47,3 +47,56 @@ test("public pending card shows Ready! and hides it once tapped", async ({ page 
   await expect(page.getByRole("button", { name: "Ready!", exact: true })).toHaveCount(0);
   await expect(page.getByText(/Waiting for everyone to gather/)).toBeVisible();
 });
+
+test("last ready participant activates public challenge immediately and publishes start", async ({ page }) => {
+  const result = await page.evaluate(async () => {
+    const originalReady = Sync.setReady;
+    const originalPublish = Sync.publishActivity;
+    const events = [];
+    Sync.setReady = async () => true;
+    Sync.publishActivity = (event) => events.push(event);
+    const c = newChallenge({
+      id: "public-ready", title: "Everyone ready", access: "public", isPublic: true, minPlayers: 2,
+      goals: [{ exercise: "pushups", repsPerDay: 50 }], durationDays: 7, buyIn: 0, startAt: null,
+      participants: [
+        { id: "other", name: "Other", isMe: false, state: "active", _ready: Date.now() - 1000 },
+        { id: "me", name: "Me", isMe: true, state: "active", _ready: null },
+      ],
+    });
+    app.challenges.unshift(c);
+    try {
+      await markReady(c.id);
+      return { status: C.status(c), startIsToday: dateKey(c.startAt) === dateKey(), events };
+    } finally {
+      Sync.setReady = originalReady;
+      Sync.publishActivity = originalPublish;
+    }
+  });
+  expect(result.status).toBe("active");
+  expect(result.startIsToday).toBe(true);
+  expect(result.events).toHaveLength(1);
+  expect(result.events[0]).toMatchObject({ challengeId: "public-ready", type: "start" });
+});
+
+test("long automatic combo title is shortened before Firebase publish", async ({ page }) => {
+  const result = await page.evaluate(async () => {
+    const originalCreate = Sync.createChallenge;
+    let published = null;
+    Sync.createChallenge = async (_id, meta) => { published = meta; return true; };
+    ui.form = newCreateForm({
+      access: "private", title: "",
+      sel_pushups: false, sel_squats: false, sel_pullups: true, sel_dips: true,
+      pullups: 50, dips: 50, duration: 3, buyIn: 0,
+    });
+    try {
+      const ok = await saveChallengeForm();
+      return { ok, title: published && published.title, goals: published && published.goals };
+    } finally {
+      Sync.createChallenge = originalCreate;
+    }
+  });
+  expect(result.ok).toBe(true);
+  expect(result.title).toBe("Pull-ups + Dips");
+  expect(result.title.length).toBeLessThanOrEqual(40);
+  expect(result.goals).toHaveLength(2);
+});

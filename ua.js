@@ -221,6 +221,8 @@ Object.assign(window.UA_TRANSLATIONS, {
   "This week": "Цього тижня", "Last 30 days": "Останні 30 днів", "Active days": "Активні дні",
   "Best streak": "Найкраща серія", "Current streak": "Поточна серія", "Personal records": "Особисті рекорди",
   "Recent workouts": "Останні тренування", "Daily best": "Рекорд дня", "No reps yet": "Повторів поки немає",
+  "Show all workouts": "Показати всі тренування", "Collapse workouts": "Згорнути тренування",
+  "Push-ups short": "Віджимання", "Squats short": "Присідання", "Pull-ups short": "Підтягування", "Dips short": "Бруси",
   "Reps · 30 days": "Повтори · 30 днів", "Completion": "Виконання", "All": "Усі", "%lld of %lld": "%lld з %lld",
   "reps": "повторів", "Exercises": "Вправи", "AI verified": "Перевірено AI", "Avg / set": "Середнє / підхід",
   "Day": "День", "faster than last time": "швидше, ніж минулого разу", "Body & measurements": "Тіло та заміри",

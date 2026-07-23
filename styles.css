@@ -1307,6 +1307,11 @@ button:is(:active, .pressed):not(:disabled) { transform: scale(0.97); filter: br
 .record-streak span { display: flex; align-items: center; gap: 8px; color: var(--accent); font-size: 12px; font-weight: 700; }
 .record-streak strong { color: var(--accent); font: 850 20px/1 var(--mono); }
 .progress-journal { display: flex; flex-direction: column; gap: 10px; }
+.progress-journal-head { min-height: 28px; display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.progress-journal-head button { width: 36px; height: 36px; margin: -4px -6px -4px 0; display: flex; align-items: center; justify-content: center; border-radius: 50%; color: var(--text-secondary); }
+.progress-journal-head button .icon { transform: rotate(90deg); transition: transform .2s var(--ease-out); }
+.progress-journal-head button[aria-expanded="true"] .icon { transform: rotate(-90deg); }
+.progress-journal .recent-workout-extra { display: none; }
 
 /* стрик-пилюля */
 .streak-pill {
