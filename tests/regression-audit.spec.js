@@ -64,6 +64,13 @@ test("service worker never stores failed responses", () => {
   expect(source.indexOf("if (res.ok)")).toBeLessThan(source.indexOf("c.put(request, copy)"));
 });
 
+test("standalone layout uses the full viewport after iOS camera sessions", () => {
+  const source = fs.readFileSync(new URL("../styles.css", import.meta.url), "utf8");
+  expect(source).toContain("@media (display-mode: standalone)");
+  expect(source).toMatch(/\.session, \.fullscreen, \.story-camera\s*{[^}]*height:\s*100lvh/s);
+  expect(source).toContain(".tabbar { bottom: calc(100dvh - 100lvh); }");
+});
+
 test("failed remote join does not charge or add a local participant", async ({ page }) => {
   await page.addInitScript(() => {
     localStorage.setItem("fs.onboarded", "true");

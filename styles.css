@@ -1361,6 +1361,24 @@ button:is(:active, .pressed):not(:disabled) { transform: scale(0.97); filter: br
 .wrap { display: flex; flex-wrap: wrap; gap: 6px 12px; }
 .gap6 { gap: 6px; } .gap8 { gap: 8px; } .gap10 { gap: 10px; } .gap12 { gap: 12px; }
 
+/* iOS PWA после камеры иногда оставляет 100dvh укороченным на высоту уже скрытой
+   панели Safari. В standalone используем полный large viewport: safe-area остаётся
+   внутренним отступом элементов, но больше не превращается в отдельную полосу. */
+@media (display-mode: standalone) {
+  html, body, #app { min-height: 100lvh; }
+  .session, .fullscreen, .story-camera {
+    top: 0;
+    bottom: auto;
+    height: 100lvh;
+  }
+  .tabbar { bottom: calc(100dvh - 100lvh); }
+  .celebrate,
+  .share-editor-shell,
+  .preset-setup,
+  .prep-content,
+  .workout-result-shell { min-height: 100lvh; }
+}
+
 /* Уважаем системную настройку «уменьшить движение»:
    гасим декоративные/крупные анимации, оставляем интерфейс работоспособным. */
 @media (prefers-reduced-motion: reduce) {
