@@ -57,6 +57,41 @@ test("dips require full extension and ignore angle jitter without vertical trave
   expect(result).toEqual({ beforeExtension: 0, afterExtension: 1, afterJitter: 1 });
 });
 
+test("dips keep counting through a brief hidden wrist but do not count a head nod", async ({ page }) => {
+  const result = await page.evaluate(() => {
+    const point = (x, y, confidence = 1) => ({ x, y, confidence });
+    const pose = (down, hideRightWrist = false, nodOnly = false) => {
+      const travel = down && !nodOnly ? .10 : 0;
+      const shoulderY = .30 + travel;
+      const elbowY = down ? .50 : .40;
+      const wristY = .50;
+      return {
+        nose: point(.50, .16 + (down ? .10 : 0)),
+        leftEar: point(.47, .17 + (down ? .10 : 0)),
+        rightEar: point(.53, .17 + (down ? .10 : 0)),
+        leftShoulder: point(.40, shoulderY), rightShoulder: point(.60, shoulderY),
+        leftElbow: point(.40, elbowY), rightElbow: point(.60, elbowY),
+        leftWrist: point(down ? .50 : .40, wristY),
+        rightWrist: point(down ? .50 : .60, wristY, hideRightWrist ? .1 : 1),
+        leftHip: point(.44, .55 + travel), rightHip: point(.56, .55 + travel),
+      };
+    };
+    const run = (nodOnly) => {
+      const counter = new window.RepCounter("dips");
+      let now = 0;
+      const feed = (points, frames) => {
+        for (let i = 0; i < frames; i++) counter.process(points, { width: 1000, height: 1000 }, true, now += 50);
+      };
+      feed(pose(false), 4);
+      feed(pose(true, true, nodOnly), 5);
+      feed(pose(false), 5);
+      return counter.count;
+    };
+    return { hiddenWrist: run(false), headOnly: run(true) };
+  });
+  expect(result).toEqual({ hiddenWrist: 1, headOnly: 0 });
+});
+
 test("camera rejects sparse landmarks before drawing or counting a pose", async ({ page }) => {
   const result = await page.evaluate(() => {
     const p = (x, y, confidence = 1) => ({ x, y, confidence });
@@ -136,6 +171,34 @@ test("push-ups and dips hide unstable legs but keep hips in the skeleton", async
   expect(result.dips).toEqual(result.pushups);
   expect(result.squats).toContain(70);
   expect(result.squats).toContain(90);
+});
+
+test("dips draw a head connected to the shoulder line", async ({ page }) => {
+  const result = await page.evaluate(() => {
+    const point = (x, y) => ({ x, y, confidence: 1 });
+    const session = new window.PoseSession(["dips"]);
+    const lines = [];
+    const arcs = [];
+    let from = null;
+    session._ctx = {
+      clearRect() {}, beginPath() { from = null; },
+      moveTo(x, y) { from = [Math.round(x), Math.round(y)]; },
+      lineTo(x, y) { lines.push([from, [Math.round(x), Math.round(y)]]); },
+      stroke() {}, fill() {},
+      arc(x, y, r) { arcs.push([Math.round(x), Math.round(y), Math.round(r)]); },
+    };
+    session._drawSkeleton({
+      head: point(.50, .12), neck: point(.50, .24),
+      leftShoulder: point(.42, .24), rightShoulder: point(.58, .24),
+      leftElbow: point(.36, .40), rightElbow: point(.64, .40),
+      leftWrist: point(.34, .56), rightWrist: point(.66, .56),
+      leftHip: point(.45, .52), rightHip: point(.55, .52),
+      root: point(.50, .52),
+    }, { width: 100, height: 100 }, true);
+    return { lines, arcs };
+  });
+  expect(result.lines).toContainEqual([[50, 12], [50, 24]]);
+  expect(result.arcs.some(([x, y, r]) => x === 50 && y === 12 && r > 4)).toBe(true);
 });
 
 test("push-ups at an angle to the camera count via the 3D elbow angle", async ({ page }) => {

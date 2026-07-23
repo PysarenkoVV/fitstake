@@ -6,6 +6,7 @@
 
 // --- Скелет: суставы, стороны, конфигурация упражнений (порт PoseModel.swift) ---
 const BONES = [
+  ["head", "neck"],
   ["neck", "leftShoulder"], ["neck", "rightShoulder"], ["neck", "root"],
   ["leftShoulder", "leftElbow"], ["leftElbow", "leftWrist"],
   ["rightShoulder", "rightElbow"], ["rightElbow", "rightWrist"],
@@ -60,16 +61,22 @@ const EX = {
     minBodyTravel: 0.18,
     maxAnchorDrift: 1.4,
     relativeBodyTravel: true,
-    requireBothSides: true,
+    // Для входа в трекинг всё ещё нужны обе руки. После этого короткое
+    // перекрытие одной кисти брусом не должно обрывать уже начатый повтор.
+    requireBothSides: false,
+    graceFrames: 22,
+    angle3d: true,
   },
 };
 
 // Индексы landmark-точек BlazePose (33 точки).
 const LM = {
+  nose: 0, leftEar: 7, rightEar: 8,
   leftShoulder: 11, rightShoulder: 12, leftElbow: 13, rightElbow: 14,
   leftWrist: 15, rightWrist: 16, leftHip: 23, rightHip: 24,
   leftKnee: 25, rightKnee: 26, leftAnkle: 27, rightAnkle: 28,
 };
+const BODY_LM_NAMES = Object.keys(LM).filter((name) => name !== "nose" && !/Ear$/.test(name));
 
 const POSE_MIN_CONFIDENCE = 0.45;
 
@@ -80,7 +87,7 @@ function posePointVisible(p, confidence = POSE_MIN_CONFIDENCE) {
 // MediaPipe sometimes returns a few confident landmarks for clothes, equipment or the floor.
 // Accept a pose only when it contains a plausible torso and enough connected body landmarks.
 function poseIsCoherent(points, exercise) {
-  const visible = Object.keys(LM).filter((name) => posePointVisible(points[name]));
+  const visible = BODY_LM_NAMES.filter((name) => posePointVisible(points[name]));
   const upperBodyExercise = exercise === "pushups" || exercise === "dips";
 
   // Near the floor the torso often hides the hips from a low camera angle. For arm
@@ -118,7 +125,7 @@ function poseQualityIssue(points, exercise, brightness, hasLandmarks) {
   if (brightness != null && brightness < 38) return "tooDark";
   if (!hasLandmarks) return "noBody";
 
-  const confident = Object.keys(LM).filter((name) => points[name] && points[name].confidence >= POSE_MIN_CONFIDENCE);
+  const confident = BODY_LM_NAMES.filter((name) => points[name] && points[name].confidence >= POSE_MIN_CONFIDENCE);
   const outside = confident.filter((name) => {
     const p = points[name];
     return p.x < 0.02 || p.x > 0.98 || p.y < 0.02 || p.y > 0.98;
@@ -155,7 +162,7 @@ class RepCounter {
     this.upThreshold = cfg.upThreshold != null ? cfg.upThreshold : 140;
     this.minConfidence = POSE_MIN_CONFIDENCE;
     this.smoothing = 0.5;
-    this.graceFrames = 15;
+    this.graceFrames = cfg.graceFrames != null ? cfg.graceFrames : 15;
     this.stableFrames = 3;
     this.minRepMs = 600;
     // Пороги анти-чита можно ослаблять по упражнению (см. EX).
@@ -274,6 +281,24 @@ class RepCounter {
   }
 
   _bodyMid(points, size) {
+    if (this.exercise === "dips") {
+      const shoulder = jointMid(points, ["leftShoulder", "rightShoulder"], size, this.minConfidence);
+      if (!shoulder) return null;
+      const hip = jointMid(points, ["leftHip", "rightHip"], size, this.minConfidence);
+      const head = jointMid(points, ["leftEar", "rightEar"], size, this.minConfidence)
+        || jointMid(points, ["nose"], size, this.minConfidence);
+      const torso = hip ? { x: (shoulder.x + hip.x) / 2, y: (shoulder.y + hip.y) / 2 } : shoulder;
+      const samples = [
+        { point: shoulder, weight: 0.55 },
+        { point: torso, weight: 0.30 },
+        ...(head ? [{ point: head, weight: 0.15 }] : []),
+      ];
+      const weight = samples.reduce((sum, item) => sum + item.weight, 0);
+      return {
+        x: samples.reduce((sum, item) => sum + item.point.x * item.weight, 0) / weight,
+        y: samples.reduce((sum, item) => sum + item.point.y * item.weight, 0) / weight,
+      };
+    }
     const [j0, j1] = EX[this.exercise].bodyJoints;
     const vis = [j0, j1].map((j) => points[j]).filter((p) => p && p.confidence > this.minConfidence).map((p) => px(p, size));
     if (!vis.length) return null;
@@ -320,6 +345,16 @@ class RepCounter {
 }
 
 function px(p, size) { return { x: p.x * size.width, y: p.y * size.height }; }
+function jointMid(points, names, size, confidence) {
+  const visible = names.map((name) => points[name])
+    .filter((p) => p && p.confidence > confidence)
+    .map((p) => px(p, size));
+  if (!visible.length) return null;
+  return {
+    x: visible.reduce((sum, p) => sum + p.x, 0) / visible.length,
+    y: visible.reduce((sum, p) => sum + p.y, 0) / visible.length,
+  };
+}
 function dist(a, b) { return Math.hypot(a.x - b.x, a.y - b.y); }
 function angleAt(vertex, a, b) {
   const v1 = { x: a.x - vertex.x, y: a.y - vertex.y }, v2 = { x: b.x - vertex.x, y: b.y - vertex.y };
@@ -385,6 +420,8 @@ class PoseSession {
     this._poseAccepted = false;
     this._brightness = null;
     this._brightnessAt = -Infinity;
+    this._stableDipPoints = {};
+    this._dipPointAge = {};
     this.countingEnabled = false;
     this.facing = "user";   // "user" (фронталка) | "environment" (задняя)
     this.zoom = 1;          // 1× | 0.5× — 0.5 = задний ультра-ширик (отдельная линза)
@@ -496,8 +533,15 @@ class PoseSession {
           const presence = p.presence != null ? p.presence : 1;
           points[name] = { x: p.x, y: p.y, confidence: Math.min(visibility, presence), world: w ? { x: w.x, y: w.y, z: w.z } : null };
         }
+        if (this.exercises[this.active] === "dips") {
+          points = this._stabilizeDipPoints(this._correctDipSideSwap(points));
+        } else {
+          this._stableDipPoints = {};
+          this._dipPointAge = {};
+        }
         points.neck = mid(points.leftShoulder, points.rightShoulder);
         points.root = mid(points.leftHip, points.rightHip);
+        points.head = headMid(points);
       }
 
       const brightness = this._sampleBrightness(video, ts);
@@ -554,7 +598,7 @@ class PoseSession {
     }
     ctx.fillStyle = "#fff";
     const r = Math.max(4, size.width / 200);
-    for (const name of Object.keys(LM)) {
+    for (const name of Object.keys(LM).filter((name) => !/Ear$/.test(name) && name !== "nose")) {
       if (hidden(name)) continue;
       const p = points[name];
       if (!on(p)) continue;
@@ -562,6 +606,76 @@ class PoseSession {
       ctx.arc(p.x * size.width, p.y * size.height, r, 0, Math.PI * 2);
       ctx.fill();
     }
+    const head = points.head;
+    if (on(head)) {
+      const shoulderWidth = on(points.leftShoulder) && on(points.rightShoulder)
+        ? Math.abs(points.rightShoulder.x - points.leftShoulder.x) * size.width
+        : size.width / 10;
+      ctx.beginPath();
+      ctx.arc(head.x * size.width, head.y * size.height, Math.max(r * 1.8, shoulderWidth * 0.18), 0, Math.PI * 2);
+      ctx.stroke();
+    }
+  }
+
+  // MediaPipe изредка на один кадр переставляет левую и правую стороны.
+  // На брусьях руки не пересекаются, поэтому выбираем назначение с меньшим
+  // перемещением относительно предыдущего устойчивого кадра.
+  _correctDipSideSwap(points) {
+    const previous = this._stableDipPoints;
+    const names = ["Shoulder", "Elbow", "Wrist"];
+    if (!previous.leftShoulder || !previous.rightShoulder) return points;
+    const cost = (swapped) => names.reduce((sum, joint) => {
+      const left = points[(swapped ? "right" : "left") + joint];
+      const right = points[(swapped ? "left" : "right") + joint];
+      const prevLeft = previous["left" + joint], prevRight = previous["right" + joint];
+      if (!left || !right || !prevLeft || !prevRight) return sum;
+      return sum + Math.hypot(left.x - prevLeft.x, left.y - prevLeft.y)
+        + Math.hypot(right.x - prevRight.x, right.y - prevRight.y);
+    }, 0);
+    const direct = cost(false), swapped = cost(true);
+    if (!(swapped + 0.12 < direct)) return points;
+    const corrected = { ...points };
+    for (const name of Object.keys(LM)) {
+      if (!name.startsWith("left")) continue;
+      const suffix = name.slice(4);
+      const right = "right" + suffix;
+      if (!(right in points)) continue;
+      corrected[name] = points[right];
+      corrected[right] = points[name];
+    }
+    return corrected;
+  }
+
+  // Сглаживаем дрожание, отбрасываем невозможные скачки и ненадолго сохраняем
+  // последнюю кисть/сустав, когда его перекрыл брус. После 18 кадров точка исчезает:
+  // система не продолжает считать по давно потерянной позе.
+  _stabilizeDipPoints(points) {
+    const next = {};
+    const previous = this._stableDipPoints;
+    const holdLimit = 18;
+    for (const name of Object.keys(LM)) {
+      const current = points[name];
+      const prev = previous[name];
+      const visible = posePointVisible(current);
+      const jumped = visible && prev && Math.hypot(current.x - prev.x, current.y - prev.y) > 0.18;
+      if (visible && !jumped) {
+        const alpha = 0.45;
+        next[name] = prev ? {
+          x: prev.x + alpha * (current.x - prev.x),
+          y: prev.y + alpha * (current.y - prev.y),
+          confidence: current.confidence,
+          world: smoothWorld(prev.world, current.world, alpha),
+        } : current;
+        this._dipPointAge[name] = 0;
+      } else if (prev && (this._dipPointAge[name] || 0) < holdLimit) {
+        this._dipPointAge[name] = (this._dipPointAge[name] || 0) + 1;
+        next[name] = { ...prev, confidence: Math.max(this.minConfidence || POSE_MIN_CONFIDENCE, prev.confidence * 0.98), held: true };
+      } else {
+        this._dipPointAge[name] = holdLimit;
+      }
+    }
+    this._stableDipPoints = next;
+    return next;
   }
 
   _sampleBrightness(video, now) {
@@ -765,6 +879,23 @@ class PoseSession {
 function mid(a, b) {
   if (!a || !b) return { x: 0, y: 0, confidence: 0 };
   return { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2, confidence: Math.min(a.confidence, b.confidence) };
+}
+
+function headMid(points) {
+  if (posePointVisible(points.leftEar) && posePointVisible(points.rightEar)) {
+    return mid(points.leftEar, points.rightEar);
+  }
+  return posePointVisible(points.nose) ? { ...points.nose } : { x: 0, y: 0, confidence: 0 };
+}
+
+function smoothWorld(previous, current, alpha) {
+  if (!current) return previous || null;
+  if (!previous) return current;
+  return {
+    x: previous.x + alpha * (current.x - previous.x),
+    y: previous.y + alpha * (current.y - previous.y),
+    z: previous.z + alpha * (current.z - previous.z),
+  };
 }
 
 async function shareVideo(blob) {
