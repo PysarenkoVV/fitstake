@@ -548,22 +548,28 @@ button:is(:active, .pressed):not(:disabled) { transform: scale(0.97); filter: br
   flex: 1; height: 44px; margin: 0;
   background: transparent;
   -webkit-appearance: none; appearance: none;
+  /* В карточках упражнений нет .physio-row: локальный fallback не даёт Safari
+     отбросить весь gradient трека из-за неопределённого --row-accent. */
+  --row-accent: var(--accent);
   --fill: 50%;
 }
 .physio-slider::-webkit-slider-runnable-track {
-  height: 6px; border-radius: 3px;
-  background: linear-gradient(to right, var(--row-accent) var(--fill), var(--white-08) var(--fill));
+  height: 8px; border-radius: 999px;
+  background: linear-gradient(to right, var(--row-accent) 0 var(--fill), rgba(255,255,255,.14) var(--fill) 100%);
+  box-shadow: inset 0 0 0 1px rgba(255,255,255,.04);
 }
 .physio-slider::-webkit-slider-thumb {
   -webkit-appearance: none;
   width: 26px; height: 26px;
-  margin-top: -10px; /* (26−6)/2 — Safari не центрует thumb на кастомном треке */
+  margin-top: -9px; /* (26−8)/2 — Safari не центрует thumb на кастомном треке */
   border-radius: 50%;
   background: #fff;
-  box-shadow: 0 1px 6px rgba(0, 0, 0, 0.45);
+  box-shadow: 0 0 0 3px rgba(200,255,33,.16), 0 2px 8px rgba(0,0,0,.5);
 }
-.physio-slider::-moz-range-track { height: 6px; border-radius: 3px; background: var(--white-08); }
-.physio-slider::-moz-range-progress { height: 6px; border-radius: 3px; background: var(--row-accent); }
+.physio-slider:focus-visible{outline:none;filter:drop-shadow(0 0 5px rgba(200,255,33,.45))}
+.physio-slider:active::-webkit-slider-thumb{transform:scale(1.08)}
+.physio-slider::-moz-range-track { height: 8px; border-radius: 999px; background: rgba(255,255,255,.14); }
+.physio-slider::-moz-range-progress { height: 8px; border-radius: 999px; background: var(--row-accent); }
 .physio-slider::-moz-range-thumb { width: 26px; height: 26px; border: none; border-radius: 50%; background: #fff; box-shadow: 0 1px 6px rgba(0, 0, 0, 0.45); }
 
 /* Онбординг: выбор упражнений (карточка + раскрывающийся ползунок максимума) */
