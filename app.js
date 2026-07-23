@@ -4,7 +4,7 @@
 "use strict";
 
 // Версия оболочки — держать в синхроне с CACHE в sw.js; уходит в баг-репорты.
-const APP_VERSION = "v139";
+const APP_VERSION = "v140";
 // Последняя JS-ошибка — прикладываем к баг-репорту, чтобы сразу видеть причину.
 let lastError = "";
 window.addEventListener("error", (e) => {
@@ -2568,9 +2568,11 @@ function TesterGuide() {
   const back = step > 0 ? `<button data-act="guideBack" class="guide-top-btn" aria-label="${t("Back")}">${icon("chevronLeft")}</button>` : `<span class="guide-top-btn"></span>`;
   return `<div class="tester-guide">
     <div class="guide-top">${back}<div class="guide-progress">${[0,1,2,3].map((n) => `<i class="${n <= step ? "active" : ""}"></i>`).join("")}</div><span>${step + 1}/4</span></div>
-    <main class="guide-main">
-      <div class="guide-kicker">${step === 0 ? "REPACT" : t("How Repact works")}</div>
-      <h1>${titles[step]}</h1><p>${copies[step]}</p>
+    <main class="guide-main guide-step-${step}">
+      <div class="guide-intro">
+        <div class="guide-kicker">${step === 0 ? "REPACT" : t("How Repact works")}</div>
+        <h1>${titles[step]}</h1><p>${copies[step]}</p>
+      </div>
       <div class="guide-visual">${guideStepVisual(step)}</div>
       ${step === 0 ? `<div class="guide-slogan"><span>${t("Don't just say it.")}</span><strong>${t("Prove it.")}</strong></div>` : ""}
     </main>
@@ -3280,14 +3282,17 @@ function DemoCompleteFull() {
   const reps = (ui.form && ui.form.demoReps) || 5;
   const onboarding = ui.screen === "onboarding";
   const guide = !!ui.guideCamera;
-  return `<div class="fullscreen">${confetti()}<div class="celebrate">
-    <div class="c-money pop-in" style="font-size:84px;display:flex">${iconF("checkCircle")}</div>
-    <div class="display" style="font-size:38px">${t("Camera check complete")}</div>
-    <div class="money" style="font-size:64px">${reps}</div>
-    <div class="form-footer" style="max-width:340px;font-size:15px">${t("Your reps were recognized correctly. Join a challenge to start saving progress.")}</div>
-    <div class="spacer"></div>
-    <button class="action-btn" data-act="${guide ? "guideDemoDone" : onboarding ? "onbFromDemo" : "findChallengeDemo"}" style="max-width:340px">${icon(guide ? "chevronRight" : onboarding ? "flame" : "search")}${t(guide ? "Continue" : onboarding ? "Get started" : "Find a challenge")}</button>
-    <button class="text-btn" data-act="demoAgain">${t("Try again")}</button>
+  return `<div class="fullscreen">${confetti()}<div class="celebrate demo-complete">
+    <div class="demo-complete-hero">
+      <div class="c-money pop-in demo-complete-mark">${iconF("checkCircle")}</div>
+      <div class="display demo-complete-title">${t("Camera check complete")}</div>
+      <div class="money demo-complete-count">${reps}</div>
+      <div class="form-footer demo-complete-copy">${t("Your reps were recognized correctly. Join a challenge to start saving progress.")}</div>
+    </div>
+    <div class="demo-complete-actions">
+      <button class="action-btn" data-act="${guide ? "guideDemoDone" : onboarding ? "onbFromDemo" : "findChallengeDemo"}">${icon(guide ? "chevronRight" : onboarding ? "flame" : "search")}${t(guide ? "Continue" : onboarding ? "Get started" : "Find a challenge")}</button>
+      <button class="text-btn" data-act="demoAgain">${t("Try again")}</button>
+    </div>
   </div></div>`;
 }
 function openDemoComplete(reps) {

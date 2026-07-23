@@ -1406,15 +1406,16 @@ button:is(:active, .pressed):not(:disabled) { transform: scale(0.97); filter: br
 .guide-top-btn{width:44px;height:44px;display:grid;place-items:center;color:#fff}
 .guide-progress{display:flex;gap:6px}.guide-progress i{height:3px;flex:1;border-radius:3px;background:rgba(255,255,255,.12)}
 .guide-progress i.active{background:var(--accent);box-shadow:0 0 12px rgba(181,255,18,.24)}
-.guide-main{flex:1;min-height:0;display:flex;flex-direction:column;padding:clamp(24px,6vh,62px) 4px 12px}
+.guide-main{flex:1;min-height:0;display:grid;grid-template-rows:auto minmax(0,1fr) auto;padding:clamp(22px,4.5dvh,44px) 4px 12px}
+.guide-intro{min-height:clamp(210px,25dvh,270px);display:flex;flex-direction:column;align-items:flex-start}
 .guide-kicker{color:var(--accent);font:800 12px/1.2 ui-monospace,monospace;letter-spacing:.18em;text-transform:uppercase;margin-bottom:12px}
 .guide-main h1{font-family:var(--display);font-size:clamp(38px,10vw,54px);line-height:.96;letter-spacing:-.035em;max-width:580px;text-wrap:balance;margin:0}
-.guide-main>p{color:var(--text-secondary);font-size:16px;line-height:1.48;max-width:520px;margin:16px 0 0;text-wrap:pretty}
-.guide-visual{flex:1;min-height:220px;display:flex;flex-direction:column;justify-content:center;margin:18px 0}
-.guide-proof{display:grid;grid-template-columns:1fr 20px 1fr 20px 1fr;align-items:center}
-.guide-proof>div{text-align:center;display:flex;flex-direction:column;align-items:center;gap:12px;color:#fff;font-size:12px;font-weight:700}
+.guide-intro>p{color:var(--text-secondary);font-size:16px;line-height:1.48;max-width:520px;margin:16px 0 0;text-wrap:pretty}
+.guide-visual{min-height:0;display:flex;flex-direction:column;justify-content:center;margin:0;padding:12px 0 18px}
+.guide-proof{display:grid;grid-template-columns:minmax(0,1fr) 20px minmax(0,1fr) 20px minmax(0,1fr);align-items:start}
+.guide-proof>div{text-align:center;display:grid;grid-template-rows:84px auto;justify-items:center;align-items:start;gap:10px;color:#fff;font-size:12px;font-weight:700;line-height:1.3}
 .guide-proof svg{width:56px;height:56px;padding:14px;border-radius:18px;color:#07110b;background:var(--accent);filter:drop-shadow(0 10px 22px rgba(181,255,18,.15))}
-.guide-proof i{height:1px;background:rgba(181,255,18,.35)}
+.guide-proof i{height:1px;background:rgba(181,255,18,.35);margin-top:42px}
 .guide-slogan{border-top:1px solid rgba(181,255,18,.4);padding-top:14px;text-transform:uppercase;font:800 18px/1.1 var(--display);letter-spacing:.04em}
 .guide-slogan span{color:var(--text-secondary);display:block}.guide-slogan strong{color:var(--accent);font-size:32px}
 .guide-camera-card{display:flex;align-items:center;gap:20px;border:1px solid rgba(255,255,255,.1);background:rgba(255,255,255,.04);border-radius:28px;padding:20px}
@@ -1432,14 +1433,26 @@ button:is(:active, .pressed):not(:disabled) { transform: scale(0.97); filter: br
 .guide-checklist svg{color:var(--text-secondary)}.guide-checklist strong{font-size:12px;line-height:1.25}
 .guide-report{display:flex;align-items:center;gap:10px;margin-top:10px;padding:12px 4px;color:var(--text-secondary);text-align:left}.guide-report>svg:first-child{color:var(--accent)}
 .guide-report span{flex:1;display:flex;flex-direction:column}.guide-report strong{color:#fff;font-size:14px}.guide-report small{font-size:11px;margin-top:2px}
-.guide-actions{display:flex;flex-direction:column;gap:3px}.guide-actions .action-btn{min-height:58px}
+.guide-actions{flex:0 0 auto;display:flex;flex-direction:column;gap:3px;padding-top:10px}.guide-actions .action-btn{min-height:58px}
+.demo-complete{justify-content:center;gap:clamp(38px,6dvh,68px);padding-top:max(28px,env(safe-area-inset-top))}
+.demo-complete-hero{display:flex;flex-direction:column;align-items:center;gap:14px;width:100%;max-width:430px}
+.demo-complete-mark{font-size:58px;display:flex;margin-bottom:4px}.demo-complete-title{font-size:clamp(34px,9vw,44px);line-height:1.08;max-width:11ch;text-wrap:balance}
+.demo-complete-count{font-size:72px;line-height:1;margin:4px 0}.demo-complete-copy{max-width:32ch;font-size:15px;line-height:1.45;text-wrap:pretty}
+.demo-complete-actions{width:100%;max-width:420px;display:flex;flex-direction:column;gap:8px}.demo-complete-actions .action-btn{width:100%;min-height:58px}
 .tester-check-card{padding:18px;display:flex;flex-direction:column;gap:14px}.tester-check-card h2{margin:4px 0 0;font:800 22px/1 var(--display)}
 .tester-check-card>.between>button{width:44px;height:44px;color:var(--text-secondary);display:grid;place-items:center}
 .tester-check-progress{display:flex;align-items:center;gap:10px}.tester-check-progress>div{flex:1}.tester-check-progress>span{font:700 12px/1 ui-monospace,monospace;color:var(--text-secondary)}
 .tester-check-items{display:grid;grid-template-columns:1fr 1fr;gap:8px}.tester-check-items div{display:flex;align-items:center;gap:8px;color:var(--text-secondary);font-size:12px;font-weight:650}
 .tester-check-items div.done{color:#fff}.tester-check-items svg{color:var(--accent);flex:0 0 auto}
 .tester-check-card>.row .action-btn{font-size:12px;min-height:44px;padding:0 10px}
-@media(max-height:700px){.guide-main{padding-top:16px}.guide-main h1{font-size:36px}.guide-visual{min-height:180px;margin:10px 0}.guide-checklist div{min-height:52px}.guide-camera-card{padding:14px}.guide-phone{height:135px}}
+@media(max-height:700px){
+  .guide-main{padding-top:14px}.guide-intro{min-height:160px}.guide-main h1{font-size:34px}.guide-intro>p{font-size:14px;margin-top:10px}
+  .guide-visual{padding:4px 0 8px}.guide-checklist div{min-height:48px}.guide-camera-card{padding:12px}.guide-phone{height:122px;width:82px}
+  .guide-actions{padding-top:4px}.demo-complete{gap:28px}.demo-complete-title{font-size:32px}.demo-complete-count{font-size:58px}
+}
+@media(min-width:600px){
+  .tester-guide{padding-left:max(22px,calc((100vw - 620px)/2));padding-right:max(22px,calc((100vw - 620px)/2))}
+}
 
 /* Фолбэк без backdrop-filter: непрозрачные/плотные заливки, чтобы контент за стеклом не мешал чтению. */
 @supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {

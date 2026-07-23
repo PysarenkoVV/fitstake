@@ -52,3 +52,35 @@ test("guide can be reopened from Profile without changing completed state", asyn
   await expect(page.getByRole("heading", { name: "Profile", exact: true })).toBeVisible();
   expect(await page.evaluate(() => JSON.parse(localStorage.getItem("fs.testerGuide")).status)).toBe("completed");
 });
+
+test("guide and camera success keep a balanced layout on compact phones", async ({ page }) => {
+  await page.setViewportSize({ width: 375, height: 667 });
+  await page.goto("/");
+  await page.evaluate(() => startTesterGuide(false));
+  await page.getByRole("button", { name: "Continue", exact: true }).click();
+
+  const guideLayout = await page.evaluate(() => {
+    const intro = document.querySelector(".guide-intro").getBoundingClientRect();
+    const visual = document.querySelector(".guide-visual").getBoundingClientRect();
+    const actions = document.querySelector(".guide-actions").getBoundingClientRect();
+    return { introBottom: intro.bottom, visualTop: visual.top, visualBottom: visual.bottom, actionsTop: actions.top, actionsBottom: actions.bottom, height: innerHeight };
+  });
+  expect(guideLayout.visualTop).toBeGreaterThanOrEqual(guideLayout.introBottom - 1);
+  expect(guideLayout.actionsTop).toBeGreaterThanOrEqual(guideLayout.visualBottom - 1);
+  expect(guideLayout.actionsBottom).toBeLessThanOrEqual(guideLayout.height);
+
+  await page.evaluate(() => {
+    ui.screen = "tabs";
+    ui.guideCamera = true;
+    ui.form = { demoReps: 5 };
+    ui.full = DemoCompleteFull;
+    render();
+  });
+  const completeLayout = await page.evaluate(() => {
+    const hero = document.querySelector(".demo-complete-hero").getBoundingClientRect();
+    const actions = document.querySelector(".demo-complete-actions").getBoundingClientRect();
+    return { gap: actions.top - hero.bottom, bottom: actions.bottom, height: innerHeight };
+  });
+  expect(completeLayout.gap).toBeLessThanOrEqual(70);
+  expect(completeLayout.bottom).toBeLessThanOrEqual(completeLayout.height);
+});
