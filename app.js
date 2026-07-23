@@ -4,7 +4,7 @@
 "use strict";
 
 // Версия оболочки — держать в синхроне с CACHE в sw.js; уходит в баг-репорты.
-const APP_VERSION = "v143";
+const APP_VERSION = "v144";
 // Последняя JS-ошибка — прикладываем к баг-репорту, чтобы сразу видеть причину.
 let lastError = "";
 window.addEventListener("error", (e) => {
@@ -95,7 +95,8 @@ const RU = {
   "Camera access is needed for the photo.": "Для фото нужен доступ к камере.",
   "Camera access is needed to count your reps.": "Для подсчёта повторов нужен доступ к камере.",
   "Switch camera": "Сменить камеру", "Ultra-wide 0.5×": "Ультраширокий 0.5×",
-  "Try a demo workout": "Попробовать демо-тренировку",
+  "Try a demo workout": "Попробовать демо-тренировку", "Choose an exercise": "Выберите упражнение",
+  "Pick what you want to try. You can change it later.": "Выберите, что хотите попробовать. Потом выбор можно изменить.",
   "AI Workout": "AI-тренировка",
   "Your camera counts every rep and helps you keep honest form.": "Камера считает каждый повтор и помогает следить за техникой.",
   "Try 5 reps": "Попробовать 5 повторений",
@@ -1589,7 +1590,7 @@ function TesterChecklistCard() {
   return `<section class="card tester-check-card">
     <div class="between"><div><span class="home-eyebrow">${t("Test Repact")}</span><h2>${t("Your testing checklist")}</h2></div><button data-act="dismissTesterChecklist" aria-label="${t("Close")}">${icon("xmark")}</button></div>
     <div class="tester-check-progress">${bar(done / checks.length)}<span>${done}/${checks.length}</span></div>
-    <div class="tester-check-items">${checks.map(([value, label]) => `<div class="${value ? "done" : ""}">${value ? iconF("checkCircle") : icon("plusCircleLine")}<span>${label}</span></div>`).join("")}</div>
+    <div class="tester-check-items">${checks.map(([value, label]) => `<div class="${value ? "done" : "pending"}">${value ? iconF("checkCircle") : icon("plusCircleLine")}<span>${label}</span></div>`).join("")}</div>
     <div class="row gap8"><button class="action-btn plain" data-act="openTesterGuide">${t("How Repact works")}</button><button class="action-btn plain" data-act="openBug">${icon("bug")}${t("Report a problem")}</button></div>
   </section>`;
 }
@@ -1957,6 +1958,14 @@ function WorkoutPickerSheet() {
     </button>`;
   }).join("");
   return sheetShell(t("Choose a workout"), `<div class="form-footer workout-choice-hint">${t("Pick what you want to complete today.")}</div><div class="workout-choice-list">${rows}</div>`, true);
+}
+function DemoExerciseSheet() {
+  const rows = ["pushups", "squats"].map((exercise) => `<button class="workout-choice demo-exercise-choice" data-act="demoExercise:${exercise}">
+    <span class="workout-choice-icon">${exIcon(exercise)}</span>
+    <span class="workout-choice-copy"><strong>${esc(Exercise.displayName(exercise))}</strong></span>
+    ${icon("chevronRight")}
+  </button>`).join("");
+  return sheetShell(t("Choose an exercise"), `<div class="form-footer workout-choice-hint">${t("Pick what you want to try. You can change it later.")}</div><div class="workout-choice-list">${rows}</div>`, true);
 }
 // Подтверждение выхода из челленджа: явный warning про невозврат взноса и потерю результатов.
 function LeaveSheet() {
@@ -3344,6 +3353,12 @@ function openDemoComplete(reps) {
   ui.full = DemoCompleteFull;
   render();
 }
+function openDemo(fromGuide) {
+  ui.guideCamera = !!fromGuide;
+  if (store.demoExercise) { openCameraPrep("demo", store.demoExercise); return; }
+  ui.sheet = DemoExerciseSheet;
+  render();
+}
 
 // ==========================================================================
 // Шеринг результата (рендер карточки на canvas → Web Share / скачивание)
@@ -4144,9 +4159,8 @@ root.addEventListener("click", async (e) => {
     case "guideFinish": finishTesterGuide(false); return;
     case "guideCamera":
       if (!ui.guideReplay) saveGuide({ status: "completed", step: 3 });
-      ui.guideCamera = true;
       track("camera_demo_started", { source: "tester_guide" });
-      openCameraPrep("demo", "pushups"); return;
+      openDemo(true); return;
     case "guideDemoDone":
       ui.guideCamera = false; markTesterProgress("cameraTested");
       track("camera_demo_completed", { source: "tester_guide", reps: (ui.form && ui.form.demoReps) || 0 });
@@ -4169,8 +4183,13 @@ root.addEventListener("click", async (e) => {
     case "back": back(); return;
     case "play": { const startEx = act.split(":")[2]; if (ui.sheet) { ui.sheet = null; ui.form = null; } openCameraPrep(arg, startEx); return; }
     case "chooseWorkout": ui.sheet = WorkoutPickerSheet; render(); return;
-    case "demo": openCameraPrep("demo", "pushups"); return;
-    case "demoAgain": ui.full = null; ui.form = null; render(); openCameraPrep("demo", "pushups"); return;
+    case "demo": openDemo(false); return;
+    case "demoExercise":
+      store.demoExercise = arg;
+      ui.sheet = null;
+      openCameraPrep("demo", arg);
+      return;
+    case "demoAgain": ui.full = null; ui.form = null; render(); openCameraPrep("demo", store.demoExercise || "pushups"); return;
     case "findChallengeDemo": ui.full = null; ui.form = null; go("challenges"); return;
     case "onbFromDemo": ui.full = null; ui.form = null; ui.onbStep = STEP.name; render(); return;
     case "startPrepared": {

@@ -84,3 +84,24 @@ test("guide and camera success keep a balanced layout on compact phones", async 
   expect(completeLayout.gap).toBeLessThanOrEqual(70);
   expect(completeLayout.bottom).toBeLessThanOrEqual(completeLayout.height);
 });
+
+test("first demo asks for an exercise and remembers the choice", async ({ page }) => {
+  await page.goto("/");
+  await page.getByRole("button", { name: "Try 5 reps", exact: true }).click();
+  await expect(page.getByRole("dialog", { name: "Choose an exercise" })).toBeVisible();
+  await page.getByRole("button", { name: "Squats", exact: true }).click();
+  await expect.poll(() => page.evaluate(() => JSON.parse(localStorage.getItem("fs.demoExercise")))).toBe("squats");
+  await expect(page.getByText("Camera setup", { exact: true })).toBeVisible();
+  expect(await page.evaluate(() => ui.form.startExercise)).toBe("squats");
+});
+
+test("unfinished checklist items are visually muted", async ({ page }) => {
+  await page.addInitScript(() => {
+    localStorage.setItem("fs.testerProgress", JSON.stringify({ startedAt: Date.now(), cameraTested: false, inviteShared: false, resultShared: false, progressViewed: false, dismissed: false }));
+  });
+  await page.goto("/");
+  const pending = page.locator(".tester-check-items .pending");
+  await expect(pending.first()).toBeVisible();
+  const color = await pending.first().locator("svg").evaluate((el) => getComputedStyle(el).color);
+  expect(color).not.toBe("rgb(181, 255, 18)");
+});

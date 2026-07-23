@@ -220,6 +220,7 @@ img { max-width: 100%; }
 .home-ai-hero::after { content: ""; position: absolute; width: 160px; height: 160px; right: -54px; top: -70px; border: 1px solid rgba(200,255,33,.2); border-radius: 50%; pointer-events: none; }
 .home-ai-orbit { width: 58px; height: 58px; margin-bottom: 18px; border-radius: 50%; display: grid; place-items: center; color: var(--accent); background: rgba(200,255,33,.13); box-shadow: inset 0 0 0 1px rgba(200,255,33,.28), 0 0 32px rgba(200,255,33,.12); }
 .home-ai-orbit span, .home-ai-orbit svg { width: 27px; height: 27px; }
+.home-ai-orbit svg { transform: translateY(-1.5px); }
 .home-eyebrow, .home-section-head { font: 750 12px/1 var(--mono); letter-spacing: 1.2px; text-transform: uppercase; }
 .home-eyebrow { color: var(--accent); }
 .home-ai-hero h2 { margin: 7px 0 6px; font-size: 34px; line-height: 1; letter-spacing: -1px; text-wrap: balance; }
@@ -1447,7 +1448,8 @@ button:is(:active, .pressed):not(:disabled) { transform: scale(0.97); filter: br
 .guide-actions{flex:0 0 auto;display:flex;flex-direction:column;gap:3px;padding-top:10px}.guide-actions .action-btn{min-height:58px}
 .demo-complete{justify-content:center;gap:clamp(38px,6dvh,68px);padding-top:max(28px,env(safe-area-inset-top))}
 .demo-complete-hero{display:flex;flex-direction:column;align-items:center;gap:14px;width:100%;max-width:430px}
-.demo-complete-mark{font-size:58px;display:flex;margin-bottom:4px}.demo-complete-title{font-size:clamp(34px,9vw,44px);line-height:1.08;max-width:11ch;text-wrap:balance}
+.demo-complete-mark{width:76px;height:76px;border-radius:24px;display:grid;place-items:center;margin-bottom:4px;color:#07110b;background:linear-gradient(145deg,#dfff2a 8%,#b5ff12 58%,#45dc85 100%);box-shadow:0 12px 38px rgba(181,255,18,.2)}
+.demo-complete-mark svg{width:42px;height:42px;stroke-width:2.5}.demo-complete-title{font-size:clamp(34px,9vw,44px);line-height:1.08;max-width:11ch;text-wrap:balance}
 .demo-complete-count{font-size:72px;line-height:1;margin:4px 0}.demo-complete-copy{max-width:32ch;font-size:15px;line-height:1.45;text-wrap:pretty}
 .demo-complete-actions{width:100%;max-width:420px;display:flex;flex-direction:column;gap:8px}.demo-complete-actions .action-btn{width:100%;min-height:58px}
 .tester-check-card{padding:18px;display:flex;flex-direction:column;gap:14px}.tester-check-card h2{margin:4px 0 0;font:800 22px/1 var(--display)}
@@ -1455,6 +1457,8 @@ button:is(:active, .pressed):not(:disabled) { transform: scale(0.97); filter: br
 .tester-check-progress{display:flex;align-items:center;gap:10px}.tester-check-progress>div{flex:1}.tester-check-progress>span{font:700 12px/1 ui-monospace,monospace;color:var(--text-secondary)}
 .tester-check-items{display:grid;grid-template-columns:1fr 1fr;gap:8px}.tester-check-items div{display:flex;align-items:center;gap:8px;color:var(--text-secondary);font-size:12px;font-weight:650}
 .tester-check-items div.done{color:#fff}.tester-check-items svg{color:var(--accent);flex:0 0 auto}
+.tester-check-items div.pending{color:rgba(255,255,255,.46)}.tester-check-items div.pending svg{color:rgba(255,255,255,.3);opacity:.72}
+.demo-exercise-choice .workout-choice-icon svg{width:25px;height:25px}
 .tester-check-card>.row .action-btn{font-size:12px;min-height:44px;padding:0 10px}
 @media(max-height:700px){
   .guide-main{padding-top:14px}.guide-intro{min-height:160px}.guide-main h1{font-size:34px}.guide-intro>p{font-size:14px;margin-top:10px}
