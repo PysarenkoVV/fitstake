@@ -35,6 +35,23 @@ test("home tab shows the day, not a duplicate challenge list", async ({ page }) 
   await expect(page.locator(".challenge-card").first()).toBeVisible();
 });
 
+test("home tips remain available after an active challenge is created", async ({ page }) => {
+  await page.evaluate(() => {
+    app.challenges.unshift(newChallenge({
+      id: "tips-active", title: "20 Push-ups", access: "solo",
+      goals: [{ exercise: "pushups", repsPerDay: 20 }], durationDays: 7, buyIn: 0,
+      startAt: startOfDay(Date.now()), currentDay: 1,
+      participants: [{ id: "me", isMe: true, state: "active" }],
+    }));
+    ui.tab = "yours"; ui.homeTipsExpanded = false; render();
+  });
+  const tips = page.getByRole("button", { name: "Tips & quick start", exact: true });
+  await expect(tips).toBeVisible();
+  await tips.click();
+  await expect(page.getByRole("button", { name: "Try 5 reps", exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Hide tips", exact: true })).toHaveAttribute("aria-expanded", "true");
+});
+
 test("all-time totals moved to the Progress tab", async ({ page }) => {
   await page.getByRole("button", { name: "Progress", exact: true }).click();
   await expect(page.getByText("All-time", { exact: true })).toBeVisible();

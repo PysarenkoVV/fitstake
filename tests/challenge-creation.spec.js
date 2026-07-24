@@ -77,6 +77,19 @@ test("streak rules explain consequences and progression shows final target", asy
   await expect(page.getByText("Final daily target")).toBeVisible();
 });
 
+test("challenge creation uses branded exercise icons", async ({ page }) => {
+  await openForm(page);
+  await expect(page.locator(".create-pick-ic")).toHaveCount(4);
+  await expect(page.locator(".create-pick-ic").first()).toHaveCSS("width", "52px");
+
+  await page.evaluate(() => {
+    ui.form = newCreateForm({ presetId: "quick7", presetExercise: "pushups", presetStep: 5, pushups: 20, duration: 7 });
+    ui.full = PresetQuickSetup;
+    render();
+  });
+  await expect(page.locator(".preset-exercise-icon")).toHaveCSS("width", "84px");
+});
+
 test("goal type hides streak rules and switches the reps label to a total", async ({ page }) => {
   await openForm(page);
   const sectionLabels = page.locator(".create-section-label");

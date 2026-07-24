@@ -4,7 +4,7 @@
 "use strict";
 
 // Версия оболочки — держать в синхроне с CACHE в sw.js; уходит в баг-репорты.
-const APP_VERSION = "v144";
+const APP_VERSION = "v145";
 // Последняя JS-ошибка — прикладываем к баг-репорту, чтобы сразу видеть причину.
 let lastError = "";
 window.addEventListener("error", (e) => {
@@ -110,6 +110,7 @@ const RU = {
   "Prove it": "Докажи",
   "No equipment": "Без оборудования",
   "Quick challenge": "Быстрый челлендж",
+  "Tips & quick start": "Подсказки и быстрый старт", "Hide tips": "Скрыть подсказки",
   "7-day Push-up Challenge": "Отжимания: 7 дней",
   "7 days · 20 push-ups a day": "7 дней · 20 отжиманий в день",
   "Start challenge": "Начать челлендж",
@@ -1664,6 +1665,12 @@ function YoursTab() {
       <div class="home-steps"><span><b>1</b>${t("Choose a goal")}</span><i></i><span><b>2</b>${t("Train with camera")}</span><i></i><span><b>3</b>${t("Keep your streak")}</span></div>
     </section>
   </div>`;
+  const discoveryAccess = active.length ? `<section class="home-section home-tips">
+    <button class="card home-tips-toggle" data-act="toggleHomeTips" aria-expanded="${!!ui.homeTipsExpanded}">
+      <span>${icon("bolt")}</span><strong>${t(ui.homeTipsExpanded ? "Hide tips" : "Tips & quick start")}</strong>${icon("chevronRight")}
+    </button>
+    ${ui.homeTipsExpanded ? discovery : ""}
+  </section>` : discovery;
 
   // Лента друзей: пульс активности по общим челленджам (сам список челленджей — во вкладке Challenges).
   const feedEvents = Sync.enabled ? sharedActivity().slice(0, 8) : [];
@@ -1674,7 +1681,7 @@ function YoursTab() {
 
   return screenHeader(t("Home")) + `<div class="stack">
     ${TesterChecklistCard()}
-    ${active.length ? todayHero : (mine.length ? "" : discovery)}
+    ${active.length ? todayHero + discoveryAccess : (mine.length ? discoveryAccess : discovery)}
     ${feed}
     <button class="card home-invite" data-act="invite"><span>${icon("share")}</span><span><strong>${t("Challenge a friend")}</strong><small>${t("Create a shared goal and send one link.")}</small></span>${icon("chevronRight")}</button>
     ${friendsSummary()}
@@ -2849,7 +2856,7 @@ function CreateWizard() {
   const checkCard = (ex) => {
     const on = f["sel_" + ex];
     return `<button class="card ${on ? "selected" : ""}" data-act="toggle" data-key="sel_${ex}" style="padding:16px;width:100%;display:flex;align-items:center;gap:12px;text-align:left">
-      <span style="display:flex;color:${on ? "var(--accent)" : "var(--text-secondary)"}">${exIcon(ex)}</span>
+      <span class="create-exercise-icon ${on ? "selected" : ""}">${exIcon(ex)}</span>
       <div style="flex:1"><div class="display" style="font-size:20px">${esc(Exercise.displayName(ex))}</div></div>
       <span style="color:${on ? "var(--accent)" : "var(--text-secondary)"};display:flex">${on ? iconF("checkCircle") : emptyCircle}</span>
     </button>`;
@@ -3934,10 +3941,11 @@ const CREATE_TEMPLATES = [
   { id: "dips20", exercise: "dips", step: 5, titleKey: "20 Dips Daily", subKey: "30 days · 20 a day", over: { sel_dips: true, dips: 20, duration: 30 } },
 ];
 function TemplatesSheet() {
-  const row = (id, title, sub) => `<button class="card" data-act="useTemplate:${id}" style="padding:16px 18px;width:100%;display:flex;align-items:center;gap:12px;text-align:left">
+  const row = (id, exercise, title, sub) => `<button class="card" data-act="useTemplate:${id}" style="padding:12px;width:100%;display:flex;align-items:center;gap:12px;text-align:left">
+    <span class="template-exercise-icon">${exIcon(exercise)}</span>
     <div style="flex:1"><div style="font-weight:700;font-size:16px">${esc(title)}</div><div class="form-footer" style="margin-top:2px">${esc(sub)}</div></div>
     <span class="secondary" style="display:flex">${icon("chevronRight")}</span></button>`;
-  const rows = CREATE_TEMPLATES.map((x) => row(x.id, t(x.titleKey), t(x.subKey))).join("");
+  const rows = CREATE_TEMPLATES.map((x) => row(x.id, x.exercise, t(x.titleKey), t(x.subKey))).join("");
   const scratch = `<button class="action-btn" data-act="useTemplate:scratch" style="background:var(--white-08);color:#fff">${t("Create from scratch")}</button>`;
   return sheetShell(t("New challenge"), `<div class="stack">${rows}${scratch}</div>`, true);
 }
@@ -4202,6 +4210,7 @@ root.addEventListener("click", async (e) => {
     case "findChallenge": go("challenges"); return;
     case "create": openCreate(); return;
     case "challengeTab": ui.challengeTab = arg; render(); return;
+    case "toggleHomeTips": ui.homeTipsExpanded = !ui.homeTipsExpanded; render(); return;
     case "toggleRecentWorkouts": ui.recentWorkoutsExpanded = !ui.recentWorkoutsExpanded; render(); return;
     case "openAccountGate": openAuthGate("account"); return;
     case "closeAuthGate": closeAuthGate(); return;

@@ -220,7 +220,8 @@ img { max-width: 100%; }
 .home-ai-hero::after { content: ""; position: absolute; width: 160px; height: 160px; right: -54px; top: -70px; border: 1px solid rgba(200,255,33,.2); border-radius: 50%; pointer-events: none; }
 .home-ai-orbit { width: 58px; height: 58px; margin-bottom: 18px; border-radius: 50%; display: grid; place-items: center; color: var(--accent); background: rgba(200,255,33,.13); box-shadow: inset 0 0 0 1px rgba(200,255,33,.28), 0 0 32px rgba(200,255,33,.12); }
 .home-ai-orbit span, .home-ai-orbit svg { width: 27px; height: 27px; }
-.home-ai-orbit svg { transform: translateY(-1.5px); }
+.home-ai-orbit span { display: grid; place-items: center; }
+.home-ai-orbit svg { transform: translateY(-.5px); }
 .home-eyebrow, .home-section-head { font: 750 12px/1 var(--mono); letter-spacing: 1.2px; text-transform: uppercase; }
 .home-eyebrow { color: var(--accent); }
 .home-ai-hero h2 { margin: 7px 0 6px; font-size: 34px; line-height: 1; letter-spacing: -1px; text-wrap: balance; }
@@ -231,6 +232,13 @@ img { max-width: 100%; }
 .home-proof span { min-width: 0; min-height: 32px; padding: 5px 6px; border-radius: 999px; display: flex; align-items: center; justify-content: center; gap: 4px; color: rgba(255,255,255,.62); background: var(--white-04); font-size: 9px; line-height: 1.1; font-weight: 650; text-align: center; }
 .home-proof svg { width: 13px; height: 13px; }
 .home-section { display: flex; flex-direction: column; gap: 10px; }
+.home-tips { gap: 14px; }
+.home-tips-toggle { width: 100%; min-height: 64px; padding: 12px 14px; display: grid; grid-template-columns: 40px 1fr 24px; align-items: center; gap: 10px; text-align: left; }
+.home-tips-toggle>span { width: 40px; height: 40px; border-radius: 12px; display: grid; place-items: center; color: var(--accent); background: rgba(200,255,33,.1); }
+.home-tips-toggle>span svg { width: 21px; height: 21px; }
+.home-tips-toggle strong { font-size: 15px; }
+.home-tips-toggle>.icon { color: var(--text-secondary); transition: transform .18s ease; }
+.home-tips-toggle[aria-expanded="true"]>.icon { transform: rotate(90deg); }
 .home-section-head { padding: 0 2px; display: flex; align-items: center; justify-content: space-between; color: rgba(255,255,255,.72); }
 .home-section-head button { min-height: 44px; margin: -12px -8px -12px 0; padding: 8px; color: var(--accent); font: 700 13px/1 var(--sans); text-transform: none; letter-spacing: 0; }
 .home-quick { width: 100%; min-height: 76px; padding: 14px; display: flex; align-items: center; gap: 12px; text-align: left; }
@@ -830,7 +838,10 @@ button:is(:active, .pressed):not(:disabled) { transform: scale(0.97); filter: br
 /* Быстрая настройка готового пресета — один компактный экран вместо полного мастера. */
 .preset-setup { min-height: 100dvh; max-width: 560px; margin: 0 auto; display: flex; flex-direction: column; }
 .preset-body { flex: 1; padding: 20px 20px calc(12px + env(safe-area-inset-bottom)); display: flex; flex-direction: column; gap: 16px; }
-.preset-exercise-icon { width: 58px; height: 58px; margin: 4px auto 0; color: var(--accent); display: flex; }
+.preset-exercise-icon { width: 84px; height: 84px; margin: 4px auto 0; border-radius: 25px; color: #07110b; display: grid; place-items: center; background: linear-gradient(145deg,#dfff2a 8%,#b5ff12 58%,#45dc85 100%); box-shadow: 0 12px 34px rgba(181,255,18,.18); }
+.preset-exercise-icon svg { width: 48px; height: 48px; stroke-width: 2.2; }
+.template-exercise-icon,.create-exercise-icon { flex: none; width: 52px; height: 52px; border-radius: 16px; display: grid; place-items: center; color: #07110b; background: linear-gradient(145deg,#dfff2a 8%,#b5ff12 58%,#45dc85 100%); box-shadow: 0 7px 20px rgba(181,255,18,.12); }
+.template-exercise-icon svg,.create-exercise-icon svg { width: 30px; height: 30px; stroke-width: 2.15; }
 .preset-exercise-name { font-size: 30px; text-align: center; }
 .preset-goal-card { padding: 18px; display: flex; flex-direction: column; align-items: center; gap: 12px; }
 .preset-stepper { width: 100%; display: grid; grid-template-columns: 52px 1fr 52px; align-items: center; gap: 14px; }
@@ -915,9 +926,9 @@ button:is(:active, .pressed):not(:disabled) { transform: scale(0.97); filter: br
 .create-pick.selected { background: rgba(200,255,33,.12); box-shadow: inset 0 0 0 1.5px var(--accent); }
 .create-pick:is(:active, .pressed) { transform: scale(0.96); }
 .create-pick-emoji { font-size: 30px; line-height: 1; }
-.create-pick-ic { display: flex; color: var(--text-secondary); }
-.create-pick-ic svg { width: 30px; height: 30px; }
-.create-pick.selected .create-pick-ic { color: var(--accent); }
+.create-pick-ic { width: 52px; height: 52px; border-radius: 16px; display: grid; place-items: center; color: #07110b; background: linear-gradient(145deg,#dfff2a 8%,#b5ff12 58%,#45dc85 100%); box-shadow: 0 7px 20px rgba(181,255,18,.12); }
+.create-pick-ic svg { width: 30px; height: 30px; stroke-width: 2.15; }
+.create-pick.selected .create-pick-ic { color: #07110b; box-shadow: 0 8px 24px rgba(181,255,18,.2); }
 .create-pick-title { font-size: 15px; font-weight: 700; color: #fff; }
 .create-pick-sub { font-size: 12px; color: rgba(255, 255, 255, 0.76); line-height: 1.25; }
 /* Грид вместо flex: одинаковая ширина и высота чипов, «Свой» на узких экранах
