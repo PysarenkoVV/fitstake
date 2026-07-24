@@ -4,7 +4,7 @@
 "use strict";
 
 // Версия оболочки — держать в синхроне с CACHE в sw.js; уходит в баг-репорты.
-const APP_VERSION = "v148";
+const APP_VERSION = "v149";
 // Последняя JS-ошибка — прикладываем к баг-репорту, чтобы сразу видеть причину.
 let lastError = "";
 window.addEventListener("error", (e) => {
@@ -1283,6 +1283,11 @@ function syncAppHeight(force) {
   if (stableAppHeight > 0) document.documentElement.style.setProperty("--app-height", `${Math.round(stableAppHeight)}px`);
 }
 syncAppHeight();
+// In-app браузеры (Instagram, Facebook) рисуют свою нижнюю панель навигации ПОВЕРХ webview.
+// Она не отражается ни в env(safe-area-inset-bottom), ни в visualViewport, ни в media-запросах
+// по высоте — поэтому кнопки на самом низу 100dvh уходят под неё. Метим документ, чтобы CSS
+// добавил нижний запас (--safe-bottom) полноэкранным экранам.
+if (/Instagram|FBAN|FBAV|FB_IAB/i.test(navigator.userAgent || "")) document.documentElement.classList.add("inapp");
 if (window.visualViewport) {
   window.visualViewport.addEventListener("resize", () => syncAppHeight(false), { passive: true });
   window.visualViewport.addEventListener("scroll", () => syncAppHeight(false), { passive: true });
@@ -2754,8 +2759,8 @@ function Onboarding() {
     <div class="create-question-content">${content}</div></div>`;
 
   let content;
-  if (step === 0) content = `<div class="center" style="height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px">
-    <div style="color:var(--accent);width:76px;height:76px;display:flex">${iconF("flame")}</div>
+  if (step === 0) content = `<div class="center onb-hero">
+    <img class="onb-logo" src="icons/icon-512.png" alt="Repact" width="132" height="132">
     <div class="display" style="font-size:46px">Repact</div>
     <div class="form-footer" style="max-width:320px;font-weight:500">${t("Every rep is verified by the camera. Coins on the line. Miss too many days and you're out.")}</div></div>`;
   // Вход — последний шаг, перед сохранением прогресса (только с Firebase).
@@ -2788,8 +2793,8 @@ function Onboarding() {
   const authStep = Sync.enabled && step === STEP.auth;
   const footerLabel = step === 0 ? t("Get started") : step === LAST_STEP ? t("Let's go") : t("Continue");
   const footer = authStep
-    ? `<div style="padding:0 20px 8px;padding-bottom:calc(8px + env(safe-area-inset-bottom));text-align:center"><div class="form-footer" style="margin-bottom:4px">${t("You’ll get 50 test coins. Guest progress stays only on this device.")}</div><button class="text-btn" data-act="skipAuth" style="width:100%">${t("Continue as guest")}</button></div>`
-    : `<div style="padding:0 20px 8px;padding-bottom:calc(8px + env(safe-area-inset-bottom));display:flex;flex-direction:column;gap:4px"><button class="action-btn" data-act="onbNext">${footerLabel}</button>${step === 0 ? `<button class="text-btn" data-act="demo">${t("Try a demo workout")}</button>` : ""}</div>`;
+    ? `<div style="padding:0 20px 8px;padding-bottom:calc(8px + var(--safe-bottom));text-align:center"><div class="form-footer" style="margin-bottom:4px">${t("You’ll get 50 test coins. Guest progress stays only on this device.")}</div><button class="text-btn" data-act="skipAuth" style="width:100%">${t("Continue as guest")}</button></div>`
+    : `<div style="padding:0 20px 8px;padding-bottom:calc(8px + var(--safe-bottom));display:flex;flex-direction:column;gap:4px"><button class="action-btn" data-act="onbNext">${footerLabel}</button>${step === 0 ? `<button class="text-btn" data-act="demo">${t("Try a demo workout")}</button>` : ""}</div>`;
   return `<div style="min-height:100dvh;display:flex;flex-direction:column">
     <div class="row gap12" style="padding:max(10px,env(safe-area-inset-top)) 20px 0;align-items:center">
       ${step > 0 ? `<button data-act="onbBack" aria-label="${t("Back")}" style="width:32px;height:32px;display:flex;align-items:center;justify-content:center;color:#fff">${icon("chevronLeft")}</button>` : `<span style="width:32px;height:32px"></span>`}
