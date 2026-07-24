@@ -15,9 +15,17 @@ test("двойной тап по «Create challenge» не роняет обра
 
   await page.getByRole("button", { name: "Challenges", exact: true }).click();
   await page.getByRole("button", { name: "New challenge", exact: true }).click();
-  // Новая форма — одна страница; Push-ups выбран. Берём Solo (стартует сразу и ведёт
-  // на список), чтобы после создания увидеть таб-бар, а не экран инвайта private/public.
-  await page.locator(".create-pick", { hasText: "Solo" }).click();
+  // Проходим мастер. Берём «Only me» (стартует сразу и ведёт на список), чтобы после
+  // создания увидеть таб-бар, а не экран инвайта private/public.
+  const next = page.getByRole("button", { name: "Continue", exact: true });
+  await page.getByRole("button", { name: /Daily streak/ }).click();
+  await page.getByRole("button", { name: "Push-ups", exact: true }).click();
+  await next.click();
+  await page.getByRole("button", { name: "7d", exact: true }).click();
+  await page.getByRole("button", { name: /Only me/ }).click();
+  await next.click();
+  await page.getByRole("button", { name: /One safety day/ }).click();
+  await next.click();
   const create = page.getByRole("button", { name: "Create challenge", exact: true });
   await expect(create).toBeVisible();
   // Быстрый двойной тап — раньше второй заход падал на ui.form=null (selectedExercises(null)).

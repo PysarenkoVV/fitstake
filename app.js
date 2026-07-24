@@ -4,7 +4,7 @@
 "use strict";
 
 // Версия оболочки — держать в синхроне с CACHE в sw.js; уходит в баг-репорты.
-const APP_VERSION = "v146";
+const APP_VERSION = "v147";
 // Последняя JS-ошибка — прикладываем к баг-репорту, чтобы сразу видеть причину.
 let lastError = "";
 window.addEventListener("error", (e) => {
@@ -421,7 +421,7 @@ const RU = {
   "Set duration and who can join.": "Выберите длительность и участников.", "Starts today · %lld days": "Старт сегодня · %lld дн.",
   "By invitation": "По приглашению", "Only people with your link": "Только люди с вашей ссылкой",
   "Anyone can join": "Может вступить любой", "Only me": "Только я", "A personal challenge": "Личный челлендж",
-  "Limit participants": "Ограничить участников", "Unlimited participants": "Без ограничений",
+  "Limit participants": "Ограничить участников", "Unlimited participants": "Без ограничений", "Participants": "Участники",
   "Up to %lld participants": "До %lld участников", "Public · unlimited": "Публичный · без ограничений",
   "Public · up to %lld": "Публичный · до %lld", "Final conditions": "Финальные условия",
   "Set misses, progression, stake and name.": "Настройте пропуски, нагрузку, ставку и название.",
@@ -2894,8 +2894,9 @@ function progressionEndText(f) {
   return selectedExercises(f).map((e) => `${Exercise.displayName(e)} ${f[e] + f.progStep * increments}`).join(" · ");
 }
 
+// После ручного ввода числа подтягиваем зависимые подписи, не пересобирая шаг целиком.
 function refreshCreateDerived() {
-  if (!ui.form || ui.full !== CreateScreen) return;
+  if (!ui.form || ui.full !== CreateWizard) return;
   const title = document.getElementById("create-title");
   if (title) title.placeholder = defaultTitle(ui.form);
   const finalTarget = document.querySelector(".progression-result strong");
@@ -2905,11 +2906,12 @@ function refreshCreateDerived() {
 function CreateWizard() {
   const f = ui.form, step = f.step, sel = selectedExercises(f);
   const seg = (opts, key, cur) => `<div class="segmented">${opts.map(([v, n]) => `<button data-act="seg" data-key="${key}" data-val="${v}" class="${String(cur) === String(v) ? "active" : ""}">${esc(n)}</button>`).join("")}</div>`;
-  const chips = (key, values, current, suffix, min, max) => `<div class="create-chips">
+  // label — доступное имя поля ручного ввода: «Custom» ни о чём не говорит ни скринридеру, ни тесту.
+  const chips = (key, values, current, suffix, min, max, label) => `<div class="create-chips">
     ${values.map((v) => `<button class="create-chip ${+current === v && !f["custom_" + key] ? "selected" : ""}" data-act="createChip:${key}:${v}">${v}${suffix || ""}</button>`).join("")}
     ${f["custom_" + key]
-      ? `<input class="create-chip create-chip-input selected" type="text" inputmode="numeric" data-model="${key}" data-num data-min="${min}" data-max="${max}" value="${esc(String(current))}">`
-      : `<button class="create-chip" data-act="createCustom:${key}" data-min="${min}" data-max="${max}">${t("Custom")}</button>`}
+      ? `<input class="create-chip create-chip-input selected" type="text" inputmode="numeric" pattern="[0-9]*" enterkeyhint="done" data-model="${key}" data-num data-min="${min}" data-max="${max}" value="${esc(String(current))}" aria-label="${esc(label || t("Custom"))}">`
+      : `<button class="create-chip" data-act="createCustom:${key}" data-min="${min}" data-max="${max}" data-label="${esc(label || t("Custom"))}">${t("Custom")}</button>`}
   </div>`;
   const question = (kicker, title, subtitle, content) => `<div class="create-question">
     <div class="create-step-kicker">${esc(kicker)}</div><div class="display create-step-title">${esc(title)}</div>
@@ -2934,9 +2936,9 @@ function CreateWizard() {
       ${selectCard(`seg" data-key="type" data-val="goal`, f.type === "goal", "target", t("Total goal"), t("Reach one total during the challenge"))}
     </div>
     <div class="create-section-label">${t("Exercises")}</div><div class="create-exercise-grid">${CREATE_EX.map(checkCard).join("")}</div>
-    ${sel.map((e) => `<div class="create-target-row"><span>${esc(Exercise.displayName(e))}</span>${chips(e, [20, 50, 100, 200], f[e], "", 1, f.type === "goal" ? 5000 : 500)}</div>`).join("")}`);
+    ${sel.map((e) => `<div class="create-target-row"><span>${esc(Exercise.displayName(e))}</span>${chips(e, [20, 50, 100, 200], f[e], "", 1, f.type === "goal" ? 5000 : 500, Exercise.displayName(e))}</div>`).join("")}`);
   else if (step === 1) content = question(t("Format"), t("How will it work?"), t("Set duration and who can join."), `
-    <div class="create-section-label">${t("Duration")}</div>${chips("duration", [3, 7, 14, 30], f.duration, t("d"), 1, 365)}
+    <div class="create-section-label">${t("Duration")}</div>${chips("duration", [3, 7, 14, 30], f.duration, t("d"), 1, 365, t("Days"))}
     <div class="create-date-range">${iconF("calendar")}<span>${t("Starts today · %lld days", f.duration || 0)}</span></div>
     <div class="create-section-label">${t("Who can join")}</div><div class="create-access-list">
       ${selectCard(`seg" data-key="access" data-val="private`, f.access === "private", "link", t("By invitation"), t("Only people with your link"))}
@@ -2945,7 +2947,7 @@ function CreateWizard() {
     </div>
     ${f.access === "public" ? `<section class="create-rule-block">
       <div class="settings-row create-rule-toggle"><span><strong>${t("Limit participants")}</strong><small>${f.limitParticipants ? t("Up to %lld participants", f.maxPlayers) : t("Unlimited participants")}</small></span><button data-act="toggle" data-key="limitParticipants" role="switch" aria-checked="${f.limitParticipants}" class="toggle ${f.limitParticipants ? "on" : ""}"></button></div>
-      ${f.limitParticipants ? chips("maxPlayers", [5, 10, 20, 50], f.maxPlayers, "", 2, 500) : ""}
+      ${f.limitParticipants ? chips("maxPlayers", [5, 10, 20, 50], f.maxPlayers, "", 2, 500, t("Participants")) : ""}
     </section>` : ""}`);
   else if (step === 2) content = question(t("Rules"), t("Final conditions"), t("Set misses, progression, stake and name."), `
       ${f.type === "streak" ? `<section class="create-rule-block"><div class="create-rule-heading"><div class="create-rule-title">${t("Allowed misses")}</div></div>
@@ -2958,7 +2960,7 @@ function CreateWizard() {
       ${f.progOn ? fieldStepper(t("Increase by"), "progStep", 1, 50, 1) + seg([["day", t("per day")], ["week", t("per week")]], "progPeriod", f.progPeriod) + `<div class="progression-result"><span>${t("Final daily target")}</span><strong>${esc(progressionEndText(f))}</strong></div>` : `<div class="form-footer">${t("No increase — the daily target stays the same.")}</div>`}</section>
       ` : ""}
       <section class="create-rule-block"><div class="create-rule-heading"><div class="create-rule-title">${t("Stake")}</div><div class="form-footer">${t("Test coins · no cash value")} · ${t("Balance")}: ${fmt(app.balance)}</div></div>
-        <div class="create-stake-row">${coinMark()}${chips("buyIn", [0, 50, 100, 250], f.buyIn, "", 0, Math.max(0, app.balance))}</div>
+        <div class="create-stake-row">${coinMark()}${chips("buyIn", [0, 50, 100, 250], f.buyIn, "", 0, Math.max(0, app.balance), t("Stake"))}</div>
         ${+f.buyIn === 0 ? `<div class="form-footer">${t("No stake")}</div>` : ""}
       </section>
       <div class="form-section"><label class="form-label" for="create-title">${t("Challenge name")}</label><input id="create-title" class="field" data-model="title" value="${esc(f.title)}" placeholder="${esc(defaultTitle(f))}" maxlength="40"></div>`);
@@ -2976,72 +2978,6 @@ function CreateWizard() {
     </div>
     <div class="create-wizard-body">${content}</div>
     ${footer}
-  </div></div>`;
-}
-
-// Одностраничная форма создания (референс Repito): все секции на одном прокручиваемом экране.
-const CREATE_DUR_CHIPS = [3, 7, 14, 30];
-const CREATE_REP_CHIPS = [50, 100, 200, 500];
-function CreateScreen() {
-  const f = ui.form, sel = selectedExercises(f);
-  const section = (label, content, cls) => `<section class="create-section${cls ? " " + cls : ""}"><div class="create-section-label">${esc(label)}</div>${content}</section>`;
-  const pick = (act, on, emoji, title, sub, ic) => `<button class="create-pick ${on ? "selected" : ""}" data-act="${act}">
-    ${emoji ? `<span class="create-pick-emoji">${emoji}</span>` : ""}${ic ? `<span class="create-pick-ic">${exIcon(ic)}</span>` : ""}
-    <span class="create-pick-title">${esc(title)}</span>${sub ? `<span class="create-pick-sub">${esc(sub)}</span>` : ""}</button>`;
-  // Чипы значений: активный — если совпал. «Custom»-чип по тапу сам превращается
-  // в поле ручного ввода прямо на своём месте (числовая клавиатура), без отдельной секции.
-  const chips = (key, values, current, suffix, min, max, label) => {
-    const custom = !!f["custom_" + key];
-    const customChip = custom
-      ? `<input class="create-chip create-chip-input selected" type="text" inputmode="numeric" pattern="[0-9]*" enterkeyhint="done"
-          data-model="${key}" data-num data-min="${min}" data-max="${max}" value="${esc(String(current))}" aria-label="${esc(label || t("Custom"))}">`
-      : `<button class="create-chip" data-act="createCustom:${key}" data-min="${min}" data-max="${max}" data-label="${esc(label || t("Custom"))}">${t("Custom")}</button>`;
-    return `<div class="create-chips">
-      ${values.map((v) => `<button class="create-chip ${!custom && +current === v ? "selected" : ""}" data-act="createChip:${key}:${v}">${v}${suffix || ""}</button>`).join("")}
-      ${customChip}</div>`;
-  };
-
-  const typeSection = section(t("Challenge type"), `<div class="create-grid-2">
-    ${pick(`seg" data-key="type" data-val="streak`, f.type === "streak", "🔥", t("Streak"), t("Daily minimum reps"))}
-    ${pick(`seg" data-key="type" data-val="goal`, f.type === "goal", "🎯", t("Goal"), t("Hit a total rep target"))}</div>`);
-
-  const exSection = section(t("Exercise"), `<div class="create-grid-2">
-    ${CREATE_EX.map((ex) => pick(`toggle" data-key="sel_${ex}`, f["sel_" + ex], null, Exercise.displayName(ex), null, ex)).join("")}</div>`);
-
-  const durSection = section(t("Duration"), chips("duration", CREATE_DUR_CHIPS, f.duration, t("d"), 1, 365, t("Days")));
-
-  const repLabel = f.type === "goal" ? t("Total reps") : t("Daily minimum reps");
-  const repSection = sel.length ? section(repLabel, sel.map((ex) => `<div class="create-rep-row">
-    ${sel.length > 1 ? `<div class="create-rep-name">${esc(Exercise.displayName(ex))}</div>` : ""}
-    ${chips(ex, CREATE_REP_CHIPS, f[ex], "", 5, 5000, Exercise.displayName(ex))}</div>`).join("")) : "";
-
-  const accessSection = section(t("Who can join"), `<div class="create-grid-3">
-    ${pick(`seg" data-key="access" data-val="private`, f.access === "private", "🔗", t("Private"), t("Invite by link"))}
-    ${pick(`seg" data-key="access" data-val="public`, f.access === "public", "🌐", t("Public"), t("Anyone joins"))}
-    ${pick(`seg" data-key="access" data-val="solo`, f.access === "solo", "🧍", t("Solo"), t("Just you"))}</div>
-    ${f.access === "public" ? `<div class="create-subfield">${fieldStepper(t("Players to gather"), "minPlayers", 2, 50, 1)}</div>` : ""}`);
-
-  const missBlock = `<section class="create-rule-block"><div class="create-rule-heading"><div class="create-rule-title">${t("Missed days")}</div><div class="form-footer">${t("Missed days decide how many unfinished days you can have before you leave the challenge and lose your stake.")}</div></div>
-    <div class="miss-options">${[
-      ["never", t("No protection"), t("Miss one day and you're out.")],
-      ["oneTotal", t("One safety day"), t("You can miss once during the whole challenge.")],
-      ["onePerTwoWeeks", t("Recurring protection"), t("You can miss once in every 14 days.")],
-    ].map(([v, title, sub]) => `<button class="miss-option ${f.miss === v ? "selected" : ""}" data-act="seg" data-key="miss" data-val="${v}"><span><strong>${esc(title)}</strong><small>${esc(sub)}</small></span>${f.miss === v ? iconF("checkCircle") : icon("plusCircle")}</button>`).join("")}</div></section>`;
-  const progBlock = `<section class="create-rule-block"><div class="settings-row create-rule-toggle"><span id="lbl-progOn"><strong>${t("Progressive overload")}</strong><small>${t("Increase your daily target gradually as you get stronger.")}</small></span><button data-act="toggle" data-key="progOn" role="switch" aria-checked="${f.progOn}" aria-labelledby="lbl-progOn" class="toggle ${f.progOn ? "on" : ""}"></button></div>
-    ${f.progOn ? fieldStepper(t("Increase by"), "progStep", 1, 50, 1) + `<div class="segmented">${[["day", t("per day")], ["week", t("per week")]].map(([v, n]) => `<button data-act="seg" data-key="progPeriod" data-val="${v}" class="${f.progPeriod === v ? "active" : ""}">${esc(n)}</button>`).join("")}</div><div class="progression-result"><span>${t("Final daily target")}</span><strong>${esc(progressionEndText(f))}</strong></div>` : `<div class="form-footer">${t("No increase — the daily target stays the same.")}</div>`}</section>`;
-
-  const stakeSection = section(t("Stake & rules"), `
-    <div class="form-section"><div class="form-label">${t("Stake amount")}</div><div class="row gap8"><span class="secondary money" style="font-size:24px">${COIN_SYM}</span><input class="field money" type="number" inputmode="numeric" data-model="buyIn" value="${f.buyIn}" style="font-size:24px"></div></div>
-    <div class="form-section"><label class="form-label" for="create-title">${t("Challenge name")}</label><input id="create-title" class="field" data-model="title" value="${esc(f.title)}" placeholder="${esc(defaultTitle(f))}" maxlength="40"></div>
-    ${f.type === "streak" ? missBlock + progBlock : ""}`, "create-section-major");
-
-  return `<div class="fullscreen"><div class="create-wizard">
-    <div class="row gap12 create-wizard-topbar">
-      <button class="create-close" data-act="closeFull" aria-label="${t("Close")}">${icon("xmark")}</button>
-      <div class="create-wizard-heading">${t("New challenge")}</div>
-    </div>
-    <div class="create-wizard-body create-form">${typeSection}${exSection}${durSection}${repSection}${accessSection}${stakeSection}</div>
-    <div class="create-wizard-footer"><button class="action-btn" data-act="saveChallenge">${iconF("checkCircle")}${t("Create challenge")}</button></div>
   </div></div>`;
 }
 
@@ -4447,23 +4383,7 @@ root.addEventListener("click", async (e) => {
   if (cmd === "createChip") {
     const key = act.split(":")[1];
     ui.form[key] = +act.split(":")[2]; ui.form["custom_" + key] = false; ui.form.dirty = true;
-    if (ui.full === CreateWizard) { render(); return; }
-    const group = el.closest(".create-chips");
-    if (group) {
-      group.querySelectorAll(".create-chip").forEach((chip) => chip.classList.toggle("selected", chip === el));
-      const input = group.querySelector(".create-chip-input");
-      if (input) {
-        const button = document.createElement("button");
-        button.className = "create-chip";
-        button.dataset.act = `createCustom:${key}`;
-        button.dataset.min = input.dataset.min;
-        button.dataset.max = input.dataset.max;
-        button.dataset.label = input.getAttribute("aria-label") || t("Custom");
-        button.textContent = t("Custom");
-        input.replaceWith(button);
-      }
-    }
-    refreshCreateDerived();
+    render();
     return;
   }
   if (cmd === "createCustom") {

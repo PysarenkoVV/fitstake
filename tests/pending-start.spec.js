@@ -9,16 +9,17 @@ test.beforeEach(async ({ page }) => {
   await page.goto("/");
 });
 
-test("public and private challenges land in Pending; solo starts Active", async ({ page }) => {
+test("private challenge lands in Pending; solo and public start Active", async ({ page }) => {
   const statuses = await page.evaluate(async () => {
     const originalCreate = Sync.createChallenge;
     Sync.createChallenge = async () => true;
     const mk = async (access) => {
       ui.form = newCreateForm();
+      ui.form.type = "streak"; ui.form.miss = "never"; ui.form.duration = 7;
       ui.form.access = access; ui.form.sel_pushups = true; ui.form.pushups = 50;
       ui.form.buyIn = 0; ui.form.minPlayers = 2;
-      await saveChallengeForm();
-      return C.status(app.challenges[0]);
+      const ok = await saveChallengeForm();
+      return ok ? C.status(app.challenges[0]) : "not-created";
     };
     try {
       return { solo: await mk("solo"), priv: await mk("private"), pub: await mk("public") };
@@ -26,7 +27,8 @@ test("public and private challenges land in Pending; solo starts Active", async 
       Sync.createChallenge = originalCreate;
     }
   });
-  expect(statuses).toEqual({ solo: "active", priv: "pending", pub: "pending" });
+  // Private ждёт, пока приглашённые подтвердят; solo и public стартуют сразу.
+  expect(statuses).toEqual({ solo: "active", priv: "pending", pub: "active" });
 });
 
 test("public pending card shows Ready! and hides it once tapped", async ({ page }) => {
@@ -84,7 +86,7 @@ test("long automatic combo title is shortened before Firebase publish", async ({
     let published = null;
     Sync.createChallenge = async (_id, meta) => { published = meta; return true; };
     ui.form = newCreateForm({
-      access: "private", title: "",
+      type: "streak", miss: "never", access: "private", title: "",
       sel_pushups: false, sel_squats: false, sel_pullups: true, sel_dips: true,
       pullups: 50, dips: 50, duration: 3, buyIn: 0,
     });

@@ -883,7 +883,8 @@ button:is(:active, .pressed):not(:disabled) { transform: scale(0.97); filter: br
 .create-step-kicker { color:var(--accent); font:750 11px/1.2 var(--mono); text-transform:uppercase; letter-spacing:.14em; margin-top:4px; }
 .create-step-title { font-size:clamp(28px,8vw,36px); line-height:1.02; }
 .create-step-copy { font-size:14px; line-height:1.4; }
-.create-choice-grid { display:grid; grid-template-columns:1fr 1fr; gap:9px; }
+/* Одна колонка: в две названия типа и подписи ломались на 3–4 строки. */
+.create-choice-grid { display:grid; grid-template-columns:1fr; gap:9px; }
 .create-choice,.create-access-list .create-choice { min-height:76px; padding:12px; border-radius:16px; text-align:left; display:grid; grid-template-columns:42px 1fr 22px; align-items:center; gap:10px; background:var(--glass-panel); box-shadow:inset 0 0 0 1px var(--ring); }
 .create-choice.selected { background:rgba(200,255,33,.1); box-shadow:inset 0 0 0 1.5px var(--accent); }
 .create-choice-icon { width:42px; height:42px; border-radius:13px; display:grid; place-items:center; color:var(--accent); background:rgba(200,255,33,.1); }
@@ -911,9 +912,7 @@ button:is(:active, .pressed):not(:disabled) { transform: scale(0.97); filter: br
 .coin-mark { width:26px; height:26px; flex:none; border-radius:50%; display:inline-grid; place-items:center; color:#07110b; background:linear-gradient(145deg,#dfff2a,#45dc85); box-shadow:0 5px 14px rgba(181,255,18,.18); }
 .coin-mark svg { width:18px; height:18px; }
 .create-review-icon .coin-mark { width:30px; height:30px; }
-@media(max-width:370px){.create-choice-grid{grid-template-columns:1fr}.create-question{padding-top:14px}.create-wizard-body{padding-inline:16px}.create-wizard-footer{padding-inline:16px}}
-.create-close { width:44px; height:44px; margin:-6px 0 -6px -6px; flex:none; display:flex; align-items:center; justify-content:center; color:#fff; }
-.create-goals { display: flex; flex-direction: column; gap: 8px; margin-top: 6px; }
+@media(max-width:370px){.create-question{padding-top:14px}.create-wizard-body{padding-inline:16px}.create-wizard-footer{padding-inline:16px}}
 .create-question { min-height: 100%; padding: 24px 0; display: flex; flex-direction: column; gap: 8px; }
 .create-question-content { flex: 1; display: flex; flex-direction: column; justify-content: center; gap: 10px; padding: 12px 0; }
 .create-question:has(.create-rule-block) .create-question-content { justify-content: flex-start; }
@@ -948,7 +947,7 @@ button:is(:active, .pressed):not(:disabled) { transform: scale(0.97); filter: br
 .miss-option strong { font-size: 15px; }
 .miss-option small, .create-rule-toggle small { color: rgba(255, 255, 255, 0.72); font-size: 12px; line-height: 1.35; }
 .miss-option > svg { width: 22px; height: 22px; flex: none; color: #fff; }
-/* Выбранное состояние — как у .create-pick/.create-chip: то же кольцо 1.5px, размер не меняется. */
+/* Выбранное состояние — как у .create-chip: то же кольцо 1.5px, размер не меняется. */
 .miss-option.selected { background: rgba(200,255,33,.12); box-shadow: inset 0 0 0 1.5px var(--accent); }
 .miss-option.selected > svg { color: var(--accent); }
 .create-rule-toggle { padding: 0; align-items: flex-start; }
@@ -958,31 +957,9 @@ button:is(:active, .pressed):not(:disabled) { transform: scale(0.97); filter: br
 .progression-result span { color: var(--text-secondary); font-size: 12px; }
 .progression-result strong { color: #fff; font-size: 16px; font-variant-numeric: tabular-nums; }
 
-/* ---- Одностраничная форма создания ---- */
-.create-wizard-heading { flex: 1; font-size: 20px; font-weight: 750; }
-.create-form { display: flex; flex-direction: column; gap: 22px; padding-top: 8px; padding-bottom: 24px; }
+/* ---- Форма создания ---- */
 .create-section { display: flex; flex-direction: column; gap: 10px; }
 .create-section-label { font-family: var(--mono); font-weight: 700; font-size: 11px; text-transform: uppercase; letter-spacing: 1px; color: var(--text-secondary); }
-/* Крупный смысловой раздел (Stake & rules): разделитель + заметнее заголовок,
-   чтобы не сливался с обычными лейблами секций. */
-.create-section-major { margin-top: 4px; padding-top: 18px; border-top: 1px solid var(--white-08); }
-.create-section-major > .create-section-label { font-size: 13px; letter-spacing: 1.4px; color: rgba(255, 255, 255, 0.88); }
-.create-grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
-.create-grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; }
-.create-pick {
-  display: flex; flex-direction: column; align-items: center; gap: 5px;
-  padding: 16px 10px; border-radius: 16px; text-align: center;
-  background: var(--glass-panel); box-shadow: inset 0 0 0 1px var(--ring);
-  transition: transform var(--motion-press) var(--ease-press), background .16s, box-shadow .16s;
-}
-.create-pick.selected { background: rgba(200,255,33,.12); box-shadow: inset 0 0 0 1.5px var(--accent); }
-.create-pick:is(:active, .pressed) { transform: scale(0.96); }
-.create-pick-emoji { font-size: 30px; line-height: 1; }
-.create-pick-ic { width: 52px; height: 52px; border-radius: 16px; display: grid; place-items: center; color: #07110b; background: linear-gradient(145deg,#dfff2a 8%,#b5ff12 58%,#45dc85 100%); box-shadow: 0 7px 20px rgba(181,255,18,.12); }
-.create-pick-ic svg { width: 30px; height: 30px; stroke-width: 2.15; }
-.create-pick.selected .create-pick-ic { color: #07110b; box-shadow: 0 8px 24px rgba(181,255,18,.2); }
-.create-pick-title { font-size: 15px; font-weight: 700; color: #fff; }
-.create-pick-sub { font-size: 12px; color: rgba(255, 255, 255, 0.76); line-height: 1.25; }
 /* Грид вместо flex: одинаковая ширина и высота чипов, «Свой» на узких экранах
    переносится на новую строку, а не вылезает за край. */
 .create-chips { display: grid; grid-template-columns: repeat(auto-fit, minmax(56px, 1fr)); gap: 8px; }
@@ -994,12 +971,8 @@ button:is(:active, .pressed):not(:disabled) { transform: scale(0.97); filter: br
 }
 .create-chip.selected { background: rgba(200,255,33,.14); box-shadow: inset 0 0 0 1.5px var(--accent); color: #fff; }
 .create-chip:is(:active, .pressed) { transform: scale(0.94); }
-.create-rep-row { display: flex; flex-direction: column; gap: 8px; }
-.create-rep-row + .create-rep-row { margin-top: 6px; }
 /* Под-лейбл упражнения внутри секции репсов — подчинён секционному заголовку
    (.create-section-label): мельче и легче, чтобы не перебивать «шапки» разделов. */
-.create-rep-name { font-size: 12px; font-weight: 600; color: var(--text-secondary); }
-.create-subfield { margin-top: 4px; }
 /* «Custom»-чип в режиме ввода: тот же чип, но редактируемый (input замаскирован под чип). */
 .create-chip-input { width: 100%; min-width: 0; text-align: center; -webkit-appearance: none; appearance: none; border: none; outline: none; }
 .create-chip.create-chip-input { font-size: 16px; }

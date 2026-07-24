@@ -21,7 +21,7 @@ test("tester guide preserves its step and routes the selected path", async ({ pa
   await expect(page.getByRole("heading", { name: "Choose how to start" })).toBeVisible();
   await page.getByRole("button", { name: "Continue", exact: true }).click();
   await page.getByRole("button", { name: "Go to the app", exact: true }).click();
-  await expect(page.getByText("Challenge type", { exact: true })).toBeVisible();
+  await expect(page.getByText("What are you proving?", { exact: true })).toBeVisible();
   expect(await page.evaluate(() => JSON.parse(localStorage.getItem("fs.testerGuide")).status)).toBe("completed");
 });
 

@@ -296,7 +296,7 @@ Object.assign(window.UA_TRANSLATIONS, {
   "Set duration and who can join.": "Обери тривалість і хто може приєднатися.", "Starts today · %lld days": "Старт сьогодні · %lld дн.",
   "By invitation": "За запрошенням", "Only people with your link": "Тільки люди з твоїм посиланням",
   "Anyone can join": "Може приєднатися кожен", "Only me": "Тільки я", "A personal challenge": "Особистий челендж",
-  "Limit participants": "Обмежити учасників", "Unlimited participants": "Без обмежень",
+  "Limit participants": "Обмежити учасників", "Unlimited participants": "Без обмежень", "Participants": "Учасники",
   "Up to %lld participants": "До %lld учасників", "Public · unlimited": "Публічний · без обмежень",
   "Public · up to %lld": "Публічний · до %lld", "Final conditions": "Фінальні умови",
   "Set misses, progression, stake and name.": "Налаштуй пропуски, навантаження, ставку та назву.",

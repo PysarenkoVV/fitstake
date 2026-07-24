@@ -9,16 +9,41 @@ test.beforeEach(async ({ page }) => {
   await page.goto("/");
 });
 
-async function openForm(page) {
+async function openWizard(page) {
   await page.getByRole("button", { name: "Challenges", exact: true }).click();
   await page.getByRole("button", { name: "New challenge", exact: true }).click();
-  await expect(page.locator(".create-form")).toBeVisible();
+  await expect(page.locator(".create-wizard")).toBeVisible();
 }
 
-test("duration Custom превращает сам чип в поле ручного ввода, без отдельной секции", async ({ page }) => {
-  await openForm(page);
-  const form = page.locator(".create-form");
-  const dur = form.locator(".create-section", { hasText: "DURATION" });
+// Шаг 1 мастера: тип челленджа + упражнение. Дальше — по кнопке Continue.
+async function fillGoalStep(page, { type = "Daily streak", exercise = "Push-ups" } = {}) {
+  await page.getByRole("button", { name: new RegExp(type) }).click();
+  await page.getByRole("button", { name: exercise, exact: true }).click();
+}
+
+// Шаг 2: срок и доступ. По умолчанию — соло, чтобы не заходить в ветку публичных настроек.
+async function fillFormatStep(page, { days = "7d", access = "Only me" } = {}) {
+  await page.getByRole("button", { name: days, exact: true }).click();
+  await page.getByRole("button", { name: new RegExp(access) }).click();
+}
+
+test("Custom превращает сам чип в поле ручного ввода, без отдельной секции", async ({ page }) => {
+  await openWizard(page);
+  await fillGoalStep(page);
+
+  // Цель по упражнению: свой ряд чипов, «Custom» — прямо в нём.
+  const reps = page.locator(".create-target-row").filter({ hasText: "Push-ups" });
+  const reps100 = reps.getByRole("button", { name: "100", exact: true });
+  await reps100.click();
+  await expect(reps100).toHaveClass(/selected/);
+  await reps.getByRole("button", { name: "Custom", exact: true }).click();
+  await expect(reps.getByRole("textbox", { name: "Push-ups" })).toHaveValue("");
+  await expect(reps.getByRole("button", { name: "100", exact: true })).not.toHaveClass(/selected/);
+  await reps.getByRole("textbox", { name: "Push-ups" }).fill("120");
+  await page.getByRole("button", { name: "Continue", exact: true }).click();
+
+  // Срок: тот же приём — «Custom»-чип превращается в поле на своём месте.
+  const dur = page.locator(".create-chips").first();
   const chip14 = dur.getByRole("button", { name: "14d", exact: true });
   await chip14.click();
   await expect(chip14).toHaveClass(/selected/);
@@ -32,7 +57,8 @@ test("duration Custom превращает сам чип в поле ручно�
   await expect(days).toHaveValue("");
   await expect(days).toHaveAttribute("inputmode", "numeric");
   await expect(days).toHaveCSS("font-size", "16px");
-  await expect(chip14).not.toHaveClass(/selected/);
+  await expect(dur.getByRole("button", { name: "14d", exact: true })).not.toHaveClass(/selected/);
+  // Замена чипа не пересобирает экран — иначе на iOS обрывается инерционный скролл.
   expect(await bodyBefore.evaluate((node) => node.isConnected)).toBe(true);
   await expect(dur.getByRole("button", { name: "+", exact: true })).toHaveCount(0);
   await expect(dur.getByRole("button", { name: "Custom", exact: true })).toHaveCount(0);
@@ -45,42 +71,48 @@ test("duration Custom превращает сам чип в поле ручно�
   await dur.getByRole("textbox", { name: "Days" }).fill("900");
   await dur.getByRole("textbox", { name: "Days" }).blur();
   await expect(dur.getByRole("textbox", { name: "Days" })).toHaveValue("365");
-
-  const reps = form.locator(".create-section", { hasText: "DAILY MINIMUM REPS" });
-  const reps100 = reps.getByRole("button", { name: "100", exact: true });
-  await reps100.click();
-  await reps.getByRole("button", { name: "Custom", exact: true }).click();
-  await expect(reps100).not.toHaveClass(/selected/);
-  await expect(reps.getByRole("textbox", { name: "Push-ups" })).toHaveValue("");
 });
 
 test("create form keeps a usable scroll area after repeated choices", async ({ page }) => {
-  await openForm(page);
+  await openWizard(page);
+  await fillGoalStep(page);
+  await page.getByRole("button", { name: "Continue", exact: true }).click();
+  await fillFormatStep(page);
+  await page.getByRole("button", { name: "Continue", exact: true }).click();
+
+  // Шаг правил — самый длинный: он и должен прокручиваться внутри себя.
   const body = page.locator(".create-wizard-body");
+  await page.getByRole("switch", { name: /Progressive overload/ }).click();
   await body.evaluate((node) => node.scrollTo(0, node.scrollHeight));
-  await expect.poll(() => body.evaluate((node) => node.scrollTop)).toBeGreaterThan(100);
+  await expect.poll(() => body.evaluate((node) => node.scrollTop)).toBeGreaterThan(0);
 
   await page.getByRole("button", { name: /One safety day/ }).click();
   await body.evaluate((node) => node.scrollTo(0, 0));
   await expect.poll(() => body.evaluate((node) => node.scrollTop)).toBe(0);
 
-  const footer = page.getByRole("button", { name: /Create challenge/ });
+  const footer = page.getByRole("button", { name: "Continue", exact: true });
   const box = await footer.boundingBox();
   const viewport = page.viewportSize();
   expect(box.y + box.height).toBeLessThanOrEqual(viewport.height);
 });
 
 test("streak rules explain consequences and progression shows final target", async ({ page }) => {
-  await openForm(page);
-  await expect(page.getByText(/before you leave the challenge and lose your stake/)).toBeVisible();
+  await openWizard(page);
+  await fillGoalStep(page);
+  await page.getByRole("button", { name: "Continue", exact: true }).click();
+  await fillFormatStep(page);
+  await page.getByRole("button", { name: "Continue", exact: true }).click();
+
+  await expect(page.getByText("Allowed misses", { exact: true })).toBeVisible();
+  await expect(page.getByText("Miss one day and you're out.", { exact: true })).toBeVisible();
   await page.getByRole("switch", { name: /Progressive overload/ }).click();
   await expect(page.getByText("Final daily target")).toBeVisible();
 });
 
 test("challenge creation uses branded exercise icons", async ({ page }) => {
-  await openForm(page);
-  await expect(page.locator(".create-pick-ic")).toHaveCount(4);
-  await expect(page.locator(".create-pick-ic").first()).toHaveCSS("width", "52px");
+  await openWizard(page);
+  await expect(page.locator(".create-exercise-icon")).toHaveCount(4);
+  await expect(page.locator(".create-exercise-icon").first()).toHaveCSS("width", "44px");
 
   await page.evaluate(() => {
     ui.form = newCreateForm({ presetId: "quick7", presetExercise: "pushups", presetStep: 5, pushups: 20, duration: 7 });
@@ -90,16 +122,19 @@ test("challenge creation uses branded exercise icons", async ({ page }) => {
   await expect(page.locator(".preset-exercise-icon")).toHaveCSS("width", "84px");
 });
 
-test("goal type hides streak rules and switches the reps label to a total", async ({ page }) => {
-  await openForm(page);
-  const sectionLabels = page.locator(".create-section-label");
-  await expect(sectionLabels.filter({ hasText: /^Daily minimum reps$/ })).toBeVisible();
-  await expect(page.getByText(/before you leave the challenge and lose your stake/)).toBeVisible();
+test("goal type hides streak rules and keeps a single create action", async ({ page }) => {
+  await openWizard(page);
+  await fillGoalStep(page, { type: "Total goal" });
+  await page.getByRole("button", { name: "Continue", exact: true }).click();
+  await fillFormatStep(page);
+  await page.getByRole("button", { name: "Continue", exact: true }).click();
 
-  await page.locator(".create-pick", { hasText: "Goal" }).click();
-  await expect(sectionLabels.filter({ hasText: /^Total reps$/ })).toBeVisible();
-  // У goal нет защиты от пропусков/прогрессии.
-  await expect(page.getByText(/before you leave the challenge and lose your stake/)).toHaveCount(0);
+  // У goal нет защиты от пропусков и прогрессии — только ставка и название.
+  await expect(page.getByText("Allowed misses", { exact: true })).toHaveCount(0);
+  await expect(page.getByRole("switch", { name: /Progressive overload/ })).toHaveCount(0);
+  await expect(page.getByText("Stake", { exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "Continue", exact: true }).click();
+  await expect(page.getByText("Review challenge")).toBeVisible();
   await expect(page.getByRole("button", { name: "Create challenge", exact: true })).toHaveCount(1);
 });
 
@@ -153,7 +188,7 @@ test("day share editor offers a 9:16 story with photo and gradient backgrounds",
   await expect(page.locator(".share-reward")).toContainText("Potential reward");
   await expect(page.locator(".share-challenge-cta")).toHaveText("DON’T JUST SAY IT.PROVE IT.");
   await expect(page.locator(".share-brand img")).toHaveAttribute("src", "icons/icon-1024.png");
-  await expect(page.locator(".share-reward")).toContainText(/🔥\d+/);
+  await expect(page.locator(".share-reward")).toContainText(/₴[\d,]+/);
   await expect.poll(() => page.evaluate(() => document.querySelector(".share-editor") === window.__shareEditorNode)).toBe(true);
   const preview = page.locator(".share-story-preview");
   await expect(preview).toHaveCSS("aspect-ratio", "9 / 16");
