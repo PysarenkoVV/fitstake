@@ -4,7 +4,7 @@
 "use strict";
 
 // Версия оболочки — держать в синхроне с CACHE в sw.js; уходит в баг-репорты.
-const APP_VERSION = "v147";
+const APP_VERSION = "v148";
 // Последняя JS-ошибка — прикладываем к баг-репорту, чтобы сразу видеть причину.
 let lastError = "";
 window.addEventListener("error", (e) => {
@@ -371,19 +371,14 @@ const RU = {
   "Google sign-in unavailable here — use email": "Google-вход тут недоступен — войди по почте",
   "Add to Home Screen: Share → Add to Home Screen": "На экран «Домой»: Поделиться → «На экран Домой»",
   "Report a problem": "Сообщить о проблеме",
-  "Pick what's wrong — one tap is enough. Details optional.": "Выбери, что не так — хватит одного тапа. Детали по желанию.",
-  "Details (optional)": "Детали (по желанию)", "Send report": "Отправить",
+  "Describe the bug: what happened and how to repeat it…": "Опиши баг: что произошло и как это повторить…",
+  "What broke": "Что сломалось", "How bad": "Насколько серьёзно", "Send report": "Отправить",
+  "Low": "Мелочь", "Normal": "Обычный", "High": "Важный", "Critical": "Критично",
+  "Attach a screenshot": "Прикрепить скриншот", "Remove screenshot": "Убрать скриншот",
+  "Screen, size and browser are attached automatically.": "Экран, размер и браузер прикрепляются автоматически.",
   "Thanks! Report sent.": "Спасибо! Отчёт отправлен.", "Couldn't send — check connection": "Не отправилось — проверь связь",
-  "Counting & camera": "Счёт и камера", "Money & stakes": "Деньги и ставки",
+  "Counting & camera": "Счёт и камера", "Challenges & money": "Челленджи и деньги",
   "Design & layout": "Дизайн и вёрстка", "App behavior": "Работа приложения",
-  "Counts extra reps": "Считает лишние повторы", "Doesn't count reps": "Не засчитывает повторы",
-  "Counts when body isn't visible": "Считает, когда тела не видно", "Camera is slow or laggy": "Камера тормозит или лагает",
-  "Skeleton doesn't appear": "Скелет не появляется", "Can't create a challenge": "Не создаётся челлендж",
-  "Can't join or leave": "Не могу вступить или выйти", "Challenge disappeared": "Челлендж пропал сам",
-  "Progress or results are wrong": "Прогресс или результаты неверные", "Wrong balance or buy-in": "Неверный баланс или взнос",
-  "Payout problem": "Проблема с выплатой", "Spacing or elements are off": "Съехали отступы или элементы",
-  "Text cut off or overlapping": "Текст обрезан или налезает", "Hard to see in dark or light theme": "Плохо видно в тёмной или светлой теме",
-  "Froze or crashed": "Зависло или вылетело", "Laggy": "Тормозит", "Something won't load": "Что-то не грузится",
   "Buy coins": "Купить коины", "coins": "коинов", "Coins purchased": "Пополнение баланса", "+%lld coins": "+%lld коинов",
   "Follow": "Подписаться", "Following": "Вы подписаны", "Unfollow": "Отписаться",
   "Challenges joined": "Участвует в челленджах", "No active challenges": "Нет активных челленджей",
@@ -2013,31 +2008,63 @@ function LeaveSheet() {
   return sheetShell(t("Leave challenge?"), body, true);
 }
 
-// Разделы и типовые проблемы для отчёта тестера — под реальные экраны Repact.
+// Разделы отчёта тестера — минимум категорий, детали живут в свободном тексте.
 // Канонические строки английские (стабильны для агента-триажа), в UI переводятся t().
 const BUG_CATS = [
-  ["🎯", "Counting & camera", ["Counts extra reps", "Doesn't count reps", "Counts when body isn't visible", "Camera is slow or laggy", "Skeleton doesn't appear"]],
-  ["🏆", "Challenges", ["Can't create a challenge", "Can't join or leave", "Challenge disappeared", "Progress or results are wrong"]],
-  ["💰", "Money & stakes", ["Wrong balance or buy-in", "Payout problem"]],
-  ["🎨", "Design & layout", ["Spacing or elements are off", "Text cut off or overlapping", "Hard to see in dark or light theme"]],
-  ["⚙️", "App behavior", ["Froze or crashed", "Laggy", "Something won't load"]],
+  ["🎯", "Counting & camera"],
+  ["🏆", "Challenges & money"],
+  ["🎨", "Design & layout"],
+  ["⚙️", "App behavior"],
 ];
+const BUG_SEVERITIES = [["low", "Low"], ["normal", "Normal"], ["high", "High"], ["critical", "Critical"]];
+const BUG_NOTE_MIN = 10;
 
-// Лист «Сообщить о проблеме»: выбор проблемы в один тап (чипсы) + необязательный текст.
+function bugViewport() { return `${window.innerWidth}×${window.innerHeight}`; }
+function bugNoteText() {
+  const el = document.getElementById("bug-note");
+  return ((el ? el.value : (ui.bug && ui.bug.note) || "")).trim();
+}
+function bugReady() { return !!(ui.bug && ui.bug.cat != null && bugNoteText().length >= BUG_NOTE_MIN); }
+// Чипы и кнопку обновляем точечно: полный render() закрыл бы клавиатуру на iOS.
+function markBugChip(el) {
+  const group = el.closest(".bug-chips");
+  if (!group) return;
+  group.querySelectorAll(".bug-chip").forEach((chip) => {
+    chip.classList.toggle("sel", chip === el);
+    chip.setAttribute("aria-pressed", String(chip === el));
+  });
+}
+function updateBugCTA() {
+  const btn = document.querySelector(".bug-send");
+  if (!btn) return;
+  const ready = bugReady();
+  btn.disabled = !ready;
+  btn.setAttribute("aria-disabled", String(!ready));
+}
+
+// Лист «Сообщить о проблеме»: обязательное описание + категория, важность и скриншот.
 function BugSheet() {
-  const groups = BUG_CATS.map(([emoji, cat, problems], ci) => {
-    const chips = problems.map((p, pi) => {
-      const on = ui.bug && ui.bug.pick === ci + "-" + pi;
-      return `<button class="bug-chip ${on ? "sel" : ""}" data-act="bugPick:${ci}-${pi}">${esc(t(p))}</button>`;
-    }).join("");
-    return `<div class="bug-group"><div class="bug-cat">${emoji} ${esc(t(cat))}</div><div class="bug-chips">${chips}</div></div>`;
-  }).join("");
-  const canSend = !!(ui.bug && ui.bug.pick);
+  const b = ui.bug || {};
+  const cats = BUG_CATS.map(([emoji, cat], ci) =>
+    `<button class="bug-chip ${b.cat === ci ? "sel" : ""}" data-act="bugPick:${ci}" aria-pressed="${b.cat === ci}">${emoji} ${esc(t(cat))}</button>`).join("");
+  const severities = BUG_SEVERITIES.map(([value, label]) =>
+    `<button class="bug-chip sev-${value} ${b.severity === value ? "sel" : ""}" data-act="bugSeverity:${value}" aria-pressed="${b.severity === value}">${esc(t(label))}</button>`).join("");
+  const shot = b.shot
+    ? `<div class="bug-shot"><img src="${b.shot}" alt=""><button class="bug-shot-drop" data-act="bugDropShot" aria-label="${t("Remove screenshot")}">${icon("xmark")}</button></div>`
+    : `<button class="bug-attach" data-act="bugShot">${icon("photo")}${t("Attach a screenshot")}</button>`;
+
   const body = `
-    <p class="secondary" style="font-size:13px;margin:-2px 0 2px">${t("Pick what's wrong — one tap is enough. Details optional.")}</p>
-    ${groups}
-    <textarea id="bug-note" class="bug-note" placeholder="${t("Details (optional)")}">${esc((ui.bug && ui.bug.note) || "")}</textarea>
-    <button class="action-btn" data-act="sendBug" ${canSend ? "" : "disabled"}>${t("Send report")}</button>`;
+    <div class="bug-context">
+      <span class="bug-tag">${esc(currentScreenName())}</span>
+      <span class="bug-tag">${esc(bugViewport())}</span>
+      <span class="bug-tag">${esc(APP_VERSION)}</span>
+    </div>
+    <textarea id="bug-note" class="bug-note" placeholder="${t("Describe the bug: what happened and how to repeat it…")}">${esc(b.note || "")}</textarea>
+    <div class="bug-field"><div class="bug-cat">${t("What broke")}</div><div class="bug-chips">${cats}</div></div>
+    <div class="bug-field"><div class="bug-cat">${t("How bad")}</div><div class="bug-chips sev">${severities}</div></div>
+    ${shot}
+    <button class="action-btn bug-send" data-act="sendBug" ${bugReady() ? "" : "disabled"}>${t("Send report")}</button>
+    <p class="bug-foot">${t("Screen, size and browser are attached automatically.")}</p>`;
   return sheetShell(t("Report a problem"), body, true);
 }
 
@@ -2050,7 +2077,7 @@ function currentScreenName() {
   return "tab-" + ui.tab;
 }
 
-function openBug() { ui.bug = { pick: null, note: "" }; ui.sheet = BugSheet; render(); }
+function openBug() { ui.bug = { cat: null, severity: "normal", note: "", shot: null }; ui.sheet = BugSheet; render(); }
 
 function ruleRow(ic, html) { return `<div class="rule-row">${icon(ic)}<div>${html}</div></div>`; }
 function rulesCard(c) {
@@ -4138,6 +4165,29 @@ function downscale(dataURL) {
   });
 }
 
+// Скриншот к баг-репорту едет в базу строкой, поэтому давим до разумного размера:
+// сначала сторона ≤1200px, затем понижаем качество, пока не влезем в лимит правил.
+function compressShot(dataURL) {
+  const LIMIT = 260000;
+  return new Promise((res) => {
+    const im = new Image();
+    im.onload = () => {
+      const k = Math.min(1, 1200 / Math.max(im.width, im.height, 1));
+      const cv = document.createElement("canvas");
+      cv.width = Math.max(1, Math.round(im.width * k)); cv.height = Math.max(1, Math.round(im.height * k));
+      cv.getContext("2d").drawImage(im, 0, 0, cv.width, cv.height);
+      let out = cv.toDataURL("image/jpeg", 0.7);
+      for (const q of [0.5, 0.35]) {
+        if (out.length <= LIMIT) break;
+        out = cv.toDataURL("image/jpeg", q);
+      }
+      res(out.length <= LIMIT ? out : null);
+    };
+    im.onerror = () => res(null);
+    im.src = dataURL;
+  });
+}
+
 // ==========================================================================
 // Обработчики (делегирование)
 // ==========================================================================
@@ -4153,7 +4203,7 @@ function parseVal(v) {
 
 // Действия «на месте» (селект/степпер/тогл) — элемент не исчезает, пульс переносится
 // патчем render; задержку pressFinish на них не вешаем, чтобы отклик был мгновенным.
-const INSTANT_CMDS = new Set(["inc", "dec", "seg", "statEx", "challengeTab", "createChip", "createCustom", "toggle", "toggleStore", "react", "goalChoice", "presetDuration", "bugPick", "shareBg", "setLanguage", "unlockPhotos"]);
+const INSTANT_CMDS = new Set(["inc", "dec", "seg", "statEx", "challengeTab", "createChip", "createCustom", "toggle", "toggleStore", "react", "goalChoice", "presetDuration", "bugPick", "bugSeverity", "shareBg", "setLanguage", "unlockPhotos"]);
 root.addEventListener("click", async (e) => {
   const el = e.target.closest("[data-act]");
   if (!el) return;
@@ -4321,7 +4371,19 @@ root.addEventListener("click", async (e) => {
       location.reload();
       return;
     }
-    case "bugPick": if (ui.bug) { ui.bug.pick = arg; render(); } return;
+    // Выбор чипа патчит DOM на месте: полный render() снял бы фокус с описания и убрал клавиатуру.
+    case "bugPick": if (ui.bug) { ui.bug.cat = +arg; markBugChip(el); updateBugCTA(); } return;
+    case "bugSeverity": if (ui.bug) { ui.bug.severity = arg; markBugChip(el); } return;
+    case "bugShot": {
+      if (!ui.bug) return;
+      const picked = await pickImage(false);
+      if (!picked || !ui.bug) return;
+      ui.bug.note = bugNoteText();
+      ui.bug.shot = await compressShot(picked);
+      render();
+      return;
+    }
+    case "bugDropShot": if (ui.bug) { ui.bug.note = bugNoteText(); ui.bug.shot = null; render(); } return;
     case "restoreTestCoins": restoreTestCoins(); return;
     case "shareBg": ui.form.background = arg; updateShareEditor(); return;
     case "shareTemplate": ui.form.template = arg; updateShareEditor(); return;
@@ -4516,20 +4578,19 @@ root.addEventListener("click", async (e) => {
     closeSheet(); return;
   }
   if (cmd === "sendBug") {
-    if (!ui.bug || !ui.bug.pick) return;
-    const [ci, pi] = ui.bug.pick.split("-").map(Number);
-    const [, cat, problems] = BUG_CATS[ci];
-    const problem = problems[pi];
-    const noteEl = document.getElementById("bug-note");
-    const note = ((noteEl && noteEl.value) || ui.bug.note || "").trim().slice(0, 1000);
-    track("bug_reported", { category: cat, problem });
+    if (!bugReady()) return;
+    const [, cat] = BUG_CATS[ui.bug.cat];
+    const note = bugNoteText().slice(0, 1000);
+    const shot = ui.bug.shot || null;
+    track("bug_reported", { category: cat, severity: ui.bug.severity, hasShot: !!shot });
     el.disabled = true;
     const ok = await Sync.reportBug({
-      category: cat, problem, note,
-      screen: currentScreenName(), version: APP_VERSION,
+      category: cat, note, severity: ui.bug.severity,
+      screen: currentScreenName(), viewport: bugViewport(), version: APP_VERSION,
       device: (navigator.userAgent || "").slice(0, 300),
       lang: store.lang, err: (lastError || "").slice(0, 500),
-    });
+      hasShot: !!shot,
+    }, shot);
     closeSheet();
     toast(ok ? t("Thanks! Report sent.") : t("Couldn't send — check connection"));
     return;
@@ -4601,7 +4662,7 @@ root.addEventListener("focusin", (e) => {
 root.addEventListener("input", (e) => {
   const el = e.target;
   if (el.id === "profile-name") { profileNameDraft = el.value; return; }
-  if (el.id === "bug-note") { if (ui.bug) ui.bug.note = el.value; return; }
+  if (el.id === "bug-note") { if (ui.bug) { ui.bug.note = el.value; updateBugCTA(); } return; }
   // Ползунки онбординга: обновляем цифру и заливку напрямую, без render() —
   // полная перерисовка innerHTML оборвала бы жест перетаскивания.
   if (el.dataset.slider != null) {

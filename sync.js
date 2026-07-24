@@ -312,12 +312,18 @@ window.Sync = (() => {
   }
 
   // Отчёт о проблеме от тестера → общий узел bugReports (create-only по правилам БД).
-  function reportBug(payload) {
+  // Скриншот кладём отдельно в bugShots/{тот же id}: так разбор багов читает список
+  // репортов, не выкачивая картинки. Потеря скриншота не отменяет сам отчёт.
+  function reportBug(payload, shot) {
     return new Promise((resolve) => {
       if (!enabled) { resolve(false); return; }
       ready(() => {
         const rec = Object.assign({}, payload, { uid: uid || "", ts: Date.now() });
-        F.push(F.ref(db, "fitstake/bugReports"), rec).then(() => resolve(true)).catch(() => resolve(false));
+        const ref = F.push(F.ref(db, "fitstake/bugReports"));
+        F.set(ref, rec)
+          .then(() => (shot ? F.set(F.ref(db, "fitstake/bugShots/" + ref.key), shot).catch(() => {}) : null))
+          .then(() => resolve(true))
+          .catch(() => resolve(false));
       });
     });
   }

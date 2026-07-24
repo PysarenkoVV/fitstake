@@ -1,14 +1,14 @@
 // Repact PWA — сеть первична, кэш как офлайн-запас оболочки.
-const CACHE = "repact-v147";
+const CACHE = "repact-v148";
 const SHELL = [
   ".",
   "index.html",
-  "styles.css?v=147",
-  "app.js?v=147",
-  "pose.js?v=147",
-  "sync.js?v=147",
-  "workout-session.js?v=147",
-  "ua.js?v=147",
+  "styles.css?v=148",
+  "app.js?v=148",
+  "pose.js?v=148",
+  "sync.js?v=148",
+  "workout-session.js?v=148",
+  "ua.js?v=148",
   "firebase-config.js",
   "manifest.json",
   "icons/icon-192.png",

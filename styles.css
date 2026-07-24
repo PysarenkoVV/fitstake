@@ -979,16 +979,45 @@ button:is(:active, .pressed):not(:disabled) { transform: scale(0.97); filter: br
 .create-chip-input:focus { outline: none; }
 
 /* ---- Сообщить о проблеме ---- */
-.bug-group { display: flex; flex-direction: column; gap: 8px; }
+.bug-field { display: flex; flex-direction: column; gap: 8px; }
 .bug-cat { font-family: var(--mono); font-weight: 700; font-size: 11px; text-transform: uppercase; letter-spacing: 1px; color: var(--text-secondary); }
-.bug-chips { display: flex; flex-wrap: wrap; gap: 8px; }
-.bug-chip {
-  padding: 9px 13px; border-radius: 999px;
-  background: var(--white-08); border: 1px solid transparent;
-  color: #fff; font-size: 14px; font-weight: 600; line-height: 1;
+/* Автоконтекст — только чтение: то, что уедет вместе с отчётом. */
+.bug-context { display: flex; flex-wrap: wrap; gap: 6px; }
+.bug-tag {
+  padding: 5px 10px; border-radius: 8px; background: var(--white-04);
+  font-family: var(--mono); font-size: 11px; color: var(--text-secondary);
 }
+/* Сетка, а не flex-wrap: чипы одинаковой ширины и предсказуемое число рядов,
+   иначе на длинных переводах кнопка «Отправить» уезжает под нижний край. */
+.bug-chips { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.bug-chips.sev { grid-template-columns: repeat(4, 1fr); }
+.bug-chip {
+  min-height: 44px; padding: 6px 8px; border-radius: 999px;
+  display: flex; align-items: center; justify-content: center; gap: 6px; text-align: center;
+  background: var(--white-08); border: 1px solid transparent;
+  color: #fff; font-size: 13px; font-weight: 600; line-height: 1.2;
+}
+.bug-chips.sev .bug-chip { font-size: 12px; padding: 6px 4px; }
 .bug-chip.sel { background: rgba(200,255,33, 0.16); border-color: var(--accent); color: var(--accent); }
+.bug-chip.sev-high.sel { background: rgba(255,216,74, 0.16); border-color: var(--warning); color: var(--warning); }
+.bug-chip.sev-critical.sel { background: rgba(255,87,87, 0.16); border-color: var(--red); color: var(--red); }
 .bug-chip:is(:active, .pressed) { transform: scale(0.92); }
+.bug-attach {
+  min-height: 44px; padding: 0 14px; border-radius: 12px; align-self: flex-start;
+  display: flex; align-items: center; gap: 8px;
+  background: var(--glass-input); box-shadow: inset 0 0 0 1px var(--ring);
+  color: #fff; font-size: 14px; font-weight: 600;
+}
+.bug-attach svg { width: 18px; height: 18px; }
+.bug-shot { position: relative; align-self: flex-start; }
+.bug-shot img { width: 72px; height: 72px; object-fit: cover; border-radius: 12px; display: block; box-shadow: inset 0 0 0 1px var(--ring); }
+.bug-shot-drop {
+  position: absolute; top: -8px; right: -8px; width: 28px; height: 28px; border-radius: 50%;
+  display: grid; place-items: center; background: var(--surface-raised); color: #fff;
+  box-shadow: 0 2px 8px rgba(0,0,0,.5);
+}
+.bug-shot-drop svg { width: 16px; height: 16px; }
+.bug-foot { margin: -6px 0 0; font-size: 12px; line-height: 1.35; color: var(--text-secondary); }
 .bug-note {
   width: 100%; min-height: 76px; resize: vertical;
   padding: 13px 14px; border-radius: 12px;

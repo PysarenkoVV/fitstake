@@ -18,6 +18,7 @@ firebase-backups/
 # Firebase Admin private keys
 *-firebase-adminsdk-*.json
 .bug-report-state.json
+.bug-shots/
 
 # Локальные картинки-заготовки (баннеры, генерации) — не должны уезжать на Pages
 repact-banner-*.png
