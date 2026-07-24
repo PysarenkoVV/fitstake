@@ -14,3 +14,6 @@ dist/
 build/
 *.log
 firebase-backups/
+
+# Firebase Admin private keys
+*-firebase-adminsdk-*.json

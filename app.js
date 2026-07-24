@@ -4,7 +4,7 @@
 "use strict";
 
 // Версия оболочки — держать в синхроне с CACHE в sw.js; уходит в баг-репорты.
-const APP_VERSION = "v145";
+const APP_VERSION = "v146";
 // Последняя JS-ошибка — прикладываем к баг-репорту, чтобы сразу видеть причину.
 let lastError = "";
 window.addEventListener("error", (e) => {
@@ -49,6 +49,10 @@ const PATHS = {
   ruler: '<rect x="2" y="9" width="20" height="7" rx="1.5"/><path d="M6.5 9v3M11 9v4M15.5 9v3M20 9v4"/>',
   scale: '<rect x="4" y="4" width="16" height="16" rx="3"/><path d="M8.8 10.2a4.5 4.5 0 016.4 0M12 12l2-2.5"/>',
   dollar: '<circle cx="12" cy="12" r="10"/><path d="M12 7v10M14.5 9.2c-.4-1-1.4-1.4-2.5-1.4-1.4 0-2.5.7-2.5 1.9 0 2.7 5 1.3 5 4 0 1.3-1.2 2-2.5 2-1.2 0-2.2-.5-2.6-1.5" stroke="#07110b"/>',
+  coinHryvnia: '<circle cx="12" cy="12" r="10"/><path d="M8 8.5h8M8 12h8M10 5.5v7.2a3.3 3.3 0 006 0" stroke="#07110b"/>',
+  target: '<circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1.5"/>',
+  globe: '<circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c3 3 3 15 0 18M12 3c-3 3-3 15 0 18"/>',
+  link: '<path d="M10 13a5 5 0 007 0l2-2a5 5 0 00-7-7l-1 1M14 11a5 5 0 00-7 0l-2 2a5 5 0 007 7l1-1"/>',
   bolt: '<path d="M13 2L4 14h6l-1 8 9-12h-6z"/>',
   trend: '<path d="M3 17l6-6 4 4 8-8M15 7h6v6"/>',
   bug: '<ellipse cx="12" cy="13" rx="4.5" ry="6"/><circle cx="12" cy="6" r="2"/><path d="M12 8v10M7.6 11H4M7.6 14H4M8 17l-3 2M16.4 11H20M16.4 14H20M16 17l3 2M10.6 4.4L9.4 2.6M13.4 4.4l1.2-1.8"/>',
@@ -409,6 +413,22 @@ const RU = {
   "Share invite": "Поделиться приглашением", "Copy link": "Скопировать ссылку", "Open challenge": "Открыть челлендж",
   "Join my challenge": "Присоединяйся к моему челленджу",
   "Publishing challenge…": "Публикуем челлендж…", "Couldn't publish challenge. Check your connection and try again.": "Не удалось опубликовать челлендж. Проверьте соединение и попробуйте снова.",
+  "Review": "Проверка", "Step %lld of 3": "Шаг %lld из 3", "Goal": "Цель", "What are you proving?": "Что вы хотите доказать?",
+  "Choose a challenge type, exercises and the target.": "Выберите тип челленджа, упражнения и цель.",
+  "Daily streak": "Каждый день", "Complete the target every day": "Выполняйте цель ежедневно",
+  "Total goal": "Общая цель", "Reach one total during the challenge": "Наберите общее число за челлендж",
+  "Exercises": "Упражнения", "Format": "Формат", "How will it work?": "Как это будет работать?",
+  "Set duration and who can join.": "Выберите длительность и участников.", "Starts today · %lld days": "Старт сегодня · %lld дн.",
+  "By invitation": "По приглашению", "Only people with your link": "Только люди с вашей ссылкой",
+  "Anyone can join": "Может вступить любой", "Only me": "Только я", "A personal challenge": "Личный челлендж",
+  "Limit participants": "Ограничить участников", "Unlimited participants": "Без ограничений",
+  "Up to %lld participants": "До %lld участников", "Public · unlimited": "Публичный · без ограничений",
+  "Public · up to %lld": "Публичный · до %lld", "Final conditions": "Финальные условия",
+  "Set misses, progression, stake and name.": "Настройте пропуски, нагрузку, ставку и название.",
+  "Allowed misses": "Допустимые пропуски", "Stake": "Ставка", "Balance": "Баланс", "No stake": "Без ставки",
+  "Check the conditions before publishing.": "Проверьте условия перед публикацией.",
+  "No daily rules": "Без ежедневных правил", "total": "всего",
+  "Complete all required fields": "Заполните обязательные поля", "Challenge is full": "В челлендже нет свободных мест",
   "Reset test data": "Сбросить тестовые данные", "Reset all test data?": "Сбросить все тестовые данные?",
   "This removes your local profile, workouts, photos and test coins from this device. This cannot be undone.": "С устройства будут удалены локальный профиль, тренировки, фото и тестовые коины. Это действие нельзя отменить.",
   "Cancel": "Отмена", "Reset and start over": "Сбросить и начать заново",
@@ -460,25 +480,28 @@ const store = new Proxy({}, {
 // ==========================================================================
 
 const fmt = (n) => Number(n).toLocaleString("en-US");
-// Игровая валюта: не реальные деньги. Единый символ вместо валютных знаков ($/€/₴).
-const COIN_SYM = "🔥";
+// Игровая валюта: тестовые монеты, не реальные деньги.
+const COIN_SYM = "₴";
+function coinMark() {
+  return `<span class="coin-mark" aria-hidden="true">${iconF("coinHryvnia")}</span>`;
+}
 function coin(value) {
-  return `<span class="money">${COIN_SYM}${fmt(value)}</span>`;
+  return `<span class="money coin-value">${coinMark()}<span>${fmt(value)}</span></span>`;
 }
 // Число «крутится» вверх до значения при появлении экрана победы (запуск — в afterRender).
 // data-countup держит целевое число; текст-фолбэк = финальное значение (если анимация не сыграет).
 function coinCountUp(value, key, fromZero) {
-  return `<span class="money" data-countup="${value}">${COIN_SYM}${fmt(value)}</span>`;
+  return `<span class="money coin-value">${coinMark()}<span data-countup="${value}">${fmt(value)}</span></span>`;
 }
 function animateCountUp(el) {
   const to = parseFloat(el.dataset.countup);
   if (!isFinite(to)) return;
-  if (REDUCE_MOTION() || to <= 0) { el.textContent = `${COIN_SYM}${fmt(to)}`; return; }
+  if (REDUCE_MOTION() || to <= 0) { el.textContent = fmt(to); return; }
   const dur = 850, t0 = performance.now();
   const ease = (p) => 1 - Math.pow(1 - p, 3); // easeOutCubic
   function step(now) {
     const p = Math.min(1, (now - t0) / dur);
-    el.textContent = `${COIN_SYM}${fmt(Math.round(to * ease(p)))}`;
+    el.textContent = fmt(Math.round(to * ease(p)));
     if (p < 1) requestAnimationFrame(step);
   }
   requestAnimationFrame(step);
@@ -580,7 +603,7 @@ function mockParticipants(total, eliminated, othersDoneToday, includeMe, repsPer
 
 function newChallenge(o) {
   return Object.assign({
-    id: uid(), type: "streak", access: "solo", minPlayers: 0, startAt: null,
+    id: uid(), type: "streak", access: "solo", minPlayers: 0, maxPlayers: 0, startAt: null,
     missPolicy: "oneTotal", progression: { step: 0, period: "day" },
     myTodayReps: {}, myTotalReps: 0, myTotalByExercise: {}, workoutStatsByDay: {}, startWeight: null, startMaxReps: null,
     beforePhoto: null, afterPhoto: null, isCompleted: false,
@@ -876,18 +899,11 @@ function applySync() {
   markFailures(); // сервер мог насчитать выбывание — фиксируем момент провала
 }
 
-// Старт remote-челленджа: private задаёт создатель (узел startAt); public стартует
-// автоматически сразу после того, как собралось ≥ minPlayers и все нажали
-// «Готов!». null = ещё Pending (стартовать нельзя).
+// Старт remote-челленджа: private задаёт создатель; public стартует сразу.
+// null = ещё Pending (стартовать нельзя).
 function remoteStartAt(rec, m) {
   if (m.access === "private") return typeof rec.startAt === "number" ? rec.startAt : null;
-  if (m.access === "public") {
-    const parts = Object.values(rec.participants || {}), minP = m.minPlayers || 0;
-    if (minP >= 2 && parts.length >= minP && parts.every((p) => typeof p.ready === "number")) {
-      return Math.max(...parts.map((p) => p.ready));
-    }
-    return null;
-  }
+  if (m.access === "public") return typeof m.startAt === "number" ? m.startAt : startOfDay(m.createdAt);
   return startOfDay(m.createdAt);
 }
 function applyPublicChallenges(today) {
@@ -907,7 +923,7 @@ function applyPublicChallenges(today) {
     const start = remoteStartAt(rec, m); // null = ещё Pending
     if (!c) {
       c = newChallenge({ id, title: m.title, goals: Object.values(m.goals || {}), durationDays: m.durationDays,
-        buyIn: m.buyIn, isPublic: true, type: m.type || "streak", access: m.access || "public", minPlayers: m.minPlayers || 0,
+        buyIn: m.buyIn, isPublic: true, type: m.type || "streak", access: m.access || "public", minPlayers: m.minPlayers || 0, maxPlayers: m.maxPlayers || 0,
         ownerId: m.ownerId, missPolicy: m.missPolicy, progression: { step: m.progressionStep || 0, period: m.progressionPeriod || "day" },
         startAt: start, currentDay: 1, yesterdayDropouts: 0, participants: [], myTodayReps: {}, myTotalReps: 0 });
       app.challenges.push(c);
@@ -981,6 +997,7 @@ function restoreAppState(saved) {
     // Миграция полей типа/доступа/старта: старые сейвы их не знают, но все они уже стартовали.
     if (c.type == null) c.type = "streak";
     if (c.minPlayers == null) c.minPlayers = 0;
+    if (c.maxPlayers == null) c.maxPlayers = 0;
     if (c.access == null) c.access = c.id === "main" ? "public" : (c.isPublic ? "private" : "solo");
     if (c.startAt === undefined) c.startAt = c.id === "main" ? null : (c.startedAt != null ? startOfDay(c.startedAt) : startOfDay(Date.now()));
   });
@@ -1082,6 +1099,7 @@ function paidStorageKey(challengeId) {
 
 async function joinChallenge(ch, weight, maxReps, beforePhoto) {
   if (C.isJoined(ch)) return false;
+  if (ch.maxPlayers > 0 && ch.participants.length >= ch.maxPlayers) return "full";
   const paidKey = paidStorageKey(ch.id);
   const alreadyPaid = !!localStorage.getItem(paidKey);
   if (!alreadyPaid && app.balance < ch.buyIn) return false;
@@ -1100,7 +1118,8 @@ async function createChallenge(o) {
   const id = o.id || ("ch_" + (Sync.uid || "local") + "_" + Date.now().toString(36));
   if (o.isPublic && Sync.enabled) {
     const published = await Sync.createChallenge(id, { title: o.title, goals: o.goals, durationDays: o.durationDays, buyIn: o.buyIn,
-      type: o.type || "streak", access: o.access || "public", minPlayers: o.minPlayers || 0,
+      type: o.type || "streak", access: o.access || "public", minPlayers: o.minPlayers || 0, maxPlayers: o.maxPlayers || 0,
+      startAt: o.access === "public" ? startOfDay(Date.now()) : null,
       missPolicy: o.missPolicy, progressionStep: o.progression.step, progressionPeriod: o.progression.period }, store["profile.name"]);
     if (!published) return "publish-failed";
   }
@@ -1447,6 +1466,11 @@ function bar(frac, money) {
   const f = Math.max(0, Math.min(1, frac || 0)) * 100;
   return `<div class="progress ${money ? "money" : ""}"><span style="width:${f}%"></span></div>`;
 }
+function challengeProgress(frac, done) {
+  const ratio = Math.max(0, Math.min(1, frac || 0));
+  const opacity = done ? 1 : 0.28 + ratio * 0.62;
+  return `<div class="progress challenge-progress ${done ? "is-complete" : ""}" style="--progress:${ratio * 100}%;--progress-opacity:${opacity.toFixed(2)}"><span></span></div>`;
+}
 // Кольцо прогресса упражнения в комбо-карточке: тап → запуск именно этого упражнения.
 function progressRing(id, g, reps, norm, done) {
   const circ = 2 * Math.PI * 30;
@@ -1502,8 +1526,8 @@ function ChallengeCard(c, withPlay) {
     return `<div style="display:flex;flex-direction:column;gap:5px">
       <div class="between" style="align-items:baseline">
         ${lbl(Exercise.displayName(g.exercise), "tracking-1")}
-        <span class="money ${done ? "c-money" : "c-white"}" style="font-size:28px">${reps} / ${norm}</span>
-      </div>${bar(reps / norm, done)}</div>`;
+        <span class="money challenge-progress-value ${done ? "is-complete" : ""}" style="font-size:28px;--progress-opacity:${(done ? 1 : 0.28 + Math.max(0, Math.min(1, reps / norm || 0)) * 0.62).toFixed(2)}">${reps} / ${norm}</span>
+      </div>${challengeProgress(reps / norm, done)}</div>`;
   }).join("");
 
   const joinedFooter = `
@@ -2814,23 +2838,55 @@ function publishableChallengeTitle(f) {
 
 function createSummary(f) {
   const sel = selectedExercises(f);
-  const buyIn = COIN_SYM + fmt(f.buyIn);
   const card = (step, iconName, title, value) => `<button class="card create-review-card" data-act="editCreate:${step}">
     <span class="create-review-icon">${icon(iconName)}</span><span class="create-review-copy"><span class="create-review-label">${esc(title)}</span><span class="create-review-value">${esc(value)}</span></span><span class="secondary">${icon("chevronRight")}</span>
   </button>`;
-  const exerciseValue = sel.map((e) => `${Exercise.displayName(e)} · ${t("%lld / day", f[e])}`).join(" + ");
-  const rules = [MissPolicy.displayName(f.miss), f.isPublic ? t("Public challenge") : t("Private challenge")];
+  const exerciseValue = sel.map((e) => `${Exercise.displayName(e)} · ${f[e]} ${f.type === "goal" ? t("total") : t("per day")}`).join(" + ");
+  const access = f.access === "public"
+    ? (f.limitParticipants ? t("Public · up to %lld", f.maxPlayers) : t("Public · unlimited"))
+    : f.access === "private" ? t("By invitation") : t("Only me");
+  const rules = f.type === "streak" ? [MissPolicy.displayName(f.miss)] : [];
   if (f.progOn) rules.push(`+${f.progStep} ${f.progPeriod === "day" ? t("per day") : t("per week")}`);
   return `<div class="create-review">
-    <div><div class="display create-review-title">${t("Review challenge")}</div><div class="form-footer">${t("Tap any card to make changes before creating.")}</div></div>
+    <div><div class="display create-review-title">${t("Review challenge")}</div><div class="form-footer">${t("Check the conditions before publishing.")}</div></div>
     <div class="create-review-name">${esc(f.title.trim() || defaultTitle(f))}</div>
     <div class="create-review-list">
-      ${card(0, "flame", t("Exercise & daily goal"), exerciseValue)}
-      ${card(1, "calendar", t("Duration"), t("%lld days", f.duration))}
-      ${card(2, "checkCircle", t("Rules"), rules.join(" · "))}
-      ${card(2, "dollar", t("Stake amount"), buyIn)}
+      ${card(0, f.type === "goal" ? "target" : "flame", f.type === "goal" ? t("Total goal") : t("Daily streak"), exerciseValue)}
+      ${card(1, "calendar", t("Format"), `${t("%lld days", f.duration)} · ${access}`)}
+      ${card(2, "checkCircle", t("Rules"), rules.length ? rules.join(" · ") : t("No daily rules"))}
+      <button class="card create-review-card" data-act="editCreate:2"><span class="create-review-icon">${coinMark()}</span><span class="create-review-copy"><span class="create-review-label">${t("Stake")}</span><span class="create-review-value">${f.buyIn > 0 ? fmt(f.buyIn) : t("No stake")}</span></span><span class="secondary">${icon("chevronRight")}</span></button>
     </div>
   </div>`;
+}
+
+function createStepValid(f, step) {
+  if (!f) return false;
+  if (step === 0) {
+    const sel = selectedExercises(f), max = f.type === "goal" ? 5000 : 500;
+    return ["streak", "goal"].includes(f.type) && sel.length > 0
+      && sel.every((e) => Number.isFinite(+f[e]) && +f[e] >= 1 && +f[e] <= max);
+  }
+  if (step === 1) {
+    return Number.isFinite(+f.duration) && +f.duration >= 1 && +f.duration <= 365
+      && ["private", "public", "solo"].includes(f.access)
+      && (f.access !== "public" || !f.limitParticipants
+        || (Number.isFinite(+f.maxPlayers) && +f.maxPlayers >= 2 && +f.maxPlayers <= 500));
+  }
+  if (step === 2) {
+    return (f.type !== "streak" || ["never", "oneTotal", "onePerTwoWeeks"].includes(f.miss))
+      && Number.isFinite(+f.buyIn) && +f.buyIn >= 0 && +f.buyIn <= app.balance
+      && publishableChallengeTitle(f).length > 0;
+  }
+  return [0, 1, 2].every((n) => createStepValid(f, n));
+}
+
+function updateCreateCTA() {
+  if (!ui.form || ui.full !== CreateWizard) return;
+  const btn = document.querySelector(".create-wizard-footer .action-btn");
+  if (!btn) return;
+  const valid = createStepValid(ui.form, ui.form.step);
+  btn.disabled = !valid;
+  btn.setAttribute("aria-disabled", String(!valid));
 }
 
 function progressionEndText(f) {
@@ -2849,47 +2905,74 @@ function refreshCreateDerived() {
 function CreateWizard() {
   const f = ui.form, step = f.step, sel = selectedExercises(f);
   const seg = (opts, key, cur) => `<div class="segmented">${opts.map(([v, n]) => `<button data-act="seg" data-key="${key}" data-val="${v}" class="${String(cur) === String(v) ? "active" : ""}">${esc(n)}</button>`).join("")}</div>`;
-  const question = (title, subtitle, content) => `<div style="padding-top:24px;display:flex;flex-direction:column;gap:8px;height:100%">
-    <div class="display" style="font-size:30px">${esc(title)}</div>${subtitle ? `<div class="form-footer">${esc(subtitle)}</div>` : ""}
-    <div style="flex:1;display:flex;flex-direction:column;justify-content:center;gap:10px">${content}</div></div>`;
-  const emptyCircle = icon("plusCircle").replace("M12 8v8M8 12h8", "");
+  const chips = (key, values, current, suffix, min, max) => `<div class="create-chips">
+    ${values.map((v) => `<button class="create-chip ${+current === v && !f["custom_" + key] ? "selected" : ""}" data-act="createChip:${key}:${v}">${v}${suffix || ""}</button>`).join("")}
+    ${f["custom_" + key]
+      ? `<input class="create-chip create-chip-input selected" type="text" inputmode="numeric" data-model="${key}" data-num data-min="${min}" data-max="${max}" value="${esc(String(current))}">`
+      : `<button class="create-chip" data-act="createCustom:${key}" data-min="${min}" data-max="${max}">${t("Custom")}</button>`}
+  </div>`;
+  const question = (kicker, title, subtitle, content) => `<div class="create-question">
+    <div class="create-step-kicker">${esc(kicker)}</div><div class="display create-step-title">${esc(title)}</div>
+    ${subtitle ? `<div class="form-footer create-step-copy">${esc(subtitle)}</div>` : ""}
+    <div class="create-question-content">${content}</div></div>`;
+  const selectCard = (act, on, ic, title, sub) => `<button class="create-choice ${on ? "selected" : ""}" data-act="${act}" aria-pressed="${on}">
+    <span class="create-choice-icon">${iconF(ic)}</span><span><strong>${esc(title)}</strong><small>${esc(sub)}</small></span>
+    <i>${on ? iconF("checkCircle") : ""}</i></button>`;
   const checkCard = (ex) => {
     const on = f["sel_" + ex];
-    return `<button class="card ${on ? "selected" : ""}" data-act="toggle" data-key="sel_${ex}" style="padding:16px;width:100%;display:flex;align-items:center;gap:12px;text-align:left">
+    return `<button class="card create-exercise-choice ${on ? "selected" : ""}" data-act="toggle" data-key="sel_${ex}">
       <span class="create-exercise-icon ${on ? "selected" : ""}">${exIcon(ex)}</span>
-      <div style="flex:1"><div class="display" style="font-size:20px">${esc(Exercise.displayName(ex))}</div></div>
-      <span style="color:${on ? "var(--accent)" : "var(--text-secondary)"};display:flex">${on ? iconF("checkCircle") : emptyCircle}</span>
+      <strong>${esc(Exercise.displayName(ex))}</strong>
+      <span class="create-choice-check">${on ? iconF("checkCircle") : ""}</span>
     </button>`;
   };
 
   let content, label = t("Continue");
-  if (step === 0) content = question(t("Exercise & daily goal"), t("Pick exercises and set a goal for each."), `${CREATE_EX.map(checkCard).join("")}
-    <div class="create-goals">${sel.map((e) => fieldStepper(Exercise.displayName(e), e, 5, 500, 5)).join("")}</div>`);
-  else if (step === 1) content = question(t("How long?"), t("Choose how long the challenge will run."),
-    `<div class="duration-options">${[[14, t("2 weeks"), t("Good for a quick start")], [30, t("1 month"), t("Balanced challenge")], [60, t("2 months"), t("Long-term progress")]].map(([days, title, sub]) => `<button class="duration-option ${+f.duration === days ? "selected" : ""}" data-act="seg" data-key="duration" data-val="${days}"><span><strong>${esc(title)}</strong><small>${esc(sub)} · ${t("%lld days", days)}</small></span>${+f.duration === days ? iconF("checkCircle") : icon("chevronRight")}</button>`).join("")}</div>
-    <div class="custom-duration"><div class="form-label">${t("Custom duration")}</div>${fieldStepper(t("Duration (days)"), "duration", 1, 365, 1)}</div>`);
-  else if (step === 2) content = question(t("Rules & stake"), t("Set the final details before review."), `
-      <section class="create-rule-block"><div class="create-rule-heading"><div class="create-rule-title">${t("Missed days")}</div><div class="form-footer">${t("Missed days decide how many unfinished days you can have before you leave the challenge and lose your stake.")}</div></div>
+  if (step === 0) content = question(t("Goal"), t("What are you proving?"), t("Choose a challenge type, exercises and the target."), `
+    <div class="create-choice-grid">
+      ${selectCard(`seg" data-key="type" data-val="streak`, f.type === "streak", "flame", t("Daily streak"), t("Complete the target every day"))}
+      ${selectCard(`seg" data-key="type" data-val="goal`, f.type === "goal", "target", t("Total goal"), t("Reach one total during the challenge"))}
+    </div>
+    <div class="create-section-label">${t("Exercises")}</div><div class="create-exercise-grid">${CREATE_EX.map(checkCard).join("")}</div>
+    ${sel.map((e) => `<div class="create-target-row"><span>${esc(Exercise.displayName(e))}</span>${chips(e, [20, 50, 100, 200], f[e], "", 1, f.type === "goal" ? 5000 : 500)}</div>`).join("")}`);
+  else if (step === 1) content = question(t("Format"), t("How will it work?"), t("Set duration and who can join."), `
+    <div class="create-section-label">${t("Duration")}</div>${chips("duration", [3, 7, 14, 30], f.duration, t("d"), 1, 365)}
+    <div class="create-date-range">${iconF("calendar")}<span>${t("Starts today · %lld days", f.duration || 0)}</span></div>
+    <div class="create-section-label">${t("Who can join")}</div><div class="create-access-list">
+      ${selectCard(`seg" data-key="access" data-val="private`, f.access === "private", "link", t("By invitation"), t("Only people with your link"))}
+      ${selectCard(`seg" data-key="access" data-val="public`, f.access === "public", "globe", t("Public"), t("Anyone can join"))}
+      ${selectCard(`seg" data-key="access" data-val="solo`, f.access === "solo", "person", t("Only me"), t("A personal challenge"))}
+    </div>
+    ${f.access === "public" ? `<section class="create-rule-block">
+      <div class="settings-row create-rule-toggle"><span><strong>${t("Limit participants")}</strong><small>${f.limitParticipants ? t("Up to %lld participants", f.maxPlayers) : t("Unlimited participants")}</small></span><button data-act="toggle" data-key="limitParticipants" role="switch" aria-checked="${f.limitParticipants}" class="toggle ${f.limitParticipants ? "on" : ""}"></button></div>
+      ${f.limitParticipants ? chips("maxPlayers", [5, 10, 20, 50], f.maxPlayers, "", 2, 500) : ""}
+    </section>` : ""}`);
+  else if (step === 2) content = question(t("Rules"), t("Final conditions"), t("Set misses, progression, stake and name."), `
+      ${f.type === "streak" ? `<section class="create-rule-block"><div class="create-rule-heading"><div class="create-rule-title">${t("Allowed misses")}</div></div>
       <div class="miss-options">${[
         ["never", t("No protection"), t("Miss one day and you're out.")],
         ["oneTotal", t("One safety day"), t("You can miss once during the whole challenge.")],
         ["onePerTwoWeeks", t("Recurring protection"), t("You can miss once in every 14 days.")],
-      ].map(([v, title, sub]) => `<button class="miss-option ${f.miss === v ? "selected" : ""}" data-act="seg" data-key="miss" data-val="${v}"><span><strong>${esc(title)}</strong><small>${esc(sub)}</small></span>${f.miss === v ? iconF("checkCircle") : icon("plusCircle")}</button>`).join("")}</div></section>
-      <div class="settings-row"><span id="lbl-isPublic">${t("Public challenge")}</span><button data-act="toggle" data-key="isPublic" role="switch" aria-checked="${f.isPublic}" aria-labelledby="lbl-isPublic" class="toggle ${f.isPublic ? "on" : ""}"></button></div>
+      ].filter(([v]) => v !== "onePerTwoWeeks" || f.duration >= 14).map(([v, title, sub]) => `<button class="miss-option ${f.miss === v ? "selected" : ""}" data-act="seg" data-key="miss" data-val="${v}"><span><strong>${esc(title)}</strong><small>${esc(sub)}</small></span><i class="create-radio">${f.miss === v ? iconF("checkCircle") : ""}</i></button>`).join("")}</div></section>
       <section class="create-rule-block"><div class="settings-row create-rule-toggle"><span id="lbl-progOn"><strong>${t("Progressive overload")}</strong><small>${t("Increase your daily target gradually as you get stronger.")}</small></span><button data-act="toggle" data-key="progOn" role="switch" aria-checked="${f.progOn}" aria-labelledby="lbl-progOn" class="toggle ${f.progOn ? "on" : ""}"></button></div>
       ${f.progOn ? fieldStepper(t("Increase by"), "progStep", 1, 50, 1) + seg([["day", t("per day")], ["week", t("per week")]], "progPeriod", f.progPeriod) + `<div class="progression-result"><span>${t("Final daily target")}</span><strong>${esc(progressionEndText(f))}</strong></div>` : `<div class="form-footer">${t("No increase — the daily target stays the same.")}</div>`}</section>
-      <div class="form-section"><div class="form-label">${t("Stake amount")}</div><div class="row gap8"><span class="secondary money" style="font-size:24px">${COIN_SYM}</span><input class="field money" type="number" inputmode="numeric" data-model="buyIn" value="${f.buyIn}" style="font-size:24px"></div></div>
+      ` : ""}
+      <section class="create-rule-block"><div class="create-rule-heading"><div class="create-rule-title">${t("Stake")}</div><div class="form-footer">${t("Test coins · no cash value")} · ${t("Balance")}: ${fmt(app.balance)}</div></div>
+        <div class="create-stake-row">${coinMark()}${chips("buyIn", [0, 50, 100, 250], f.buyIn, "", 0, Math.max(0, app.balance))}</div>
+        ${+f.buyIn === 0 ? `<div class="form-footer">${t("No stake")}</div>` : ""}
+      </section>
       <div class="form-section"><label class="form-label" for="create-title">${t("Challenge name")}</label><input id="create-title" class="field" data-model="title" value="${esc(f.title)}" placeholder="${esc(defaultTitle(f))}" maxlength="40"></div>`);
   else content = createSummary(f);
 
+  const valid = createStepValid(f, step);
   const footer = step === CREATE_LAST
-    ? `<div class="create-wizard-footer"><button class="action-btn" data-act="saveChallenge">${t("Create challenge")}</button></div>`
-    : `<div class="create-wizard-footer"><button class="action-btn" data-act="createNext">${f.editingFromReview ? t("Save changes") : label}</button></div>`;
+    ? `<div class="create-wizard-footer"><button class="action-btn" data-act="saveChallenge" ${valid ? "" : "disabled"}>${t("Create challenge")}</button></div>`
+    : `<div class="create-wizard-footer"><button class="action-btn" data-act="createNext" ${valid ? "" : "disabled"}>${f.editingFromReview ? t("Save changes") : label}</button></div>`;
 
   return `<div class="fullscreen"><div class="create-wizard">
     <div class="row gap12 create-wizard-topbar">
       <button data-act="createBack" style="width:32px;height:32px;display:flex;align-items:center;justify-content:center;color:#fff">${icon(step > 0 ? "chevronLeft" : "xmark")}</button>
-      <div style="flex:1">${bar(step / CREATE_LAST)}</div>
+      <div class="create-progress"><div>${bar(Math.min(step + 1, 3) / 3)}</div><span>${step === CREATE_LAST ? t("Review") : t("Step %lld of 3", step + 1)}</span></div>
     </div>
     <div class="create-wizard-body">${content}</div>
     ${footer}
@@ -2966,17 +3049,18 @@ function CreateScreen() {
 async function saveChallengeForm() {
   if (!ui.form) return false; // второй тап после того как первый уже создал челлендж и обнулил форму
   const f = ui.form, sel = selectedExercises(f);
-  if (!sel.length) { toast(t("Pick at least one exercise")); return false; }
+  if (![0, 1, 2].every((step) => createStepValid(f, step))) { toast(t("Complete all required fields")); return false; }
   const clampV = (n) => Math.min(Math.max(+n || 0, 1), 5000);
   // streak — дневная норма (≤500); goal — цель повторов всего (≤5000).
   const goals = sel.map((e) => f.type === "goal" ? { exercise: e, target: clampV(f[e]) } : { exercise: e, repsPerDay: Math.min(clampV(f[e]), 500) });
   const access = f.access || "solo";
   const isPublic = access !== "solo";
-  // solo стартует сразу; private ждёт кнопки создателя, public — набора участников (startAt=null → Pending).
+  // Solo и public стартуют сразу; private ждёт подтверждения приглашённых участников.
   const ok = await createChallenge({
     title: publishableChallengeTitle(f), goals, type: f.type || "streak", access,
-    minPlayers: access === "public" ? Math.min(Math.max(f.minPlayers, 2), 50) : 0,
-    startAt: access === "solo" ? startOfDay(Date.now()) : null,
+    minPlayers: 0,
+    maxPlayers: access === "public" && f.limitParticipants ? Math.min(Math.max(+f.maxPlayers, 2), 500) : 0,
+    startAt: access === "private" ? null : startOfDay(Date.now()),
     durationDays: Math.min(Math.max(f.duration, 1), 365), buyIn: Math.max(f.buyIn, 0), isPublic, missPolicy: f.miss,
     progression: f.type === "streak" && f.progOn ? { step: f.progStep, period: f.progPeriod } : { step: 0, period: "day" },
   });
@@ -3927,10 +4011,10 @@ async function shareChallengePoster(data) {
 // Открытие/закрытие модалок и поздравлений
 // ==========================================================================
 function newCreateForm(over) {
-  return Object.assign({ step: 0, type: "streak", access: "private", minPlayers: 5,
-    title: "", sel_pushups: true, sel_squats: false, sel_pullups: false, sel_dips: false,
+  return Object.assign({ step: 0, type: null, access: null, minPlayers: 0, maxPlayers: 10, limitParticipants: false,
+    title: "", sel_pushups: false, sel_squats: false, sel_pullups: false, sel_dips: false,
     pushups: store.dailyGoal || 50, squats: store.dailyGoal || 50, pullups: 20, dips: 30,
-    duration: 30, buyIn: 0, isPublic: !isGuest(), miss: "oneTotal", progOn: false, progStep: 5, progPeriod: "day" }, over || {});
+    duration: null, buyIn: 0, miss: null, progOn: false, progStep: 5, progPeriod: "day" }, over || {});
 }
 // Быстрые шаблоны перед мастером — сокращают путь создания. over — предзаполнение формы.
 const CREATE_TEMPLATES = [
@@ -3984,7 +4068,7 @@ function PresetQuickSetup() {
     </div>
   </div></div>`;
 }
-function openCreate() { ui.form = newCreateForm(); ui.full = CreateScreen; render(); window.scrollTo(0, 0); }
+function openCreate() { ui.form = newCreateForm(); ui.full = CreateWizard; render(); window.scrollTo(0, 0); }
 function openJoin(id) { ui.form = { challengeId: id, weight: store["profile.weightKg"], maxReps: store["profile.maxReps"], photo: null }; ui.sheet = JoinSheet; render(); }
 function openMeasure() { ui.form = { weight: store["profile.weightKg"], maxReps: store["profile.maxReps"] }; ui.sheet = MeasureSheet; render(); }
 function openStartPicker(id) { ui.form = { challengeId: id }; ui.sheet = StartPicker; render(); }
@@ -4217,10 +4301,13 @@ root.addEventListener("click", async (e) => {
     case "useTemplate": {
       const tpl = CREATE_TEMPLATES.find((x) => x.id === arg);
       if (arg === "scratch") {
-        ui.form = newCreateForm({ sel_pushups: true });
+        ui.form = newCreateForm();
         ui.sheet = null; ui.full = CreateWizard;
       } else {
-        ui.form = newCreateForm(Object.assign({ presetId: tpl.id, presetExercise: tpl.exercise, presetStep: tpl.step }, tpl.over));
+        ui.form = newCreateForm(Object.assign({
+          type: "streak", access: isGuest() ? "solo" : "public", miss: "oneTotal",
+          presetId: tpl.id, presetExercise: tpl.exercise, presetStep: tpl.step,
+        }, tpl.over));
         ui.sheet = null; ui.full = PresetQuickSetup;
       }
       render(); window.scrollTo(0, 0); return;
@@ -4312,14 +4399,14 @@ root.addEventListener("click", async (e) => {
   // Форм-контролы
   if (cmd === "seg") {
     const key = el.dataset.key, sk = el.dataset.store, val = parseVal(el.dataset.val);
-    if (sk != null) { store[sk] = val; storeHook(sk); } else ui.form[key] = val;
+    if (sk != null) { store[sk] = val; storeHook(sk); } else { ui.form[key] = val; ui.form.dirty = true; }
     render(); return;
   }
   if (cmd === "statEx") { statExFilter = el.dataset.ex; render(); return; }
   if (cmd === "toggle") {
     const key = el.dataset.key;
     if (key === "isPublic" && !ui.form[key] && isGuest()) { openAuthGate("publicCreate"); return; }
-    ui.form[key] = !ui.form[key]; render(); return;
+    ui.form[key] = !ui.form[key]; ui.form.dirty = true; render(); return;
   }
   if (cmd === "toggleStore") { const k = el.dataset.key; store[k] = !store[k]; render(); return; }
   if (cmd === "inc" || cmd === "dec") {
@@ -4328,7 +4415,7 @@ root.addEventListener("click", async (e) => {
     let v = (sk != null ? store[sk] : ui.form[key]) || 0;
     v += dir * by;
     if (!isNaN(min)) v = Math.max(min, v); if (!isNaN(max)) v = Math.min(max, v);
-    if (sk != null) { store[sk] = v; storeHook(sk); } else ui.form[key] = v;
+    if (sk != null) { store[sk] = v; storeHook(sk); } else { ui.form[key] = v; ui.form.dirty = true; }
     if (ui.full === ChallengeCompleteFull && sk == null) {
       const input = Array.from(document.querySelectorAll(".challenge-complete [data-model]")).find((node) => node.dataset.model === key);
       if (input) input.value = v;
@@ -4341,7 +4428,7 @@ root.addEventListener("click", async (e) => {
 
   if (cmd === "createNext") {
     const f = ui.form;
-    if (f.step === 0 && !selectedExercises(f).length) { toast(t("Pick at least one exercise")); return; }
+    if (!createStepValid(f, f.step)) { toast(t("Complete all required fields")); return; }
     if (f.editingFromReview) { f.editingFromReview = false; f.step = CREATE_LAST; navRender(); return; }
     f.step++; navRender();
     return;
@@ -4359,7 +4446,8 @@ root.addEventListener("click", async (e) => {
   }
   if (cmd === "createChip") {
     const key = act.split(":")[1];
-    ui.form[key] = +act.split(":")[2]; ui.form["custom_" + key] = false;
+    ui.form[key] = +act.split(":")[2]; ui.form["custom_" + key] = false; ui.form.dirty = true;
+    if (ui.full === CreateWizard) { render(); return; }
     const group = el.closest(".create-chips");
     if (group) {
       group.querySelectorAll(".create-chip").forEach((chip) => chip.classList.toggle("selected", chip === el));
@@ -4399,13 +4487,14 @@ root.addEventListener("click", async (e) => {
   }
   if (cmd === "saveChallenge") {
     if (!ui.form) return; // второй тап: первый уже создал челлендж и обнулил форму
+    if (![0, 1, 2].every((step) => createStepValid(ui.form, step))) { toast(t("Complete all required fields")); return; }
     const access = ui.form.access || "solo", synced = access !== "solo";
     if (synced && isGuest()) { openAuthGate("publicCreate"); return; }
     setBtnLoading(el, true, synced ? t("Publishing challenge…") : t("Create challenge"));
     if (await saveChallengeForm()) {
       ui.form = null;
-      // solo стартует сразу (Active); private/public ещё не стартовали (Pending).
-      ui.challengeTab = synced ? "pending" : "active";
+      // Public и solo стартуют сразу; только invite-челлендж ждёт подтверждения.
+      ui.challengeTab = access === "private" ? "pending" : "active";
       // Синканные (private/public) — показываем экран с инвайтом; solo — сразу к списку.
       if (synced) { ui.full = ChallengeCreatedFull; render(); }
       else { ui.full = null; go("challenges"); }
@@ -4444,13 +4533,13 @@ root.addEventListener("click", async (e) => {
     if (C.isJoined(c)) { closeSheet(); return; } // уже вступил (повторный заход по ссылке)
     setBtnLoading(el, true, t("Joining…"));
     const ok = await joinChallenge(c, f.weight, f.maxReps, f.photo);
-    if (ok) {
+    if (ok === true) {
       if (store.pendingInvite && store.pendingInvite.challengeId === c.id) store.pendingInvite = null;
       closeSheet();
     }
     else {
       setBtnLoading(el, false);
-      toast(ok === null ? t("Couldn't join challenge") : t("Not enough coins"));
+      toast(ok === "full" ? t("Challenge is full") : ok === null ? t("Couldn't join challenge") : t("Not enough coins"));
     }
     return;
   }
@@ -4615,6 +4704,7 @@ root.addEventListener("input", (e) => {
       ui.form[k] = el.type === "number" || el.type === "range" ? (+el.value || 0) : el.value;
     }
     if (k === "photoZoom" || k === "dim") updateSharePreviewStyle();
+    if (ui.full === CreateWizard) { ui.form.dirty = true; updateCreateCTA(); }
   }
 });
 root.addEventListener("change", (e) => {

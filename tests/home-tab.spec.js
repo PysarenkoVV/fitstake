@@ -52,6 +52,26 @@ test("home tips remain available after an active challenge is created", async ({
   await expect(page.getByRole("button", { name: "Hide tips", exact: true })).toHaveAttribute("aria-expanded", "true");
 });
 
+test("challenge progress becomes brighter as the daily goal is completed", async ({ page }) => {
+  await page.evaluate(() => {
+    app.challenges = [newChallenge({
+      id: "visual-progress", title: "Visual progress", access: "solo",
+      goals: [{ exercise: "pushups", repsPerDay: 150 }, { exercise: "squats", repsPerDay: 50 }],
+      durationDays: 7, buyIn: 0, startAt: startOfDay(Date.now()),
+      participants: [{ id: "me", isMe: true, state: "active" }],
+      myTodayReps: { pushups: 50, squats: 70 },
+    })];
+    ui.tab = "challenges"; ui.challengeTab = "active"; render();
+  });
+
+  const card = page.locator(".challenge-card", { hasText: "Visual progress" });
+  const bars = card.locator(".challenge-progress");
+  await expect(bars).toHaveCount(2);
+  expect(await bars.nth(0).locator("span").evaluate((el) => Number(getComputedStyle(el).opacity))).toBeLessThan(0.7);
+  await expect(bars.nth(1)).toHaveClass(/is-complete/);
+  expect(await bars.nth(1).locator("span").evaluate((el) => getComputedStyle(el).opacity)).toBe("1");
+});
+
 test("all-time totals moved to the Progress tab", async ({ page }) => {
   await page.getByRole("button", { name: "Progress", exact: true }).click();
   await expect(page.getByText("All-time", { exact: true })).toBeVisible();
