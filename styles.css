@@ -42,6 +42,7 @@
   /* Нижний безопасный отступ полноэкранных экранов. В обычном браузере = системный home-indicator;
      в in-app браузере (Instagram/FB) добавляем запас на их нижнюю панель навигации поверх контента. */
   --safe-bottom: env(safe-area-inset-bottom);
+  --safe-top: max(env(safe-area-inset-top), var(--native-safe-top, 0px));
 
   /* Одна система движения: быстрый старт, мягкая остановка, без задержек и overshoot. */
   --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
@@ -951,8 +952,8 @@ button:is(:active, .pressed):not(:disabled) { transform: scale(0.97); filter: br
 /* height (не min-height): тело скроллится внутри, шапка и футер закреплены,
    контент не уезжает под Dynamic Island. */
 .create-wizard { height: var(--app-height); max-width: 560px; margin: 0 auto; display: flex; flex-direction: column; overflow: hidden; }
-.create-wizard-topbar { padding: max(10px, env(safe-area-inset-top)) 20px 12px; align-items: center; flex: none; }
-.create-wizard-body { min-height: 0; flex: 1; padding: 0 20px; overflow-y: auto; overscroll-behavior-y: contain; -webkit-overflow-scrolling: touch; touch-action: pan-y; }
+.create-wizard-topbar { padding: max(10px, var(--safe-top)) 20px 12px; align-items: center; flex: none; }
+.create-wizard-body { min-height: 0; flex: 1; padding: 0 20px; overflow-y: auto; overflow-anchor: none; overscroll-behavior-y: contain; -webkit-overflow-scrolling: touch; touch-action: pan-y; }
 .create-wizard-footer { position: relative; z-index: 2; flex: none; padding: 8px 20px calc(8px + var(--safe-bottom)); background: linear-gradient(to top, rgba(7, 7, 7, 0.96) 78%, transparent); }
 .create-progress { flex:1; display:grid; grid-template-columns:1fr auto; align-items:center; gap:12px; }
 .create-progress > div { min-width:0; }
@@ -991,8 +992,7 @@ button:is(:active, .pressed):not(:disabled) { transform: scale(0.97); filter: br
 .create-review-icon .coin-mark { width:30px; height:30px; }
 @media(max-width:370px){.create-question{padding-top:14px}.create-wizard-body{padding-inline:16px}.create-wizard-footer{padding-inline:16px}}
 .create-question { min-height: 100%; padding: 24px 0; display: flex; flex-direction: column; gap: 8px; }
-.create-question-content { flex: 1; display: flex; flex-direction: column; justify-content: center; gap: 10px; padding: 12px 0; }
-.create-question:has(.create-rule-block) .create-question-content { justify-content: flex-start; }
+.create-question-content { flex: 1; display: flex; flex-direction: column; justify-content: flex-start; gap: 10px; padding: 16px 0 12px; }
 .duration-options { display: flex; flex-direction: column; gap: 8px; }
 .duration-option { width: 100%; min-height: 68px; padding: 12px 14px; border-radius: 14px; background: var(--glass-panel); box-shadow: inset 0 0 0 1px var(--ring); display: flex; align-items: center; gap: 12px; text-align: left; }
 .duration-option > span { min-width: 0; flex: 1; display: flex; flex-direction: column; gap: 3px; }
@@ -1140,14 +1140,16 @@ button:is(:active, .pressed):not(:disabled) { transform: scale(0.97); filter: br
 /* На перерисовках открытого оверлея (шаги мастера, драг фото) вход не повторяем. */
 .fullscreen.no-enter { animation: none; }
 .challenge-complete { overscroll-behavior-y: contain; touch-action: pan-y; scroll-padding-top: calc(env(safe-area-inset-top) + 20px); }
-.challenge-complete-content { padding-top: max(24px, calc(env(safe-area-inset-top) + 18px)); padding-bottom: calc(28px + var(--safe-bottom)); display: flex; flex-direction: column; gap: 18px; align-items: center; text-align: center; }
+.challenge-complete-content { padding-top: max(24px, calc(var(--safe-top) + 18px)); padding-bottom: calc(28px + var(--safe-bottom)); display: flex; flex-direction: column; gap: 18px; align-items: center; text-align: center; }
 .challenge-complete-hero { width: 100%; display: flex; flex-direction: column; align-items: center; gap: 12px; }
 .challenge-complete-trophy { width: 96px; height: 96px; display: flex; }
 .repact-prize-mark { width: 96px; height: 96px; overflow: visible; }
 .repact-prize-ring { fill: rgba(200,255,33,.055); stroke: url(#repactPrizeGradient); stroke-width: 1.5; }
 .challenge-complete-title { font-size: 34px; }
-.challenge-photo-actions { width: 100%; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
-.challenge-photo-actions .action-btn { width: 100%; min-width: 0; min-height: 58px; padding: 12px; background: var(--white-08); color: #fff; font-size: 14px; white-space: nowrap; }
+.challenge-photo-column { min-width: 0; display: flex; flex-direction: column; gap: 7px; }
+.challenge-photo-pick { display: grid; grid-template-columns: repeat(2, minmax(44px, 1fr)); gap: 8px; }
+.challenge-photo-pick button { min-width: 44px; height: 46px; display: grid; place-items: center; border-radius: 13px; color: #fff; background: var(--white-08); box-shadow: inset 0 0 0 1px var(--ring); }
+.challenge-photo-pick button svg { width: 20px; height: 20px; }
 @keyframes full-in { from { opacity: 0; transform: scale(0.985); } to { opacity: 1; transform: scale(1); } }
 .celebrate { min-height: 100dvh; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; padding: 24px 20px calc(24px + var(--safe-bottom)); gap: 18px; }
 /* «Челлендж создан»: контент строго под Dynamic Island, единый блок по центру

@@ -4,7 +4,7 @@
 "use strict";
 
 // Версия оболочки — держать в синхроне с CACHE в sw.js; уходит в баг-репорты.
-const APP_VERSION = "v153";
+const APP_VERSION = "v154";
 // Последняя JS-ошибка — прикладываем к баг-репорту, чтобы сразу видеть причину.
 let lastError = "";
 window.addEventListener("error", (e) => {
@@ -1239,8 +1239,10 @@ function addReps(ch, counts, sessionStats, sessionDayKey = dateKey()) {
   return closed;
 }
 
-function completeChallenge(ch, afterPhoto, weight, maxReps) {
-  ch.afterPhoto = afterPhoto || null; ch.isCompleted = true;
+function completeChallenge(ch, beforePhoto, afterPhoto, weight, maxReps) {
+  ch.beforePhoto = beforePhoto || null;
+  ch.afterPhoto = afterPhoto || null;
+  ch.isCompleted = true;
   addMeasurement(weight, maxReps);
 }
 function addMeasurement(weight, maxReps) { app.measurements.push({ id: uid(), date: Date.now(), weight, maxReps }); }
@@ -3380,12 +3382,12 @@ function ChallengeCompleteFull() {
     <div class="card" style="padding:16px;width:100%;display:flex;flex-direction:column;gap:12px;text-align:left">
       ${lbl(t("Before / After"), "tracking-1")}
       <div class="grid2">
-        <div style="display:flex;flex-direction:column;gap:6px"><div class="photo-slot" style="height:190px">${c.beforePhoto ? `<img src="${c.beforePhoto}" alt="${t("Before")}">` : icon("camera")}</div>${lbl(t("Before"))}</div>
-        <div style="display:flex;flex-direction:column;gap:6px"><div class="photo-slot accent" style="height:190px">${f.photo ? `<img src="${f.photo}" alt="${t("After")}">` : iconF("camera")}</div>${lbl(t("After"))}</div>
-      </div>
-      <div class="challenge-photo-actions">
-        <button class="action-btn" data-act="pickPhoto:camera">${iconF("camera")}${f.photo ? t("Retake") : t("Take photo")}</button>
-        <button class="action-btn" data-act="pickPhoto:library">${iconF("photo")}${t("Upload")}</button>
+        <div class="challenge-photo-column"><div class="photo-slot" style="height:190px">${f.beforePhoto ? `<img src="${f.beforePhoto}" alt="${t("Before")}">` : icon("camera")}</div>${lbl(t("Before"))}
+          <div class="challenge-photo-pick"><button data-act="pickPhoto:beforeCamera" aria-label="${t("Take photo")}">${iconF("camera")}</button><button data-act="pickPhoto:beforeLibrary" aria-label="${t("Upload")}">${iconF("photo")}</button></div>
+        </div>
+        <div class="challenge-photo-column"><div class="photo-slot accent" style="height:190px">${f.photo ? `<img src="${f.photo}" alt="${t("After")}">` : iconF("camera")}</div>${lbl(t("After"))}
+          <div class="challenge-photo-pick"><button data-act="pickPhoto:afterCamera" aria-label="${t("Take photo")}">${iconF("camera")}</button><button data-act="pickPhoto:afterLibrary" aria-label="${t("Upload")}">${iconF("photo")}</button></div>
+        </div>
       </div>
     </div>
 
@@ -4072,7 +4074,7 @@ function openShareDay(c) {
   ui.full = ShareDayEditorFull;
   render();
 }
-function openChallengeComplete(c) { ui.form = { challengeId: c.id, weight: store["profile.weightKg"], maxReps: store["profile.maxReps"], photo: null }; ui.full = ChallengeCompleteFull; ui.resetFullScroll = true; render(); }
+function openChallengeComplete(c) { ui.form = { challengeId: c.id, weight: store["profile.weightKg"], maxReps: store["profile.maxReps"], beforePhoto: c.beforePhoto || null, photo: c.afterPhoto || null }; ui.full = ChallengeCompleteFull; ui.resetFullScroll = true; render(); }
 function closeFull() { ui.full = null; ui.form = null; ui.workoutResult = null; navRender(); }
 
 function CameraPrepFull() {
@@ -4437,7 +4439,16 @@ root.addEventListener("click", async (e) => {
     render(); return;
   }
 
-  if (act.startsWith("pickPhoto")) { const img = await pickImage(arg === "camera"); if (img) { ui.form.photo = img; render(); } return; }
+  if (act.startsWith("pickPhoto")) {
+    const camera = arg === "camera" || /Camera$/.test(arg);
+    const img = await pickImage(camera);
+    if (img) {
+      if (/^before/.test(arg)) ui.form.beforePhoto = img;
+      else ui.form.photo = img;
+      render();
+    }
+    return;
+  }
 
   if (cmd === "createNext") {
     const f = ui.form;
@@ -4612,7 +4623,7 @@ root.addEventListener("click", async (e) => {
   }
   if (cmd === "saveResult") {
     const f = ui.form, c = app.challenges.find((x) => x.id === arg);
-    completeChallenge(c, f.photo, f.weight, f.maxReps);
+    completeChallenge(c, f.beforePhoto, f.photo, f.weight, f.maxReps);
     store["profile.weightKg"] = f.weight; store["profile.maxReps"] = f.maxReps;
     closeFull(); return;
   }
@@ -4636,7 +4647,7 @@ root.addEventListener("click", async (e) => {
       const total = (c.myTotalByExercise && c.myTotalByExercise[g.exercise]) || c.myTodayReps[g.exercise] || 0;
       return `${fmt(total)} ${Exercise.displayName(g.exercise).toLowerCase()}`;
     }).join(" · ");
-    const shared = await shareCard({ title: c.title, duration: c.durationDays, totalReps: c.myTotalReps, exerciseSummary, weight: wc, maxReps: mc, payout: C.payout(c), beforePhoto: c.beforePhoto, afterPhoto: f.photo });
+    const shared = await shareCard({ title: c.title, duration: c.durationDays, totalReps: c.myTotalReps, exerciseSummary, weight: wc, maxReps: mc, payout: C.payout(c), beforePhoto: f.beforePhoto, afterPhoto: f.photo });
     if (shared) { markTesterProgress("resultShared"); openShareComplete({ type: "challengeComplete", challengeId: c.id, form: Object.assign({}, f) }); }
     return;
   }
@@ -4908,7 +4919,7 @@ const press = { el: null, sel: "", start: 0, pending: null, applyTimer: 0, relea
 // «Тот же» элемент в перерисованном DOM ищем по data-атрибутам действия.
 function pressSelector(el) {
   const parts = [];
-  for (const a of ["data-act", "data-sess", "data-err", "data-key", "data-store", "data-by"]) {
+  for (const a of ["data-act", "data-sess", "data-err", "data-key", "data-store", "data-val", "data-by"]) {
     const v = el.getAttribute(a);
     if (v != null) parts.push(`[${a}="${v.replace(/"/g, '\\"')}"]`);
   }

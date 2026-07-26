@@ -24,6 +24,9 @@ test("required choices unlock each step and public defaults to unlimited", async
   await expect(next).toBeDisabled();
   await page.getByRole("button", { name: "7d", exact: true }).click();
   await page.getByRole("button", { name: /Public/ }).click();
+  await expect(page.getByRole("button", { name: /Public/ })).toHaveAttribute("aria-pressed", "true");
+  await expect(page.getByRole("button", { name: /By invitation/ })).toHaveAttribute("aria-pressed", "false");
+  await expect(page.locator(".create-access-list .selected")).toHaveCount(1);
   await expect(page.getByText("Unlimited participants")).toBeVisible();
   await expect(next).toBeEnabled();
 
