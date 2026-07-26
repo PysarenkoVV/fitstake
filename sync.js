@@ -146,11 +146,17 @@ window.Sync = (() => {
     const provider = new A.GoogleAuthProvider();
     const cur = authInstance.currentUser;
     try {
-      if (cur && cur.isAnonymous) await A.linkWithPopup(cur, provider);
+      if (window.RepactNativeAuth && typeof window.RepactNativeAuth.signInGoogle === "function") {
+        const tokens = await window.RepactNativeAuth.signInGoogle();
+        const credential = A.GoogleAuthProvider.credential(tokens.idToken || null, tokens.accessToken);
+        if (cur && cur.isAnonymous) await A.linkWithCredential(cur, credential);
+        else await A.signInWithCredential(authInstance, credential);
+      } else if (cur && cur.isAnonymous) await A.linkWithPopup(cur, provider);
       else await A.signInWithPopup(authInstance, provider);
       refreshAuthState();
       return { ok: true };
     } catch (e) {
+      if (e && e.message === "cancelled") return { ok: false, error: "cancelled" };
       const code = (e && e.code) || "error";
       // Этот Google-аккаунт уже привязан к другому uid — просто входим в него.
       if (code === "auth/credential-already-in-use") {
