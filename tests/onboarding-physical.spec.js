@@ -46,22 +46,15 @@ test("physical profile step: gender cards, slider drag and stepper buttons", asy
   await expect(page.getByText("Your exercises")).toBeVisible();
 });
 
-test("exercises step: multi-select reveals a per-exercise reps slider", async ({ page }) => {
+test("exercises step: multi-select does not ask users to estimate a one-set max", async ({ page }) => {
   await toExercisesStep(page);
-  // Четыре карточки упражнений; отжимания выбраны по умолчанию → один ползунок.
   await expect(page.locator(".onb-ex")).toHaveCount(4);
-  await expect(page.locator(".physio-slider")).toHaveCount(1);
+  await expect(page.locator(".onb-ex .physio-slider")).toHaveCount(0);
+  await expect(page.getByText("Max reps in one set")).toHaveCount(0);
 
-  // Выбираем ещё одно упражнение → появляется второй ползунок.
   await page.getByRole("button", { name: "Squats", exact: true }).click();
-  await expect(page.locator(".physio-slider")).toHaveCount(2);
+  await expect(page.locator(".onb-ex.selected")).toHaveCount(2);
   expect(await page.evaluate(() => JSON.parse(localStorage.getItem("fs.profile.sel_squats")))).toBe(true);
-
-  // Тянем ползунок максимума отжиманий.
-  const reps = page.locator('[data-slider="profile.reps.pushups"]');
-  await reps.fill("90");
-  await expect(page.locator('[data-val-for="profile.reps.pushups"]')).toHaveText("90");
-  expect(await page.evaluate(() => JSON.parse(localStorage.getItem("fs.profile.reps.pushups")))).toBe(90);
 
   await page.getByRole("button", { name: "Continue", exact: true }).click();
   await expect(page.getByText("Your fitness level")).toBeVisible();

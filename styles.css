@@ -1035,8 +1035,23 @@ button:is(:active, .pressed):not(:disabled) { transform: scale(0.97); filter: br
 .progression-result strong { color: #fff; font-size: 16px; font-variant-numeric: tabular-nums; }
 
 /* Первый экран онбординга: лого-иконка приложения крупно, со свечением как на домашнем экране. */
-.onb-hero { height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 18px; }
+.onb-content { flex: 1; min-height: 0; padding: 0 24px; overflow-y: auto; }
+.onb-content-welcome { display: flex; align-items: center; padding-bottom: clamp(16px, 5dvh, 48px); }
+.onb-hero { width: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px; }
 .onb-logo { width: clamp(104px, 30vw, 132px); height: auto; border-radius: 28px; box-shadow: 0 18px 48px rgba(181, 255, 18, 0.22); }
+.onb-wordmark { margin-top: 4px; font-size: clamp(42px, 12vw, 52px); line-height: 1; }
+.onb-tagline { max-width: 340px; margin-top: 12px; font-weight: 500; line-height: 1.5; text-wrap: balance; }
+.set-progress-card { padding: 18px; }
+.set-progress-head { display: flex; align-items: flex-start; justify-content: space-between; }
+.set-progress-head > div { display: flex; flex-direction: column; gap: 5px; }
+.set-progress-head small { color: var(--text-secondary); font-size: 11px; font-weight: 600; }
+.set-progress-head > span { padding: 5px 8px; border-radius: 999px; color: var(--money); background: rgba(69,212,131,.13); font: 800 11px/1 var(--mono); }
+.set-progress-stats { margin-top: 18px; display: grid; grid-template-columns: repeat(3, 1fr); }
+.set-progress-stats > div { min-width: 0; display: flex; flex-direction: column; gap: 6px; }
+.set-progress-stats > div + div { padding-left: 14px; box-shadow: inset 1px 0 0 var(--ring); }
+.set-progress-stats strong { color: #fff; font: 800 24px/1 var(--mono); }
+.set-progress-stats span { color: var(--text-secondary); font-size: 10px; font-weight: 650; line-height: 1.25; }
+.set-progress-stats .is-best strong { color: var(--accent); }
 
 /* ---- Форма создания ---- */
 .create-section { display: flex; flex-direction: column; gap: 10px; }

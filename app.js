@@ -4,7 +4,7 @@
 "use strict";
 
 // Версия оболочки — держать в синхроне с CACHE в sw.js; уходит в баг-репорты.
-const APP_VERSION = "v151";
+const APP_VERSION = "v152";
 // Последняя JS-ошибка — прикладываем к баг-репорту, чтобы сразу видеть причину.
 let lastError = "";
 window.addEventListener("error", (e) => {
@@ -297,6 +297,9 @@ const RU = {
   "Your data": "Твои данные", "Your fitness level": "Твоя физуха", "Your gender": "Твой пол", "Your height": "Твой рост",
   "Your physical profile": "Твои параметры", "yrs": "лет",
   "Your exercises": "Твои упражнения", "Pick what you train and set your one-set max.": "Отметь, что тренируешь, и укажи максимум за подход.",
+  "Pick what you train. Repact will measure your progress from verified workouts.": "Выбери, что тренируешь. Repact сам измерит прогресс по подтверждённым тренировкам.",
+  "Strength progress": "Прогресс силы", "Verified sets only": "Только подтверждённые сеты",
+  "First workout": "Первая тренировка", "Best set": "Лучший сет", "Latest workout": "Последняя тренировка",
   "%@ level → %lld working sets per exercise.": "Уровень %@ → %lld рабочих сета на упражнение.",
   "This information is used to personalize your first week workout program. You can edit it later from your profile page.": "Эти данные помогут собрать программу первой недели под тебя. Их можно изменить позже в профиле.",
   "Your starting point — at the finish you'll see how far you've come.": "Твоя точка отсчёта — на финише увидишь, как далеко ушёл.",
@@ -1868,7 +1871,7 @@ function DetailScreen(id) {
       finaleCard(c), totalCard(c), participantsCard(c), potCard(c), rulesCard(c),
       c.beforePhoto ? beforeAfterCard(c) : "", inviteBtn, leaveBtn,
     ].join("") : [
-      totalCard(c), todayCard(c),
+      totalCard(c), challengeSetProgressCard(c), todayCard(c),
       C.isFinished(c) ? `<button class="action-btn money" data-act="showResult:${c.id}">${iconF("trophy")}${t("Show result")}</button>` : "",
       callToAction(c), shareDayBtn, inviteBtn,
       potCard(c), socialCard(c), rulesCard(c),
@@ -1901,6 +1904,24 @@ function totalCard(c) {
     ${lbl(t("Challenge total"), "tracking-15")}
     <div class="money" style="font-size:56px;margin:6px 0">${c.myTotalReps}</div>
     ${s >= 2 ? `<div class="row gap6" style="justify-content:center">${streakPill(s)}${lbl(t("Day streak"), "tracking-1")}</div>` : `<div class="secondary" style="font-size:13px;font-weight:600">${esc(C.exerciseNames(c))}</div>`}
+  </div>`;
+}
+function challengeSetProgressCard(c) {
+  const days = Object.keys(c.workoutStatsByDay || {}).sort().map((key) => {
+    const summary = workoutSummary(c, key);
+    return summary.best > 0 ? { key, best: summary.best } : null;
+  }).filter(Boolean);
+  if (!days.length) return "";
+  const first = days[0].best;
+  const latest = days[days.length - 1].best;
+  const best = Math.max(...days.map((day) => day.best));
+  return `<div class="card set-progress-card">
+    <div class="set-progress-head"><div>${lbl(t("Strength progress"), "tracking-1")}<small>${t("Verified sets only")}</small></div>${best > first ? `<span>+${best - first}</span>` : ""}</div>
+    <div class="set-progress-stats">
+      <div><strong>${first}</strong><span>${t("First workout")}</span></div>
+      <div class="is-best"><strong>${best}</strong><span>${t("Best set")}</span></div>
+      <div><strong>${latest}</strong><span>${t("Latest workout")}</span></div>
+    </div>
   </div>`;
 }
 // Статус-карточка проваленного челленджа: причина и что с ним будет дальше.
@@ -2569,7 +2590,7 @@ function resumeAuthIntent() {
 // ==========================================================================
 // Онбординг
 // ==========================================================================
-// Короткий онбординг: имя → параметры тела → упражнения+максимумы → уровень → норма → вход.
+// Короткий онбординг: имя → параметры тела → упражнения → уровень → норма → вход.
 const SYNC_ON = !!(window.Sync && window.Sync.enabled);
 const LAST_STEP = SYNC_ON ? 6 : 5;
 const STEP = {
@@ -2714,8 +2735,7 @@ function OnbPhysical() {
     <div class="form-footer">${t("This information is used to personalize your first week workout program. You can edit it later from your profile page.")}</div>`;
 }
 
-// Основное упражнение = первое выбранное (по порядку EX_ORDER); от него зависят
-// profile.maxReps/startExercise и стартовый замер.
+// Основное упражнение = первое выбранное (по порядку EX_ORDER).
 function primaryExercise() { return EX_ORDER.find((ex) => store["profile.sel_" + ex]) || "pushups"; }
 const REP_RANGE = [1, 120];
 // Дневная цель по одному упражнению: максимум × рабочие сета, с коэффициентом нагрузки.
@@ -2724,26 +2744,15 @@ function exerciseTarget(level, reps, choice) {
   return Math.max(10, Math.round((recommendedDailyReps(level, reps) * factor) / 10) * 10);
 }
 
-// Экран «Твои упражнения»: мульти-выбор до 4 упражнений; у каждого выбранного —
-// ползунок максимума за подход. Ползунок — сиблинг кнопки-тумблера (иначе тап по
-// нему переключал бы выбор).
+// Экран «Твои упражнения»: мульти-выбор до 4 упражнений.
 function OnbExercises() {
-  const [min, max] = REP_RANGE;
   return EX_ORDER.map((ex) => {
-    const on = store["profile.sel_" + ex], key = "profile.reps." + ex, v = store[key];
-    const pct = (((v - min) / (max - min)) * 100).toFixed(1);
+    const on = store["profile.sel_" + ex];
     const head = `<button class="onb-ex-head" data-act="toggleStore" data-key="profile.sel_${ex}" aria-pressed="${on}">
       <span class="onb-ex-icon">${exIcon(ex)}</span>
       <span class="onb-ex-name">${esc(Exercise.displayName(ex))}</span>
       <span class="onb-ex-check" style="color:${on ? "var(--accent)" : "var(--text-secondary)"}">${on ? iconF("checkCircle") : icon("plusCircleLine")}</span></button>`;
-    const slider = on ? `<div class="onb-ex-slider">
-      <div class="between"><span class="label secondary" style="font-size:13px">${t("Max reps in one set")}</span>
-        <span><span class="physio-num" data-val-for="${key}">${v}</span> <span class="physio-unit">${t("reps")}</span></span></div>
-      <div class="physio-ctrl">
-        <button data-act="dec" data-store="${key}" data-min="${min}" data-max="${max}" aria-label="−">−</button>
-        <input type="range" class="physio-slider" data-slider="${key}" min="${min}" max="${max}" step="1" value="${v}" style="--fill:${pct}%" aria-label="${esc(Exercise.displayName(ex))}">
-        <button data-act="inc" data-store="${key}" data-min="${min}" data-max="${max}" aria-label="+">+</button></div></div>` : "";
-    return `<div class="onb-ex card ${on ? "selected" : ""}">${head}${slider}</div>`;
+    return `<div class="onb-ex card ${on ? "selected" : ""}">${head}</div>`;
   }).join("");
 }
 
@@ -2762,14 +2771,14 @@ function Onboarding() {
   let content;
   if (step === 0) content = `<div class="center onb-hero">
     <img class="onb-logo" src="icons/icon-512.png" alt="Repact" width="132" height="132">
-    <div class="display" style="font-size:46px">Repact</div>
-    <div class="form-footer" style="max-width:320px;font-weight:500">${t("Every rep is verified by the camera. Coins on the line. Miss too many days and you're out.")}</div></div>`;
+    <div class="onb-wordmark display">Repact</div>
+    <div class="onb-tagline form-footer">${t("Every rep is verified by the camera. Coins on the line. Miss too many days and you're out.")}</div></div>`;
   // Вход — последний шаг, перед сохранением прогресса (только с Firebase).
   else if (step === STEP.auth) content = question(t("Create your account"), t("So your progress is saved and syncs across your devices."), authForm());
   else if (step === STEP.name) content = question(t("Your name"), t("Friends will see it in the leaderboard."),
     `<input class="field" id="onb-name" value="${esc(store["profile.name"] || "")}" placeholder="${esc(t("Your name"))}" aria-label="${esc(t("Your name"))}" maxlength="20" autocomplete="name">`);
   else if (step === STEP.physical) content = question(t("Your physical profile"), null, OnbPhysical());
-  else if (step === STEP.exercises) content = question(t("Your exercises"), t("Pick what you train and set your one-set max."), OnbExercises());
+  else if (step === STEP.exercises) content = question(t("Your exercises"), t("Pick what you train. Repact will measure your progress from verified workouts."), OnbExercises());
   else if (step === STEP.fitness) content = question(t("Your fitness level"), null, Level.all.map((l) => optionCard(Level.name(l), Level.subtitle(l), level === l, `onbSet:profile.level:${l}`)).join(""));
   // Итоговый шаг: дневная норма = сумма по выбранным упражнениям (каждое на 3–4 сета).
   else {
@@ -2802,7 +2811,7 @@ function Onboarding() {
       <div style="flex:1">${bar(step / LAST_STEP)}</div>
       ${step > 0 ? `<span class="label secondary" style="font-size:12px;white-space:nowrap">${t("Step %lld of %lld", step, LAST_STEP)}</span>` : langToggle()}
     </div>
-    <div style="flex:1;padding:0 24px;overflow-y:auto">${content}</div>
+    <div class="onb-content ${step === 0 ? "onb-content-welcome" : ""}">${content}</div>
     ${footer}
   </div>`;
 }
@@ -4641,7 +4650,7 @@ root.addEventListener("click", async (e) => {
       if (!name) { toast(t("Your name")); return; }
       store["profile.name"] = name;
     }
-    // Основное упражнение (первое выбранное) кормит дневную норму и стартовый замер.
+    // Основное упражнение (первое выбранное) кормит дневную норму.
     if (ui.onbStep === STEP.exercises) {
       const primary = EX_ORDER.find((ex) => store["profile.sel_" + ex]);
       if (!primary) { toast(t("Pick at least one exercise")); return; }
