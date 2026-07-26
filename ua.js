@@ -32,6 +32,7 @@ window.UA_TRANSLATIONS = {
   "Nothing pending": "Нічого не очікує", "Create a new challenge to get started!": "Створіть челендж, щоб почати!",
   "Continue workout": "Продовжити тренування", "Start today's workout": "Почати тренування на сьогодні",
   "Finish workout": "Завершити тренування", "Finish workout?": "Завершити тренування?", "Save workout": "Зберегти тренування",
+  "Lower down": "Опустися нижче", "Push up": "Піднімися вище",
   "Workout saved": "Тренування збережено", "Workout sounds": "Звуки тренування", "Finish set": "Завершити підхід",
   "Start next set": "Почати наступний підхід", "Extra set": "Ще один підхід", "Rest": "Відпочинок",
   "Rest finished": "Відпочинок завершено", "Overall time": "Загальний час", "Day complete": "День завершено",

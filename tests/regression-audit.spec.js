@@ -71,6 +71,12 @@ test("standalone layout uses the full viewport after iOS camera sessions", () =>
   expect(source).toContain(".tabbar { bottom: calc(100dvh - 100lvh); }");
 });
 
+test("a workout started after the daily goal stays in extra-reps mode", () => {
+  const source = fs.readFileSync(new URL("../workout-session.js", import.meta.url), "utf8");
+  expect(source).toContain("completionDismissed = goals.every((goal) => goal.target != null && goal.start >= goal.target)");
+  expect(source).toContain("if (allReached && !completionDismissed && workoutStartedAt && !workoutStoppedAt)");
+});
+
 test("failed remote join does not charge or add a local participant", async ({ page }) => {
   await page.addInitScript(() => {
     localStorage.setItem("fs.onboarded", "true");

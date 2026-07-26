@@ -565,7 +565,14 @@ class PoseSession {
         // Неактивные упражнения комбо на паузе: счёт заморожен, кадр не обрабатываем.
         if (i !== this.active) return { exercise: c.exercise, repCount: c.count, status: "paused", bendAngle: null };
         const r = c.process(acceptedPoints, size, this.countingEnabled);
-        return { exercise: c.exercise, repCount: c.count, status: r.status, bendAngle: r.bendAngle };
+        const guidePhase = c.wasDown || !c.armed ? "up" : "down";
+        const span = Math.max(1, c.upThreshold - c.downThreshold);
+        const guideProgress = r.bendAngle == null ? 0 : Math.max(0, Math.min(1,
+          guidePhase === "up"
+            ? (r.bendAngle - c.downThreshold) / span
+            : (c.upThreshold - r.bendAngle) / span
+        ));
+        return { exercise: c.exercise, repCount: c.count, status: r.status, bendAngle: r.bendAngle, guidePhase, guideProgress };
       });
       // Всё нужное для активного упражнения в кадре — скелет зеленеет.
       const ar = results[this.active];

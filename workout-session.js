@@ -36,6 +36,11 @@ async function openSession(challengeId, startExercise) {
       <div class="hint" id="sess-hint"></div>
     </div>
     <div class="sess-countdown" id="sess-countdown" aria-live="assertive"></div>
+    <div class="sess-range-guide" id="sess-range-guide" hidden>
+      <span id="sess-range-label"></span>
+      <div class="sess-range-track"><i id="sess-range-fill"></i><b></b></div>
+      <strong id="sess-range-value">0%</strong>
+    </div>
     <div class="sess-rest" id="sess-rest" hidden>
       <div class="sess-rest-counter" id="sess-rest-counter"></div>
       <div class="sess-rest-timer">
@@ -54,6 +59,10 @@ async function openSession(challengeId, startExercise) {
   const canvas = overlay.querySelector(".skeleton");
   const hintEl = overlay.querySelector("#sess-hint");
   const countdownEl = overlay.querySelector("#sess-countdown");
+  const rangeGuideEl = overlay.querySelector("#sess-range-guide");
+  const rangeLabelEl = overlay.querySelector("#sess-range-label");
+  const rangeFillEl = overlay.querySelector("#sess-range-fill");
+  const rangeValueEl = overlay.querySelector("#sess-range-value");
   const elapsedEl = overlay.querySelector("#sess-elapsed");
   const restEl = overlay.querySelector("#sess-rest");
   const restTimeEl = overlay.querySelector("#sess-rest-time");
@@ -157,7 +166,11 @@ async function openSession(challengeId, startExercise) {
   let workoutStartedAt = 0, workoutStoppedAt = 0, lastClockText = "";
   let setStartTotal = 0, setReps = [];
   let resting = false, restStartedAt = 0, restEndsAt = 0, restDurationMs = 90000, restTotalMs = 0, restCuePlayed = false;
-  let completionShown = false, completionDismissed = false;
+  let rangePhase = "", rangeReachedUntil = 0;
+  let completionShown = false;
+  // Если дневная цель была закрыта до открытия камеры, это уже extra-сессия:
+  // новые повторы не должны снова запускать экран «Day complete».
+  let completionDismissed = goals.every((goal) => goal.target != null && goal.start >= goal.target);
 
   const sessionRepTotal = () => sess.snapshot.results.reduce((sum, result) => sum + result.repCount, 0);
   const currentSetReps = () => Math.max(0, sessionRepTotal() - setStartTotal);
@@ -291,13 +304,31 @@ async function openSession(challengeId, startExercise) {
       const allReached = goals.every((x) => x.target != null && totalFor(x, resultFor(x.exercise)) >= x.target);
       const now = performance.now();
       if (sessionTotal > 0 && !workoutStartedAt) workoutStartedAt = now;
-      if (allReached && workoutStartedAt && !workoutStoppedAt) {
+      if (allReached && !completionDismissed && workoutStartedAt && !workoutStoppedAt) {
         workoutStoppedAt = now;
         closeCurrentSet();
-        if (!completionDismissed) showCompletion();
+        showCompletion();
       }
       updateElapsed(now);
       updateRest(now);
+
+      // Для dips показываем путь до следующей контрольной точки теми же порогами,
+      // которыми реально пользуется счётчик: сначала вниз, затем обратно вверх.
+      const showRangeGuide = g.exercise === "dips" && !resting && !(completionShown && !completionDismissed)
+        && ar && ar.bendAngle != null && countingStarted;
+      rangeGuideEl.hidden = !showRangeGuide;
+      if (showRangeGuide) {
+        const phase = ar.guidePhase || "up";
+        if (rangePhase && phase !== rangePhase) rangeReachedUntil = now + 260;
+        rangePhase = phase;
+        const reached = now < rangeReachedUntil;
+        const progress = reached ? 100 : Math.round((ar.guideProgress || 0) * 100);
+        rangeGuideEl.dataset.phase = phase;
+        rangeGuideEl.classList.toggle("reached", reached || progress >= 96);
+        rangeLabelEl.textContent = phase === "down" ? t("Lower down") : t("Push up");
+        rangeFillEl.style.height = `${progress}%`;
+        rangeValueEl.textContent = `${progress}%`;
+      }
 
       // Счётчик активного упражнения
       const numEl = countersEl.querySelector("#sess-num");

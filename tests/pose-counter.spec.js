@@ -92,6 +92,25 @@ test("dips keep counting through a brief hidden wrist but do not count a head no
   expect(result).toEqual({ hiddenWrist: 1, headOnly: 0 });
 });
 
+test("dips guide maps both movement phases from zero to the checkpoint", async ({ page }) => {
+  const result = await page.evaluate(() => {
+    const counter = new window.RepCounter("dips");
+    const progress = (angle, phase) => {
+      const span = counter.upThreshold - counter.downThreshold;
+      return phase === "up"
+        ? (angle - counter.downThreshold) / span
+        : (counter.upThreshold - angle) / span;
+    };
+    return {
+      downStart: progress(counter.upThreshold, "down"),
+      downReached: progress(counter.downThreshold, "down"),
+      upStart: progress(counter.downThreshold, "up"),
+      upReached: progress(counter.upThreshold, "up"),
+    };
+  });
+  expect(result).toEqual({ downStart: 0, downReached: 1, upStart: 0, upReached: 1 });
+});
+
 test("camera rejects sparse landmarks before drawing or counting a pose", async ({ page }) => {
   const result = await page.evaluate(() => {
     const p = (x, y, confidence = 1) => ({ x, y, confidence });

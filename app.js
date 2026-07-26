@@ -4,7 +4,7 @@
 "use strict";
 
 // Версия оболочки — держать в синхроне с CACHE в sw.js; уходит в баг-репорты.
-const APP_VERSION = "v149";
+const APP_VERSION = "v151";
 // Последняя JS-ошибка — прикладываем к баг-репорту, чтобы сразу видеть причину.
 let lastError = "";
 window.addEventListener("error", (e) => {
@@ -199,6 +199,7 @@ const RU = {
   "Set %lld completed": "Сет %lld завершён", "%lld reps": "%lld повторов", "Total %@": "Всего %@",
   "+30 sec": "+30 сек", "Start next set": "Начать новый сет", "Rest finished": "Отдых закончен",
   "Finish workout": "Закончить", "Extra set": "Ещё сет", "Day complete": "День закрыт",
+  "Lower down": "Опустись ниже", "Push up": "Поднимись выше",
   "Time": "Время", "Sets": "Сеты", "Average set": "Средний сет", "Best set": "Лучший сет",
   "%lld sets": "%lld сетов", "avg %lld": "в среднем %lld", "%lld sec faster": "на %lld сек быстрее",
   "Finish workout?": "Завершить тренировку?", "Save completed reps?": "Сохранить выполненные повторы?",
