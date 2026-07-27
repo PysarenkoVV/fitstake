@@ -698,11 +698,64 @@ button:is(:active, .pressed):not(:disabled) { transform: scale(0.97); filter: br
   text-align: center;
   overflow-wrap: anywhere;
 }
+.sess-energy {
+  position: absolute;
+  z-index: 4;
+  left: max(18px, env(safe-area-inset-left));
+  top: 50%;
+  transform: translateY(-38%);
+  width: 72px;
+  display: grid;
+  justify-items: center;
+  gap: 9px;
+  color: #fff;
+  pointer-events: none;
+  filter: drop-shadow(0 4px 14px rgba(0,0,0,.55));
+}
+.sess-energy[hidden] { display: none; }
+.sess-energy > span {
+  width: 100px;
+  font-size: 11px;
+  line-height: 1.15;
+  font-weight: 800;
+  text-align: center;
+  text-transform: uppercase;
+  letter-spacing: .05em;
+}
+.sess-energy-track {
+  position: relative;
+  width: 24px;
+  height: 154px;
+  overflow: hidden;
+  border: 2px solid rgba(255,255,255,.72);
+  border-radius: 999px;
+  background: rgba(0,0,0,.32);
+  box-shadow: inset 0 0 0 1px rgba(0,0,0,.18);
+}
+.sess-energy-track i {
+  position: absolute;
+  inset: auto 3px 3px;
+  min-height: 4px;
+  border-radius: 999px;
+  background: linear-gradient(to top, var(--accent), var(--money));
+  box-shadow: 0 0 14px rgba(200,255,33,.42);
+}
+.sess-energy > strong {
+  min-width: 42px;
+  padding: 4px 7px;
+  border-radius: 999px;
+  background: rgba(0,0,0,.42);
+  font: 800 12px/1 var(--mono);
+  text-align: center;
+}
+.sess-energy.low .sess-energy-track { border-color: var(--warning); }
+.sess-energy.low .sess-energy-track i { background: linear-gradient(to top, #ff7a45, var(--warning)); }
+.sess-energy.low > strong { color: #171006; background: var(--warning); }
 /* Шкала амплитуды dips: путь до следующего реального порога счётчика. */
 .sess-range-guide {
   position: absolute;
   z-index: 4;
-  left: max(18px, env(safe-area-inset-left));
+  right: max(18px, env(safe-area-inset-right));
   top: 50%;
   transform: translateY(-38%);
   width: 72px;

@@ -509,6 +509,44 @@ test("starting a rep during rest resumes the next set without losing it", async 
   await page.getByRole("button", { name: "Exit without saving", exact: true }).click();
 });
 
+test("set energy drains between reps and refills on the next rep", async ({ page }) => {
+  await page.evaluate(async () => {
+    class FakePoseSession {
+      constructor(exercises) {
+        this.snapshot = { results: exercises.map((exercise) => ({ exercise, repCount: 0, status: "up", bendAngle: 170 })) };
+        window.__fakePoseSession = this;
+      }
+      setRecordingContext() {}
+      setActive() {}
+      setCountingEnabled() {}
+      async start() {}
+      stop() {}
+      isRecording() { return false; }
+      async toggleRecording() { return false; }
+    }
+    window.__REPACT_SET_IDLE_MS__ = 2000;
+    window.PoseSession = FakePoseSession;
+    await window.openSession("demo", "pushups");
+    window.__fakePoseSession.snapshot.results[0].repCount = 1;
+  });
+
+  const energy = page.locator("#sess-energy");
+  await expect(energy).toBeVisible();
+  const first = Number(await energy.getAttribute("aria-valuenow"));
+  await page.waitForTimeout(500);
+  const drained = Number(await energy.getAttribute("aria-valuenow"));
+  expect(drained).toBeLessThan(first);
+
+  await page.evaluate(() => {
+    window.__fakePoseSession.snapshot.results[0].repCount = 2;
+  });
+  await expect.poll(async () => Number(await energy.getAttribute("aria-valuenow"))).toBeGreaterThan(drained);
+
+  await page.getByRole("button", { name: "Finish set", exact: true }).click();
+  await expect(energy).toBeHidden();
+  await page.getByRole("button", { name: "Finish workout", exact: true }).click();
+});
+
 test("daily target completion shows finish and extra-set actions", async ({ page }) => {
   await page.evaluate(async () => {
     class FakePoseSession {

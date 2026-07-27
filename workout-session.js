@@ -36,6 +36,11 @@ async function openSession(challengeId, startExercise) {
       <div class="hint" id="sess-hint"></div>
     </div>
     <div class="sess-countdown" id="sess-countdown" aria-live="assertive"></div>
+    <div class="sess-energy" id="sess-energy" role="progressbar" aria-label="${t("Set energy")}" aria-valuemin="0" aria-valuemax="100" aria-valuenow="100" hidden>
+      <span>${t("Set energy")}</span>
+      <div class="sess-energy-track"><i id="sess-energy-fill"></i></div>
+      <strong id="sess-energy-value">10s</strong>
+    </div>
     <div class="sess-range-guide" id="sess-range-guide" hidden>
       <span id="sess-range-label"></span>
       <div class="sess-range-track"><i id="sess-range-fill"></i><b></b></div>
@@ -59,6 +64,9 @@ async function openSession(challengeId, startExercise) {
   const canvas = overlay.querySelector(".skeleton");
   const hintEl = overlay.querySelector("#sess-hint");
   const countdownEl = overlay.querySelector("#sess-countdown");
+  const energyEl = overlay.querySelector("#sess-energy");
+  const energyFillEl = overlay.querySelector("#sess-energy-fill");
+  const energyValueEl = overlay.querySelector("#sess-energy-value");
   const rangeGuideEl = overlay.querySelector("#sess-range-guide");
   const rangeLabelEl = overlay.querySelector("#sess-range-label");
   const rangeFillEl = overlay.querySelector("#sess-range-fill");
@@ -320,6 +328,16 @@ async function openSession(challengeId, startExercise) {
       updateElapsed(now);
       updateRest(now);
       if (resting && ar && ar.status === "down") resumeAfterRest(true);
+      const showEnergy = !resting && !allReached && currentSetReps() > 0 && !!lastRepAt;
+      energyEl.hidden = !showEnergy;
+      if (showEnergy) {
+        const remaining = Math.max(0, setIdleMs - (now - lastRepAt));
+        const energy = Math.round(remaining / setIdleMs * 100);
+        energyEl.setAttribute("aria-valuenow", String(energy));
+        energyEl.classList.toggle("low", energy <= 30);
+        energyFillEl.style.height = `${energy}%`;
+        energyValueEl.textContent = `${Math.ceil(remaining / 1000)}s`;
+      }
 
       // Для dips показываем путь до следующей контрольной точки теми же порогами,
       // которыми реально пользуется счётчик: сначала вниз, затем обратно вверх.
