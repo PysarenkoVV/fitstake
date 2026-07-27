@@ -368,9 +368,10 @@ const RU = {
   "Pull-up Progression": "Подтягивания: прогрессия", "Grows a bit every week": "Растёт каждую неделю",
   "Easier": "Легче", "Recommended": "Рекомендовано", "Harder": "Интенсивнее",
   "So your progress is saved and syncs across your devices": "Чтобы прогресс сохранялся и синхронизировался между устройствами",
-  "Continue with Google": "Продолжить с Google", "or": "или",
+  "Continue with Google": "Продолжить с Google", "Continue with Facebook": "Продолжить с Facebook", "or": "или",
   "Allow popups and try again": "Разреши всплывающие окна и попробуй снова",
   "Enable Google in Firebase (Sign-in method)": "Включи Google в Firebase (Sign-in method)",
+  "Enable Facebook in Firebase (Sign-in method)": "Включи Facebook в Firebase (Sign-in method)",
   "Add domain in Firebase (Authorized domains)": "Добавь домен в Firebase (Authorized domains)",
   "Google sign-in unavailable here — use email": "Google-вход тут недоступен — войди по почте",
   "Add to Home Screen: Share → Add to Home Screen": "На экран «Домой»: Поделиться → «На экран Домой»",
@@ -2539,6 +2540,7 @@ function photoSlot(dataURL, caption) {
 // Форма входа (Google + email/пароль) — общая для профиля и онбординга.
 function authForm() {
   return `<button class="action-btn" data-act="googleAuth" style="background:#fff;color:#1f1f1f;box-shadow:none;backdrop-filter:none;-webkit-backdrop-filter:none">${t("Continue with Google")}</button>
+    <button class="action-btn" data-act="facebookAuth" style="background:#1877f2;color:#fff;box-shadow:none;backdrop-filter:none;-webkit-backdrop-filter:none">${t("Continue with Facebook")}</button>
     <div class="form-footer" style="text-align:center;opacity:.5">${t("or")}</div>
     <label class="form-label" for="auth-email">${t("Email")}</label>
     <input class="field" id="auth-email" type="email" inputmode="email" autocomplete="email" placeholder="${esc(t("Email"))}">
@@ -4609,6 +4611,30 @@ root.addEventListener("click", async (e) => {
         "auth/popup-blocked": "Allow popups and try again",
         "auth/operation-not-supported-in-this-environment": "Google sign-in unavailable here — use email",
         "auth/web-storage-unsupported": "Google sign-in unavailable here — use email",
+        "offline": "Authentication service is still loading — try again",
+      }[res.error];
+      toast(hint ? t(hint) : (res.error || t("Couldn't sign in")));
+    }
+    return;
+  }
+  if (cmd === "facebookAuth") {
+    setBtnLoading(el, true, t("Signing in…"));
+    const res = await Sync.signInFacebook();
+    if (res.ok) {
+      store.skippedAuth = false;
+      track("account_linked", { method: "facebook" });
+      if (ui.screen === "onboarding") { finishOnboarding(); return; }
+      if (store["profile.name"]) Sync.registerUser(store["profile.name"]);
+      toast(t("Signed in"));
+      if (ui.authIntent) resumeAuthIntent(); else render();
+    } else {
+      setBtnLoading(el, false);
+      if (res.error === "cancelled") return;
+      const hint = {
+        "auth/operation-not-allowed": "Enable Facebook in Firebase (Sign-in method)",
+        "auth/configuration-not-found": "Enable Facebook in Firebase (Sign-in method)",
+        "auth/unauthorized-domain": "Add domain in Firebase (Authorized domains)",
+        "auth/popup-blocked": "Allow popups and try again",
         "offline": "Authentication service is still loading — try again",
       }[res.error];
       toast(hint ? t(hint) : (res.error || t("Couldn't sign in")));

@@ -170,6 +170,31 @@ window.Sync = (() => {
     }
   }
 
+  // Вход через Facebook. Веб и iOS WebView используют один Firebase popup-flow.
+  // Анонимный аккаунт привязываем, чтобы сохранить уже набранный прогресс.
+  async function signInFacebook() {
+    if (!enabled || !(await waitForAuth())) return { ok: false, error: "offline" };
+    const provider = new A.FacebookAuthProvider();
+    provider.addScope("email");
+    const cur = authInstance.currentUser;
+    try {
+      if (cur && cur.isAnonymous) await A.linkWithPopup(cur, provider);
+      else await A.signInWithPopup(authInstance, provider);
+      refreshAuthState();
+      return { ok: true };
+    } catch (e) {
+      const code = (e && e.code) || "error";
+      if (code === "auth/credential-already-in-use") {
+        try {
+          const cred = A.FacebookAuthProvider.credentialFromError(e);
+          if (cred) { await A.signInWithCredential(authInstance, cred); refreshAuthState(); return { ok: true }; }
+        } catch {}
+      }
+      if (code === "auth/popup-closed-by-user" || code === "auth/cancelled-popup-request") return { ok: false, error: "cancelled" };
+      return { ok: false, error: code };
+    }
+  }
+
   async function signOutUser() {
     if (A && authInstance) { try { await A.signOut(authInstance); } catch {} }
     // onAuthStateChanged(null) вернёт анонимный вход.
@@ -335,7 +360,7 @@ window.Sync = (() => {
   }
 
   return {
-    enabled, state, init, registerUser, join, report, createChallenge, joinChallenge, leaveChallenge, reportChallenge, restart, restartChallenge, setReady, setStartAt, setFollowing, publishActivity, setReaction, reportBug, signIn, signUp, signInGoogle, signOutUser,
+    enabled, state, init, registerUser, join, report, createChallenge, joinChallenge, leaveChallenge, reportChallenge, restart, restartChallenge, setReady, setStartAt, setFollowing, publishActivity, setReaction, reportBug, signIn, signUp, signInGoogle, signInFacebook, signOutUser,
     get uid() { return uid; },
     get email() { return accountEmail; },
     get isAnonymous() { return isAnon; },
