@@ -798,13 +798,26 @@ button:is(:active, .pressed):not(:disabled) { transform: scale(0.97); filter: br
 .sess-range-track b {
   position: absolute;
   z-index: 2;
-  top: 8px;
   left: 50%;
   width: 14px;
   height: 3px;
   border-radius: 999px;
   background: #fff;
   transform: translateX(-50%);
+}
+.sess-range-track .range-mark-top { top: 8px; }
+.sess-range-track .range-mark-bottom { bottom: 8px; }
+.sess-range-track em {
+  position: absolute;
+  z-index: 3;
+  left: 50%;
+  width: 34px;
+  height: 5px;
+  border-radius: 999px;
+  background: var(--accent);
+  box-shadow: 0 0 12px rgba(200,255,33,.6);
+  transform: translate(-50%, 50%);
+  transition: bottom 90ms linear;
 }
 .sess-range-guide > strong {
   min-width: 42px;
@@ -821,6 +834,7 @@ button:is(:active, .pressed):not(:disabled) { transform: scale(0.97); filter: br
   border-color: var(--money);
   box-shadow: 0 0 0 4px rgba(69,212,131,.14), 0 0 22px rgba(69,212,131,.32);
 }
+.sess-range-guide.reached .sess-range-track em { background: var(--money); }
 .sess-range-guide.reached > strong { color: #07110b; background: var(--money); }
 .sess-rest[hidden] { display: none; }
 .sess-rest {

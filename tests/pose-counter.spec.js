@@ -547,6 +547,51 @@ test("set energy drains between reps and refills on the next rep", async ({ page
   await page.getByRole("button", { name: "Finish workout", exact: true }).click();
 });
 
+test("range guide is available beyond dips and shows checkpoints plus movement", async ({ page }) => {
+  await page.evaluate(async () => {
+    class FakePoseSession {
+      constructor(exercises) {
+        this.snapshot = {
+          results: exercises.map((exercise) => ({
+            exercise,
+            repCount: 0,
+            status: "up",
+            bendAngle: 150,
+            guidePhase: "down",
+            guideProgress: .4,
+          })),
+        };
+        window.__fakePoseSession = this;
+      }
+      setRecordingContext() {}
+      setActive() {}
+      setCountingEnabled() {}
+      async start() {}
+      stop() {}
+      isRecording() { return false; }
+      async toggleRecording() { return false; }
+    }
+    window.PoseSession = FakePoseSession;
+    await window.openSession("demo", "pushups");
+  });
+
+  const guide = page.locator("#sess-range-guide");
+  await expect(guide).toBeVisible({ timeout: 5000 });
+  await expect(page.locator("#sess-range-label")).toHaveText("Lower down");
+  await expect(page.locator(".sess-range-track b")).toHaveCount(2);
+  await expect(page.locator("#sess-range-marker")).toHaveCSS("bottom", /.+/);
+
+  await page.evaluate(() => {
+    window.__fakePoseSession.snapshot.results[0].guidePhase = "up";
+    window.__fakePoseSession.snapshot.results[0].guideProgress = .7;
+  });
+  await expect(page.locator("#sess-range-label")).toHaveText("Push up");
+  await expect(page.locator("#sess-range-value")).toHaveText("70%");
+
+  await page.getByRole("button", { name: "Close", exact: true }).click();
+  await expect(page.locator(".session")).toHaveCount(0);
+});
+
 test("daily target completion shows finish and extra-set actions", async ({ page }) => {
   await page.evaluate(async () => {
     class FakePoseSession {

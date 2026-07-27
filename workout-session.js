@@ -43,7 +43,7 @@ async function openSession(challengeId, startExercise) {
     </div>
     <div class="sess-range-guide" id="sess-range-guide" hidden>
       <span id="sess-range-label"></span>
-      <div class="sess-range-track"><i id="sess-range-fill"></i><b></b></div>
+      <div class="sess-range-track"><i id="sess-range-fill"></i><b class="range-mark-top"></b><b class="range-mark-bottom"></b><em id="sess-range-marker"></em></div>
       <strong id="sess-range-value">0%</strong>
     </div>
     <div class="sess-rest" id="sess-rest" hidden>
@@ -70,6 +70,7 @@ async function openSession(challengeId, startExercise) {
   const rangeGuideEl = overlay.querySelector("#sess-range-guide");
   const rangeLabelEl = overlay.querySelector("#sess-range-label");
   const rangeFillEl = overlay.querySelector("#sess-range-fill");
+  const rangeMarkerEl = overlay.querySelector("#sess-range-marker");
   const rangeValueEl = overlay.querySelector("#sess-range-value");
   const elapsedEl = overlay.querySelector("#sess-elapsed");
   const restEl = overlay.querySelector("#sess-rest");
@@ -339,9 +340,8 @@ async function openSession(challengeId, startExercise) {
         energyValueEl.textContent = `${Math.ceil(remaining / 1000)}s`;
       }
 
-      // Для dips показываем путь до следующей контрольной точки теми же порогами,
-      // которыми реально пользуется счётчик: сначала вниз, затем обратно вверх.
-      const showRangeGuide = g.exercise === "dips" && !resting && !(completionShown && !completionDismissed)
+      // Путь до следующей контрольной точки использует те же пороги, что и счётчик.
+      const showRangeGuide = !resting && !(completionShown && !completionDismissed)
         && ar && ar.bendAngle != null && countingStarted;
       rangeGuideEl.hidden = !showRangeGuide;
       if (showRangeGuide) {
@@ -352,8 +352,15 @@ async function openSession(challengeId, startExercise) {
         const progress = reached ? 100 : Math.round((ar.guideProgress || 0) * 100);
         rangeGuideEl.dataset.phase = phase;
         rangeGuideEl.classList.toggle("reached", reached || progress >= 96);
-        rangeLabelEl.textContent = phase === "down" ? t("Lower down") : t("Push up");
+        const labels = {
+          pushups: { down: "Lower down", up: "Push up" },
+          squats: { down: "Squat down", up: "Stand up" },
+          pullups: { down: "Pull up", up: "Return to hang" },
+          dips: { down: "Lower down", up: "Push up" },
+        };
+        rangeLabelEl.textContent = t((labels[g.exercise] || labels.pushups)[phase]);
         rangeFillEl.style.height = `${progress}%`;
+        rangeMarkerEl.style.bottom = `${5 + progress * .88}%`;
         rangeValueEl.textContent = `${progress}%`;
       }
 
