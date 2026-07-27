@@ -347,6 +347,22 @@ test("cancelling the share sheet does not fall back to a file download", async (
   expect(result).toEqual({ withShare: 0, withoutShare: 1 });
 });
 
+test("iOS app sends recorded video to the native Photos bridge", async ({ page }) => {
+  const result = await page.evaluate(async () => {
+    let savedName = null;
+    let shared = false;
+    window.RepactNativeMedia = {
+      saveVideo: async (file) => { savedName = file.name; },
+    };
+    navigator.canShare = () => true;
+    navigator.share = async () => { shared = true; };
+    await window.shareVideo(new Blob(["video"], { type: "video/mp4" }));
+    delete window.RepactNativeMedia;
+    return { savedName, shared };
+  });
+  expect(result).toEqual({ savedName: "repact.mp4", shared: false });
+});
+
 test("recorded workout frame includes exercise, target, challenge, and progress", async ({ page }) => {
   const frame = await page.evaluate(() => {
     const size = { width: 720, height: 1280 };

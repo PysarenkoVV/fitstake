@@ -728,7 +728,7 @@ class PoseSession {
       this._recording = false;
       await new Promise((res) => { this._recorder.onstop = res; this._recorder.stop(); });
       const blob = new Blob(this._recChunks, { type: this._recorder.mimeType || "video/webm" });
-      shareVideo(blob);
+      await shareVideo(blob);
       return false;
     }
     const size = this.snapshot.imageSize;
@@ -917,6 +917,10 @@ function smoothWorld(previous, current, alpha) {
 async function shareVideo(blob) {
   const ext = blob.type.includes("mp4") ? "mp4" : "webm";
   const file = new File([blob], "repact." + ext, { type: blob.type });
+  if (window.RepactNativeMedia && typeof window.RepactNativeMedia.saveVideo === "function") {
+    await window.RepactNativeMedia.saveVideo(file);
+    return;
+  }
   if (navigator.canShare && navigator.canShare({ files: [file] })) {
     // Отмена (свайп вниз) — не повод скачивать: download-фолбэк открывал в PWA
     // превью Safari, после которого iOS оставлял камеру замороженной.
