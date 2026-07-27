@@ -860,6 +860,10 @@ function applySync() {
   const ch = app.challenges.find((c) => c.id === "main");
   const parts = Sync.state.participants;
   const today = dateKey();
+  // Сначала открываем новый локальный день, и только потом объединяем его с
+  // Firebase. Иначе вчерашние myTodayReps принимались за офлайн-повторы сегодня
+  // и успевали записаться на сервер под новой датой.
+  if (app.dayKey !== today) resetDailyState(today);
   if (ch && parts) {
     ch.currentDay = currentDayFromStart(ch.durationDays); // свежий день для расчёта пропусков/стрика
     ch.participants = Object.entries(parts).map(([id, p]) => {
@@ -1047,15 +1051,18 @@ markFailures(); // пропуски могли накопиться, пока п
 }
 
 // ---- Смена дня: приложение может жить открытым сутками — сбрасываем «сегодня» и двигаем номер дня ----
-function rolloverIfNeeded() {
-  const now = dateKey();
-  if (app.dayKey === now) return false;
-  app.dayKey = now;
+function resetDailyState(dayKey) {
+  app.dayKey = dayKey;
   for (const c of app.challenges) {
     c.myTodayReps = {};
     for (const p of c.participants) { p.doneToday = false; p.todayReps = 0; }
     c.currentDay = computeCurrentDay(c);
   }
+}
+function rolloverIfNeeded() {
+  const now = dateKey();
+  if (app.dayKey === now) return false;
+  resetDailyState(now);
   applySync(); // с Firebase «сегодня» пересоберётся из данных нового дня
   markFailures(); // новый день мог добавить пропуск сверх защиты
   saveApp();
@@ -5083,3 +5090,4 @@ if (store.onboarded && store["profile.name"]) Sync.registerUser(store["profile.n
 // Сторожок смены дня: интервал + возврат PWA из фона.
 setInterval(() => { if (!liveSession && rolloverIfNeeded() && !ui.sheet && !ui.full) render(); }, 30000);
 document.addEventListener("visibilitychange", () => { if (!document.hidden && !liveSession && rolloverIfNeeded() && !ui.sheet && !ui.full) render(); });
+window.addEventListener("repact:resume", () => { if (!liveSession && rolloverIfNeeded()) render(); });

@@ -93,3 +93,38 @@ test("challenge details accept vertical scrolling immediately on touch devices",
   await detail.evaluate((el) => { el.scrollTop = 220; });
   expect(await detail.evaluate((el) => el.scrollTop)).toBeGreaterThan(0);
 });
+
+test("yesterday's local progress is cleared before Firebase can copy it into today", async ({ page }) => {
+  const result = await page.evaluate(() => {
+    const today = dateKey();
+    const yesterday = dateKey(Date.now() - DAY);
+    const main = app.challenges.find((c) => c.id === "main");
+    Object.defineProperty(Sync, "uid", { configurable: true, value: "daily-reset-me" });
+    Sync.state.participants = {
+      "daily-reset-me": {
+        total: 200,
+        days: { [yesterday]: { pushups: 150, squats: 50 } },
+      },
+    };
+    main.myTodayReps = { pushups: 150, squats: 50 };
+    main.participants = [{ id: "daily-reset-me", isMe: true, state: "active", doneToday: true, todayReps: 200 }];
+    app.dayKey = yesterday;
+    const reports = [];
+    const originalReport = Sync.report;
+    Sync.report = (...args) => reports.push(args);
+    applySync();
+    Sync.report = originalReport;
+    return {
+      dayKey: app.dayKey,
+      today,
+      progress: main.myTodayReps,
+      doneToday: C.me(main).doneToday,
+      reports,
+    };
+  });
+
+  expect(result.dayKey).toBe(result.today);
+  expect(result.progress).toEqual({});
+  expect(result.doneToday).toBe(false);
+  expect(result.reports).toEqual([]);
+});
