@@ -624,6 +624,43 @@ test("range guide is available beyond dips and shows checkpoints plus movement",
   await expect(page.locator(".session")).toHaveCount(0);
 });
 
+test("a new best set is compared with the profile value and saved", async ({ page }) => {
+  await page.evaluate(async () => {
+    localStorage.setItem("fs.profile.reps.pushups", "1");
+    localStorage.setItem("fs.profile.maxReps", "1");
+    localStorage.setItem("fs.profile.startExercise", JSON.stringify("pushups"));
+    class FakePoseSession {
+      constructor(exercises) {
+        this.snapshot = { results: exercises.map((exercise) => ({ exercise, repCount: 0, status: "up", bendAngle: 170 })) };
+        window.__fakePoseSession = this;
+      }
+      setRecordingContext() {}
+      setActive() {}
+      setCountingEnabled() {}
+      async start() {}
+      stop() {}
+      isRecording() { return false; }
+      async toggleRecording() { return false; }
+    }
+    window.PoseSession = FakePoseSession;
+    await window.openSession("demo", "pushups");
+  });
+
+  await expect(page.locator("#sess-best")).toHaveText("Best set: 1");
+  await page.evaluate(() => {
+    window.__fakePoseSession.snapshot.results[0].repCount = 2;
+  });
+  await expect(page.locator("#sess-best")).toHaveText("New best set: 2");
+  await expect(page.locator("#sess-best")).toHaveClass(/new/);
+
+  await page.getByRole("button", { name: "Finish set", exact: true }).click();
+  await expect(page.locator("#sess-rest-reps")).toHaveText("New best set: 2");
+  expect(await page.evaluate(() => JSON.parse(localStorage.getItem("fs.profile.reps.pushups")))).toBe(2);
+  expect(await page.evaluate(() => JSON.parse(localStorage.getItem("fs.profile.maxReps")))).toBe(2);
+
+  await page.getByRole("button", { name: "Finish workout", exact: true }).click();
+});
+
 test("daily target completion shows finish and extra-set actions", async ({ page }) => {
   await page.evaluate(async () => {
     class FakePoseSession {

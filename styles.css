@@ -936,6 +936,15 @@ button:is(:active, .pressed):not(:disabled) { transform: scale(0.97); filter: br
 }
 .session .sess-nav svg { width: 16px; height: 16px; }
 .session .cap { font-family: var(--mono); font-weight: 700; text-transform: uppercase; font-size: 13px; letter-spacing: 2px; color: rgba(255, 255, 255, 0.6); }
+.session .sess-best {
+  padding: 5px 10px;
+  border-radius: 999px;
+  background: rgba(0,0,0,.38);
+  color: rgba(255,255,255,.72);
+  font: 750 12px/1 var(--mono);
+  text-shadow: none;
+}
+.session .sess-best.new { color: #07110b; background: var(--accent); box-shadow: 0 0 18px rgba(200,255,33,.3); }
 .session .angle { font-family: var(--mono); font-size: 13px; color: rgba(255, 255, 255, 0.6); }
 .c-white { color: #fff; } .c-accent { color: var(--accent); } .c-money { color: var(--money); }
 

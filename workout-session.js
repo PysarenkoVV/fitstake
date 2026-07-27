@@ -157,6 +157,7 @@ async function openSession(challengeId, startExercise) {
     countersEl.className = "counter-col";
     countersEl.innerHTML = `
       <span class="cap">${esc(Exercise.displayName(g.exercise))}${combo ? ` • ${active + 1}/${goals.length}` : ""}</span>
+      <span class="sess-best" id="sess-best">${t("Best set: %lld", Math.max(0, Number(store["profile.reps." + g.exercise]) || 0))}</span>
       <div class="count-line">
         <span class="counter-big c-white" id="sess-num">${totalFor(g, resultFor(g.exercise))}</span>
         ${g.target != null ? `<span class="count-target">/ ${g.target}</span>` : ""}
@@ -174,6 +175,7 @@ async function openSession(challengeId, startExercise) {
   const priorWorkoutMs = isDemo ? 0 : workoutSummary(c).elapsedMs;
   let workoutStartedAt = 0, workoutStoppedAt = 0, lastClockText = "";
   let setStartTotal = 0, setReps = [];
+  let lastSetWasRecord = false;
   let lastRepAt = 0;
   const setIdleMs = Math.max(1000, Number(window.__REPACT_SET_IDLE_MS__) || 10000);
   let resting = false, restStartedAt = 0, restEndsAt = 0, restDurationMs = 90000, restTotalMs = 0, restCuePlayed = false;
@@ -195,6 +197,17 @@ async function openSession(challengeId, startExercise) {
   function closeCurrentSet() {
     const reps = currentSetReps();
     if (reps <= 0) return 0;
+    const exercise = goals[active].exercise;
+    const key = "profile.reps." + exercise;
+    const previousBest = Math.max(0, Number(store[key]) || 0);
+    lastSetWasRecord = reps > previousBest;
+    if (lastSetWasRecord) {
+      store[key] = reps;
+      if (store["profile.startExercise"] === exercise) {
+        store["profile.maxReps"] = reps;
+        storeHook("profile.maxReps");
+      }
+    }
     setReps.push(reps);
     setStartTotal = sessionRepTotal();
     return reps;
@@ -242,7 +255,7 @@ async function openSession(challengeId, startExercise) {
     const rg = goals[active], rTotal = totalFor(rg, resultFor(rg.exercise));
     restCounterEl.textContent = `${Exercise.displayName(rg.exercise)}  ${rTotal}${rg.target != null ? ` / ${rg.target}` : ""}`;
     restSetEl.textContent = t("Set %lld completed", setReps.length);
-    restRepsEl.textContent = t("%lld reps", reps);
+    restRepsEl.textContent = lastSetWasRecord ? t("New best set: %lld", reps) : t("%lld reps", reps);
     restTotalEl.textContent = t("Total %@", `${dayRepTotal()} / ${goals.reduce((sum, goal) => sum + (goal.target || 0), 0)}`);
     renderRestActions(false);
     sess.setCountingEnabled(false);
@@ -366,6 +379,14 @@ async function openSession(challengeId, startExercise) {
 
       // Счётчик активного упражнения
       const numEl = countersEl.querySelector("#sess-num");
+      const bestEl = countersEl.querySelector("#sess-best");
+      if (bestEl) {
+        const best = Math.max(0, Number(store["profile.reps." + g.exercise]) || 0);
+        const setCount = currentSetReps();
+        const isNewBest = setCount > best;
+        bestEl.classList.toggle("new", isNewBest);
+        bestEl.textContent = isNewBest ? t("New best set: %lld", setCount) : t("Best set: %lld", best);
+      }
       if (numEl) {
         numEl.textContent = total;
         const cls = curReached ? "c-money" : (ar && ar.status === "down" ? "c-accent" : "c-white");
