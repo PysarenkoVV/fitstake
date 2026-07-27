@@ -1,5 +1,5 @@
 // Repact PWA — сеть первична, кэш как офлайн-запас оболочки.
-const CACHE = "repact-v161";
+const CACHE = "repact-v162";
 const SHELL = [
   ".",
   "index.html",
@@ -11,9 +11,9 @@ const SHELL = [
   "ua.js?v=159",
   "firebase-config.js",
   "manifest.json",
-  "icons/icon-192.png",
-  "icons/icon-512.png",
-  "icons/icon-180.png",
+  "icons/icon-192.png?v=logo2",
+  "icons/icon-512.png?v=logo2",
+  "icons/icon-180.png?v=logo2",
 ];
 
 self.addEventListener("install", (event) => {
