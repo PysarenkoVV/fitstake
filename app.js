@@ -433,6 +433,7 @@ const RU = {
   "This removes your local profile, workouts, photos and test coins from this device. This cannot be undone.": "С устройства будут удалены локальный профиль, тренировки, фото и тестовые коины. Это действие нельзя отменить.",
   "Cancel": "Отмена", "Reset and start over": "Сбросить и начать заново",
   "Camera frames are processed on this device and are not uploaded to our servers.": "Кадры камеры обрабатываются на этом устройстве и не загружаются на наши серверы.",
+  "Privacy Policy": "Политика конфиденциальности", "Delete account and data": "Удалить аккаунт и данные",
   "Video is recorded only when you tap Record and stays on your device unless you choose to share it.": "Видео записывается только после нажатия кнопки записи и остаётся на устройстве, пока вы сами им не поделитесь.",
   "We use PostHog and Firebase Analytics to understand product usage and improve the test app.": "Мы используем PostHog и Firebase Analytics, чтобы понимать использование продукта и улучшать тестовое приложение.",
   "Shared!": "Готово!", "Your result has been shared.": "Результат опубликован.",
@@ -2504,6 +2505,10 @@ function ProfileTab() {
     ${privacyRow(t("Weight and measurements stay on this device."))}
     ${privacyRow(t("We use PostHog and Firebase Analytics to understand product usage and improve the test app."))}
     ${privacyRow(t("Nothing is used to train any models."))}
+    <div style="display:flex;flex-wrap:wrap;gap:10px;padding-top:4px">
+      <a class="badge" href="privacy.html" target="_blank" rel="noopener" style="color:var(--money);text-decoration:none">${t("Privacy Policy")}</a>
+      <a class="badge" href="data-deletion.html" target="_blank" rel="noopener" style="color:var(--money);text-decoration:none">${t("Delete account and data")}</a>
+    </div>
     <div class="form-footer">${t("Test currency — no real money.")}</div>
   </div>`;
 

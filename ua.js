@@ -230,6 +230,7 @@ Object.assign(window.UA_TRANSLATIONS, {
   "Wallet": "Гаманець", "Privacy & data": "Приватність і дані",
   "Video is processed on your device by the camera — not recorded and not sent to any server.": "Відео обробляється камерою на вашому пристрої — не записується й не надсилається на сервер.",
   "Before / After photos are stored on your device — the app doesn't upload them to our servers.": "Фото до / після зберігаються на вашому пристрої — застосунок не завантажує їх на наші сервери.",
+  "Privacy Policy": "Політика конфіденційності", "Delete account and data": "Видалити акаунт і дані",
   "Weight and measurements stay on this device.": "Вага та заміри залишаються на цьому пристрої.",
   "Nothing is used to train any models.": "Жодні дані не використовуються для навчання моделей.",
   "Weekly volume": "Тижневий обсяг", "Weight: %lld kg": "Вага: %lld кг", "Yesterday %lld dropped out": "Учора вибуло: %lld",
