@@ -407,6 +407,9 @@ test("first rep starts the workout clock and finishing a set opens rest", async 
   await expect(page.locator("#sess-elapsed")).toHaveText(/00:0[1-9]/);
   await page.getByRole("button", { name: "Finish set", exact: true }).click();
   await expect(page.locator("#sess-rest")).toBeVisible();
+  const activeTimeAtRest = await page.locator("#sess-elapsed").textContent();
+  await page.waitForTimeout(1100);
+  await expect(page.locator("#sess-elapsed")).toHaveText(activeTimeAtRest);
   await expect(page.locator("#sess-rest-set")).toHaveText("Set 1 completed");
   await expect(page.locator("#sess-rest-reps")).toHaveText("1 reps");
   await expect(page.locator("#sess-rest-time")).toHaveText(/01:2[89]/);
@@ -422,6 +425,8 @@ test("first rep starts the workout clock and finishing a set opens rest", async 
   await expect(page.locator("#sess-rest-time")).toHaveText(/01:5[89]/);
   await page.getByRole("button", { name: "Start next set", exact: true }).click();
   await expect(page.locator("#sess-rest")).toBeHidden();
+  await page.waitForTimeout(1100);
+  await expect(page.locator("#sess-elapsed")).not.toHaveText(activeTimeAtRest);
 
   await page.getByRole("button", { name: "Close", exact: true }).click();
   await page.getByRole("button", { name: "Exit without saving", exact: true }).click();

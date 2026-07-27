@@ -218,6 +218,7 @@ async function openSession(challengeId, startExercise) {
     const reps = closeCurrentSet();
     if (!reps || resting) return;
     const now = performance.now();
+    if (workoutStartedAt && !workoutStoppedAt) workoutStoppedAt = now;
     resting = true;
     restStartedAt = now;
     restDurationMs = 90000;
@@ -240,6 +241,10 @@ async function openSession(challengeId, startExercise) {
     if (!resting) return;
     const now = performance.now();
     restTotalMs += Math.max(0, now - restStartedAt);
+    if (workoutStartedAt && workoutStoppedAt) {
+      workoutStartedAt += Math.max(0, now - workoutStoppedAt);
+      workoutStoppedAt = 0;
+    }
     resting = false;
     restEl.hidden = true;
     restEl.classList.remove("ready");
