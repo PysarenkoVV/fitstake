@@ -257,6 +257,70 @@ test("push-ups at an angle to the camera count via the 3D elbow angle", async ({
   expect(result).toEqual({ with3d: 1, flat2d: 0 });
 });
 
+test("angled push-ups count when the far elbow angle is distorted", async ({ page }) => {
+  const count = await page.evaluate(() => {
+    const point = (x, y, anglePose) => ({
+      x, y, confidence: 1,
+      world: anglePose,
+    });
+    const arm = (side, bent, distorted) => {
+      const x = side === "left" ? .40 : .60;
+      const shoulder = { x: side === "left" ? -.2 : .2, y: bent ? -.05 : -.30, z: 0 };
+      const elbow = distorted
+        ? { x: shoulder.x, y: 0, z: 0 }
+        : { x: shoulder.x, y: bent ? 0 : 0, z: bent ? .25 : 0 };
+      const wrist = { x: shoulder.x, y: .25, z: 0 };
+      return {
+        [side + "Shoulder"]: point(x, bent ? .60 : .40, shoulder),
+        [side + "Elbow"]: point(x, bent ? .65 : .55, elbow),
+        [side + "Wrist"]: point(x, .70, wrist),
+      };
+    };
+    const pose = (bent) => ({
+      ...arm("left", bent, false),
+      ...arm("right", bent, bent),
+    });
+    const counter = new window.RepCounter("pushups");
+    let now = 0;
+    const feed = (points, frames) => {
+      for (let i = 0; i < frames; i++) counter.process(points, { width: 1000, height: 1000 }, true, now += 50);
+    };
+    feed(pose(false), 5);
+    feed(pose(true), 6);
+    feed(pose(false), 6);
+    return counter.count;
+  });
+  expect(count).toBe(1);
+});
+
+test("push-ups do not draw the head tracker", async ({ page }) => {
+  const result = await page.evaluate(() => {
+    const point = (x, y) => ({ x, y, confidence: 1 });
+    const session = new window.PoseSession(["pushups"]);
+    const lines = [];
+    const arcs = [];
+    let from = null;
+    session._ctx = {
+      clearRect() {}, beginPath() { from = null; },
+      moveTo(x, y) { from = [Math.round(x), Math.round(y)]; },
+      lineTo(x, y) { lines.push([from, [Math.round(x), Math.round(y)]]); },
+      stroke() {}, fill() {},
+      arc(x, y, r) { arcs.push([Math.round(x), Math.round(y), Math.round(r)]); },
+    };
+    session._drawSkeleton({
+      head: point(.50, .12), neck: point(.50, .24),
+      leftShoulder: point(.42, .24), rightShoulder: point(.58, .24),
+      leftElbow: point(.36, .40), rightElbow: point(.64, .40),
+      leftWrist: point(.34, .56), rightWrist: point(.66, .56),
+      leftHip: point(.45, .52), rightHip: point(.55, .52),
+      root: point(.50, .52),
+    }, { width: 100, height: 100 }, true);
+    return { lines, arcs };
+  });
+  expect(result.lines).not.toContainEqual([[50, 12], [50, 24]]);
+  expect(result.arcs.some(([x, y]) => x === 50 && y === 12)).toBe(false);
+});
+
 test("cancelling the share sheet does not fall back to a file download", async ({ page }) => {
   const result = await page.evaluate(async () => {
     const blob = new Blob(["x"], { type: "video/mp4" });

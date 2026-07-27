@@ -193,7 +193,14 @@ class RepCounter {
     this.tracking = true;
     this.lostFrames = 0;
 
-    const raw = sides.map((s) => this._bendAngle(s, points, size)).reduce((a, b) => a + b, 0) / sides.length;
+    const sideAngles = sides.map((s) => this._bendAngle(s, points, size));
+    // При съёмке отжиманий под углом дальний локоть часто выглядит заметно прямее
+    // ближнего. Среднее двух углов не доходило до порога, хотя повтор был полным.
+    // Внизу достаточно подтверждённого сгиба одной руки, наверху — подтверждённого
+    // разгибания; реальный ход корпуса ниже всё равно отсекает движения одной рукой.
+    const raw = this.exercise === "pushups" && sideAngles.length > 1
+      ? (this.wasDown || !this.armed ? Math.max(...sideAngles) : Math.min(...sideAngles))
+      : sideAngles.reduce((a, b) => a + b, 0) / sideAngles.length;
     const angle = this.smoothedAngle != null ? this.smoothedAngle + this.smoothing * (raw - this.smoothedAngle) : raw;
     this.smoothedAngle = angle;
 
@@ -588,8 +595,10 @@ class PoseSession {
     const ctx = this._ctx;
     ctx.clearRect(0, 0, size.width, size.height);
     const on = (p) => posePointVisible(p);
-    const hideLegs = this.exercises[this.active] === "pushups" || this.exercises[this.active] === "dips";
-    const hidden = (name) => hideLegs && /Knee|Ankle$/.test(name);
+    const exercise = this.exercises[this.active];
+    const hideLegs = exercise === "pushups" || exercise === "dips";
+    const hideHead = exercise === "pushups";
+    const hidden = (name) => (hideLegs && /Knee|Ankle$/.test(name)) || (hideHead && name === "head");
     ctx.lineWidth = Math.max(3, size.width / 260);
     // Изумрудный, когда всё нужное в кадре; иначе брендовый лайм.
     ctx.strokeStyle = ready ? "rgba(69,212,131,0.95)" : "rgba(200,255,33,0.9)";
@@ -614,7 +623,7 @@ class PoseSession {
       ctx.fill();
     }
     const head = points.head;
-    if (on(head)) {
+    if (!hideHead && on(head)) {
       const shoulderWidth = on(points.leftShoulder) && on(points.rightShoulder)
         ? Math.abs(points.rightShoulder.x - points.leftShoulder.x) * size.width
         : size.width / 10;
