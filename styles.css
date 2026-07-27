@@ -1139,6 +1139,10 @@ button:is(:active, .pressed):not(:disabled) { transform: scale(0.97); filter: br
 }
 /* На перерисовках открытого оверлея (шаги мастера, драг фото) вход не повторяем. */
 .fullscreen.no-enter { animation: none; }
+.challenge-detail {
+  animation: none;
+  touch-action: pan-y;
+}
 .challenge-complete { overscroll-behavior-y: contain; touch-action: pan-y; scroll-padding-top: calc(env(safe-area-inset-top) + 20px); }
 .challenge-complete-content { padding-top: max(24px, calc(var(--safe-top) + 18px)); padding-bottom: calc(28px + var(--safe-bottom)); display: flex; flex-direction: column; gap: 18px; align-items: center; text-align: center; }
 .challenge-complete-hero { width: 100%; display: flex; flex-direction: column; align-items: center; gap: 12px; }

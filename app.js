@@ -1410,7 +1410,11 @@ function render() {
 // before() выполняется ВНУТРИ перехода (после снятия старого кадра, перед render):
 // туда уносим сброс скролла, иначе старый кадр снимется уже прокрученным наверх.
 function navRender(before) {
-  if (REDUCE_MOTION() || typeof document.startViewTransition !== "function") { if (before) before(); render(); return; }
+  // View Transition временно замораживает hit-testing снимка страницы. На iOS это
+  // иногда оставляет вложенный overflow-контейнер без скролла ещё на несколько
+  // свайпов, поэтому на touch-устройствах навигация должна быть мгновенной.
+  const coarsePointer = window.matchMedia && window.matchMedia("(pointer: coarse)").matches;
+  if (REDUCE_MOTION() || coarsePointer || typeof document.startViewTransition !== "function") { if (before) before(); render(); return; }
   // На время перехода стекло непрозрачно: в VT-снимках backdrop-filter не работает,
   // иначе контент просвечивает и блюр «догоняет» после анимации (правило .vt в styles.css).
   document.documentElement.classList.add("vt");
@@ -1882,7 +1886,7 @@ function DetailScreen(id) {
   } else {
     body = [potCard(c), callToAction(c), rulesCard(c), participantsCard(c)].join("");
   }
-  return `<div class="fullscreen" id="detail-scroll" style="z-index:1">${nav}<div class="screen stack" style="padding-top:24px">${body}</div></div>`;
+  return `<div class="fullscreen challenge-detail" id="detail-scroll" style="z-index:1">${nav}<div class="screen stack" style="padding-top:24px">${body}</div></div>`;
 }
 
 function potCard(c) {

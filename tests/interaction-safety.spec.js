@@ -69,3 +69,27 @@ test("Challenge complete starts at the top and keeps native vertical scrolling",
   expect(await title.evaluate((el, original) => el === original, titleNode)).toBe(true);
   await expect(page.locator('[data-model="weight"]')).toHaveValue("76");
 });
+
+test("challenge details accept vertical scrolling immediately on touch devices", async ({ page }, testInfo) => {
+  test.skip(testInfo.project.name !== "mobile");
+  await page.evaluate(() => {
+    const c = newChallenge({
+      id: "detail-scroll", title: "Scrollable challenge", access: "solo",
+      goals: [{ exercise: "squats", repsPerDay: 55 }], durationDays: 7, buyIn: 50,
+      startAt: startOfDay(Date.now()), currentDay: 2,
+      participants: [{ id: "me", name: "Me", isMe: true, state: "failed", doneToday: false, todayReps: 13 }],
+    });
+    app.challenges.unshift(c);
+    openDetail(c.id);
+  });
+
+  const detail = page.locator("#detail-scroll");
+  await expect(detail).toBeVisible();
+  await expect(detail).toHaveClass(/challenge-detail/);
+  expect(await detail.evaluate((el) => getComputedStyle(el).touchAction)).toBe("pan-y");
+  expect(await detail.evaluate((el) => getComputedStyle(el).animationName)).toBe("none");
+  expect(await page.locator("html").evaluate((el) => el.classList.contains("vt"))).toBe(false);
+
+  await detail.evaluate((el) => { el.scrollTop = 220; });
+  expect(await detail.evaluate((el) => el.scrollTop)).toBeGreaterThan(0);
+});
