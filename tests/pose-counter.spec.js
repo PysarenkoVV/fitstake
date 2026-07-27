@@ -462,6 +462,53 @@ test("a set ends automatically after ten seconds without another rep", async ({ 
   await page.getByRole("button", { name: "Finish workout", exact: true }).click();
 });
 
+test("starting a rep during rest resumes the next set without losing it", async ({ page }) => {
+  await page.evaluate(async () => {
+    class FakePoseSession {
+      constructor(exercises) {
+        this.snapshot = { results: exercises.map((exercise) => ({ exercise, repCount: 0, status: "up", bendAngle: 170 })) };
+        window.__fakePoseSession = this;
+      }
+      setRecordingContext() {}
+      setActive() {}
+      setCountingEnabled(on, preserveCurrentRep = false) {
+        this.countingEnabled = on;
+        this.preservedCurrentRep = preserveCurrentRep;
+      }
+      async start() {}
+      stop() {}
+      isRecording() { return false; }
+      async toggleRecording() { return false; }
+    }
+    window.PoseSession = FakePoseSession;
+    await window.openSession("demo", "pushups");
+    window.__fakePoseSession.snapshot.results[0].repCount = 1;
+  });
+
+  await expect(page.getByRole("button", { name: "Finish set", exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "Finish set", exact: true }).click();
+  await expect(page.locator("#sess-rest")).toBeVisible();
+
+  await page.evaluate(() => {
+    window.__fakePoseSession.snapshot.results[0].status = "down";
+  });
+  await expect(page.locator("#sess-rest")).toBeHidden();
+  expect(await page.evaluate(() => window.__fakePoseSession.preservedCurrentRep)).toBe(true);
+
+  await page.evaluate(() => {
+    window.__fakePoseSession.snapshot.results[0] = {
+      ...window.__fakePoseSession.snapshot.results[0],
+      status: "up",
+      repCount: 2,
+    };
+  });
+  await expect(page.locator("#sess-num")).toHaveText("2");
+  await expect(page.getByRole("button", { name: "Finish set", exact: true })).toBeVisible();
+
+  await page.getByRole("button", { name: "Close", exact: true }).click();
+  await page.getByRole("button", { name: "Exit without saving", exact: true }).click();
+});
+
 test("daily target completion shows finish and extra-set actions", async ({ page }) => {
   await page.evaluate(async () => {
     class FakePoseSession {

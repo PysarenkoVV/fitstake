@@ -240,7 +240,7 @@ async function openSession(challengeId, startExercise) {
     updateRest(now);
     prevBottomKey = "";
   }
-  function resumeAfterRest() {
+  function resumeAfterRest(preserveCurrentRep = false) {
     if (!resting) return;
     const now = performance.now();
     restTotalMs += Math.max(0, now - restStartedAt);
@@ -253,7 +253,7 @@ async function openSession(challengeId, startExercise) {
     restEl.classList.remove("ready");
     overlay.classList.remove("resting");
     setStartTotal = sessionRepTotal();
-    sess.setCountingEnabled(true);
+    sess.setCountingEnabled(true, preserveCurrentRep);
     prevBottomKey = "";
   }
   function showCompletion() {
@@ -319,6 +319,7 @@ async function openSession(challengeId, startExercise) {
       }
       updateElapsed(now);
       updateRest(now);
+      if (resting && ar && ar.status === "down") resumeAfterRest(true);
 
       // Для dips показываем путь до следующей контрольной точки теми же порогами,
       // которыми реально пользуется счётчик: сначала вниз, затем обратно вверх.

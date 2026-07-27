@@ -438,9 +438,9 @@ class PoseSession {
   // Переключить активное упражнение комбо (считается только оно).
   setActive(i) { if (i >= 0 && i < this.counters.length) this.active = i; }
 
-  setCountingEnabled(on) {
+  setCountingEnabled(on, preserveCurrentRep = false) {
     this.countingEnabled = !!on;
-    if (on) {
+    if (on && !preserveCurrentRep) {
       const c = this.counters[this.active];
       if (c) {
         c.wasDown = false;
