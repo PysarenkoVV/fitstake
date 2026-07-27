@@ -165,6 +165,8 @@ async function openSession(challengeId, startExercise) {
   const priorWorkoutMs = isDemo ? 0 : workoutSummary(c).elapsedMs;
   let workoutStartedAt = 0, workoutStoppedAt = 0, lastClockText = "";
   let setStartTotal = 0, setReps = [];
+  let lastRepAt = 0;
+  const setIdleMs = Math.max(1000, Number(window.__REPACT_SET_IDLE_MS__) || 10000);
   let resting = false, restStartedAt = 0, restEndsAt = 0, restDurationMs = 90000, restTotalMs = 0, restCuePlayed = false;
   let rangePhase = "", rangeReachedUntil = 0;
   let completionShown = false;
@@ -219,6 +221,7 @@ async function openSession(challengeId, startExercise) {
     if (!reps || resting) return;
     const now = performance.now();
     if (workoutStartedAt && !workoutStoppedAt) workoutStoppedAt = now;
+    lastRepAt = 0;
     resting = true;
     restStartedAt = now;
     restDurationMs = 90000;
@@ -344,6 +347,7 @@ async function openSession(challengeId, startExercise) {
         // Новый засчитанный повтор: один звук по приоритету workout > exercise > milestone > rep.
         // На повторе, закрывающем упражнение/тренировку, обычный rep/milestone не звучит.
         if (total > prevTotal && total > 0) {
+          lastRepAt = now;
           const milestone = total % 10 === 0;
           const justReached = curReached && !prevGoalReached;
           const event = justReached ? (allReached ? "workout" : "exercise") : (milestone ? "milestone" : "rep");
@@ -359,6 +363,10 @@ async function openSession(challengeId, startExercise) {
           }
         }
         prevTotal = total;
+      }
+
+      if (!resting && !allReached && currentSetReps() > 0 && lastRepAt && now - lastRepAt >= setIdleMs) {
+        startRest();
       }
 
       // Сначала стабильно находим тело, затем даём человеку 3 секунды занять позицию.

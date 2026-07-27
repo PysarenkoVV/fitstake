@@ -433,6 +433,35 @@ test("first rep starts the workout clock and finishing a set opens rest", async 
   await expect(page.locator(".session")).toHaveCount(0);
 });
 
+test("a set ends automatically after ten seconds without another rep", async ({ page }) => {
+  await page.evaluate(async () => {
+    class FakePoseSession {
+      constructor(exercises) {
+        this.snapshot = { results: exercises.map((exercise) => ({ exercise, repCount: 0, status: "up", bendAngle: 170 })) };
+        window.__fakePoseSession = this;
+      }
+      setRecordingContext() {}
+      setActive() {}
+      setCountingEnabled(on) { this.countingEnabled = on; }
+      async start() {}
+      stop() {}
+      isRecording() { return false; }
+      async toggleRecording() { return false; }
+    }
+    window.__REPACT_SET_IDLE_MS__ = 1000;
+    window.PoseSession = FakePoseSession;
+    await window.openSession("demo", "pushups");
+    window.__fakePoseSession.snapshot.results[0].repCount = 1;
+  });
+
+  await expect(page.getByRole("button", { name: "Finish set", exact: true })).toBeVisible();
+  await expect(page.locator("#sess-rest")).toBeVisible({ timeout: 2500 });
+  await expect(page.locator("#sess-rest-set")).toHaveText("Set 1 completed");
+  await expect(page.locator("#sess-rest-reps")).toHaveText("1 reps");
+
+  await page.getByRole("button", { name: "Finish workout", exact: true }).click();
+});
+
 test("daily target completion shows finish and extra-set actions", async ({ page }) => {
   await page.evaluate(async () => {
     class FakePoseSession {
