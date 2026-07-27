@@ -604,7 +604,7 @@ function newChallenge(o) {
   return Object.assign({
     id: uid(), type: "streak", access: "solo", minPlayers: 0, maxPlayers: 0, startAt: null,
     missPolicy: "oneTotal", progression: { step: 0, period: "day" },
-    myTodayReps: {}, myTotalReps: 0, myTotalByExercise: {}, workoutStatsByDay: {}, startWeight: null, startMaxReps: null,
+    myTodayReps: {}, myTodayKey: null, myTotalReps: 0, myTotalByExercise: {}, workoutStatsByDay: {}, startWeight: null, startMaxReps: null,
     beforePhoto: null, afterPhoto: null, isCompleted: false,
   }, o);
 }
@@ -881,12 +881,13 @@ function applySync() {
     // (report повис в памяти SDK и не долетел) иначе пропала бы. Берём max, а если
     // локальное впереди сервера — досылаем, чтобы сервер догнал (по кругу не зациклит).
     const serverToday = me._days[today] || {};
-    const localToday = ch.myTodayReps || {};
+    const localToday = ch.myTodayKey === today ? (ch.myTodayReps || {}) : {};
     const mergedToday = {};
     for (const ex of new Set([...Object.keys(localToday), ...Object.keys(serverToday)])) {
       mergedToday[ex] = Math.max(+localToday[ex] || 0, +serverToday[ex] || 0);
     }
     ch.myTodayReps = mergedToday;
+    ch.myTodayKey = today;
     ch.myTotalReps = Math.max(+ch.myTotalReps || 0, me._total);
     ch.myTotalByExercise = totalsByExercise(me._days);
     app.totalReps = Math.max(+app.totalReps || 0, me._total);
@@ -947,7 +948,7 @@ function applyPublicChallenges(today) {
         _ready: typeof p.ready === "number" ? p.ready : null };
     });
     const me = C.me(c);
-    if (me) { c.myTodayReps = Object.assign({}, me._days[today] || {}); c.myTotalReps = me._total; c.myTotalByExercise = totalsByExercise(me._days); }
+    if (me) { c.myTodayReps = Object.assign({}, me._days[today] || {}); c.myTodayKey = today; c.myTotalReps = me._total; c.myTotalByExercise = totalsByExercise(me._days); }
   }
   if (JOIN_ID && app.challenges.some((c) => c.id === JOIN_ID) && !ui.full && !ui.sheet) { ui.tab = "challenges"; ui.detailId = JOIN_ID; }
 }
@@ -1055,6 +1056,7 @@ function resetDailyState(dayKey) {
   app.dayKey = dayKey;
   for (const c of app.challenges) {
     c.myTodayReps = {};
+    c.myTodayKey = dayKey;
     for (const p of c.participants) { p.doneToday = false; p.todayReps = 0; }
     c.currentDay = computeCurrentDay(c);
   }
@@ -1202,6 +1204,10 @@ function addReps(ch, counts, sessionStats, sessionDayKey = dateKey()) {
   if (total <= 0) return false;
   const me = C.me(ch);
   if (!me) return false;
+  if (ch.myTodayKey !== sessionDayKey) {
+    ch.myTodayReps = {};
+    ch.myTodayKey = sessionDayKey;
+  }
   const wasDone = C.isTodayDone(ch);
   const completedBefore = new Set(ch.goals.filter((g) => C.exProgress(ch, g) >= C.norm(ch, g)).map((g) => g.exercise));
   app.totalReps += total;

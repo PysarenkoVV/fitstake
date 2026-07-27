@@ -107,6 +107,7 @@ test("yesterday's local progress is cleared before Firebase can copy it into tod
       },
     };
     main.myTodayReps = { pushups: 150, squats: 50 };
+    main.myTodayKey = yesterday;
     main.participants = [{ id: "daily-reset-me", isMe: true, state: "active", doneToday: true, todayReps: 200 }];
     app.dayKey = yesterday;
     const reports = [];
@@ -118,6 +119,7 @@ test("yesterday's local progress is cleared before Firebase can copy it into tod
       dayKey: app.dayKey,
       today,
       progress: main.myTodayReps,
+      progressDay: main.myTodayKey,
       doneToday: C.me(main).doneToday,
       reports,
     };
@@ -125,6 +127,7 @@ test("yesterday's local progress is cleared before Firebase can copy it into tod
 
   expect(result.dayKey).toBe(result.today);
   expect(result.progress).toEqual({});
+  expect(result.progressDay).toBe(result.today);
   expect(result.doneToday).toBe(false);
   expect(result.reports).toEqual([]);
 });
