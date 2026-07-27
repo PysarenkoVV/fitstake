@@ -429,6 +429,8 @@ class PoseSession {
     this._brightnessAt = -Infinity;
     this._stableDipPoints = {};
     this._dipPointAge = {};
+    this._visualPoints = {};
+    this._visualLostFrames = 0;
     this.countingEnabled = false;
     this.facing = "user";   // "user" (фронталка) | "environment" (задняя)
     this.zoom = 1;          // 1× | 0.5× — 0.5 = задний ультра-ширик (отдельная линза)
@@ -585,7 +587,7 @@ class PoseSession {
       const ar = results[this.active];
       const ready = !!(ar && (ar.status === "up" || ar.status === "down"));
       this.snapshot = { results, points: acceptedPoints, imageSize: size, quality };
-      this._drawSkeleton(acceptedPoints, size, ready);
+      this._drawSkeleton(this._smoothVisualPoints(acceptedPoints), size, ready);
       if (this._recording) this._drawRecordFrame(size);
     }
     requestAnimationFrame(() => this._loop());
@@ -631,6 +633,43 @@ class PoseSession {
       ctx.arc(head.x * size.width, head.y * size.height, Math.max(r * 1.8, shoulderWidth * 0.18), 0, Math.PI * 2);
       ctx.stroke();
     }
+  }
+
+  // Счётчик получает быстрые acceptedPoints выше, а более сильное сглаживание
+  // применяется только к нарисованному скелету и записываемому видео.
+  _smoothVisualPoints(points) {
+    if (!Object.keys(points).length) {
+      this._visualLostFrames++;
+      if (this._visualLostFrames > 5) this._visualPoints = {};
+      return {};
+    }
+    this._visualLostFrames = 0;
+    const previous = this._visualPoints;
+    const next = {};
+    for (const [name, current] of Object.entries(points)) {
+      const prev = previous[name];
+      if (!current || !posePointVisible(current) || !prev) {
+        if (current) next[name] = current;
+        continue;
+      }
+      const distance = Math.hypot(current.x - prev.x, current.y - prev.y);
+      const likelyOutlier = distance > .22 && current.confidence < prev.confidence * .75;
+      if (likelyOutlier) {
+        next[name] = prev;
+        continue;
+      }
+      const alpha = /Elbow|Wrist|Knee|Ankle$/.test(name) ? .52
+        : /Shoulder|Hip$|neck|root/.test(name) ? .34
+          : .30;
+      next[name] = {
+        ...current,
+        x: prev.x + alpha * (current.x - prev.x),
+        y: prev.y + alpha * (current.y - prev.y),
+        world: smoothWorld(prev.world, current.world, alpha),
+      };
+    }
+    this._visualPoints = next;
+    return next;
   }
 
   // MediaPipe изредка на один кадр переставляет левую и правую стороны.

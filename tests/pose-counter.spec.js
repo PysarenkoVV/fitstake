@@ -192,6 +192,38 @@ test("push-ups and dips hide unstable legs but keep hips in the skeleton", async
   expect(result.squats).toContain(90);
 });
 
+test("visual skeleton smoothing is stronger on the torso and ignores a weak jump", async ({ page }) => {
+  const result = await page.evaluate(() => {
+    const session = new window.PoseSession(["pushups"]);
+    const first = {
+      leftShoulder: { x: .2, y: .3, confidence: .9 },
+      leftWrist: { x: .2, y: .6, confidence: .9 },
+    };
+    session._smoothVisualPoints(first);
+    const current = {
+      leftShoulder: { x: .3, y: .3, confidence: .9 },
+      leftWrist: { x: .3, y: .6, confidence: .9 },
+    };
+    const smoothed = session._smoothVisualPoints(current);
+    const afterOutlier = session._smoothVisualPoints({
+      leftShoulder: { x: .9, y: .3, confidence: .5 },
+      leftWrist: { x: smoothed.leftWrist.x, y: .6, confidence: .9 },
+    });
+    return {
+      shoulder: smoothed.leftShoulder.x,
+      wrist: smoothed.leftWrist.x,
+      outlierShoulder: afterOutlier.leftShoulder.x,
+      sourceShoulder: current.leftShoulder.x,
+    };
+  });
+
+  expect(result.shoulder).toBeCloseTo(.234, 3);
+  expect(result.wrist).toBeCloseTo(.252, 3);
+  expect(result.wrist).toBeGreaterThan(result.shoulder);
+  expect(result.outlierShoulder).toBeCloseTo(result.shoulder, 3);
+  expect(result.sourceShoulder).toBe(.3);
+});
+
 test("dips draw a head connected to the shoulder line", async ({ page }) => {
   const result = await page.evaluate(() => {
     const point = (x, y) => ({ x, y, confidence: 1 });
