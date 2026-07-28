@@ -30,7 +30,7 @@ test("dips require full extension and ignore angle jitter without vertical trave
     const point = (x, y) => ({ x, y, confidence: 1 });
     const pose = (kind, moveBody = true) => {
       const top = kind === "top", partial = kind === "partial";
-      const shoulderY = moveBody ? (top || partial ? .30 : .40) : .30;
+      const shoulderY = moveBody ? (top ? .30 : partial ? .35 : .40) : .30;
       const elbowY = top ? .40 : .50;
       const wristY = top ? .50 : (partial ? .577 : .50);
       const wristOffset = top ? 0 : (partial ? .064 : .10);
@@ -90,6 +90,76 @@ test("dips keep counting through a brief hidden wrist but do not count a head no
     return { hiddenWrist: run(false), headOnly: run(true) };
   });
   expect(result).toEqual({ hiddenWrist: 1, headOnly: 0 });
+});
+
+test("dips use body travel when a low camera compresses the elbow angle", async ({ page }) => {
+  const count = await page.evaluate(() => {
+    const pose = (angle, shoulderY) => {
+      const arm = (side) => {
+        const x = side === "left" ? .40 : .60;
+        const radians = angle * Math.PI / 180;
+        return {
+          [side + "Shoulder"]: {
+            x, y: shoulderY, confidence: 1,
+            world: { x: Math.sin(radians), y: Math.cos(radians), z: 0 },
+          },
+          [side + "Elbow"]: {
+            x, y: .45, confidence: 1,
+            world: { x: 0, y: 0, z: 0 },
+          },
+          [side + "Wrist"]: {
+            x, y: .55, confidence: 1,
+            world: { x: 0, y: 1, z: 0 },
+          },
+        };
+      };
+      return { ...arm("left"), ...arm("right") };
+    };
+    const counter = new window.RepCounter("dips");
+    let now = 0;
+    const feed = (points, frames) => {
+      for (let i = 0; i < frames; i++) {
+        counter.process(points, { width: 1000, height: 1000 }, true, now += 50);
+      }
+    };
+    feed(pose(147, .30), 6);
+    // Ни 140° внизу, ни 142° наверху не пересекают оба угловых порога.
+    feed(pose(140, .42), 8);
+    feed(pose(142, .30), 10);
+    return counter.count;
+  });
+  expect(count).toBe(1);
+});
+
+test("dips range position follows the body without jumping when the phase changes", async ({ page }) => {
+  const positions = await page.evaluate(() => {
+    const point = (x, y) => ({ x, y, confidence: 1 });
+    const pose = (shoulderY) => ({
+      leftShoulder: point(.40, shoulderY), rightShoulder: point(.60, shoulderY),
+      leftElbow: point(.40, .45), rightElbow: point(.60, .45),
+      leftWrist: point(.40, .55), rightWrist: point(.60, .55),
+    });
+    const counter = new window.RepCounter("dips");
+    let now = 0;
+    const feed = (points, frames) => {
+      let result;
+      for (let i = 0; i < frames; i++) {
+        result = counter.process(points, { width: 1000, height: 1000 }, true, now += 50);
+      }
+      return result.rangePosition;
+    };
+    return {
+      top: feed(pose(.30), 6),
+      middleDown: feed(pose(.36), 6),
+      bottom: feed(pose(.42), 8),
+      middleUp: feed(pose(.36), 6),
+      returnedTop: feed(pose(.30), 10),
+    };
+  });
+  expect(positions.top).toBeLessThan(positions.middleDown);
+  expect(positions.middleDown).toBeLessThan(positions.bottom);
+  expect(positions.middleUp).toBeLessThan(positions.bottom);
+  expect(positions.returnedTop).toBeLessThan(positions.middleUp);
 });
 
 test("dips guide maps both movement phases from zero to the checkpoint", async ({ page }) => {
@@ -353,6 +423,36 @@ test("push-ups do not draw the head tracker", async ({ page }) => {
   expect(result.arcs.some(([x, y]) => x === 50 && y === 12)).toBe(false);
 });
 
+test("squats do not draw the head tracker", async ({ page }) => {
+  const result = await page.evaluate(() => {
+    const point = (x, y) => ({ x, y, confidence: 1 });
+    const session = new window.PoseSession(["squats"]);
+    const lines = [];
+    const arcs = [];
+    let from = null;
+    session._ctx = {
+      clearRect() {}, beginPath() { from = null; },
+      moveTo(x, y) { from = [Math.round(x), Math.round(y)]; },
+      lineTo(x, y) { lines.push([from, [Math.round(x), Math.round(y)]]); },
+      stroke() {}, fill() {},
+      arc(x, y) { arcs.push([Math.round(x), Math.round(y)]); },
+    };
+    session._drawSkeleton({
+      head: point(.50, .12), neck: point(.50, .24),
+      leftShoulder: point(.42, .24), rightShoulder: point(.58, .24),
+      leftElbow: point(.36, .40), rightElbow: point(.64, .40),
+      leftWrist: point(.34, .56), rightWrist: point(.66, .56),
+      leftHip: point(.45, .52), rightHip: point(.55, .52),
+      leftKnee: point(.44, .70), rightKnee: point(.56, .70),
+      leftAnkle: point(.43, .90), rightAnkle: point(.57, .90),
+      root: point(.50, .52),
+    }, { width: 100, height: 100 }, true);
+    return { lines, arcs };
+  });
+  expect(result.lines).not.toContainEqual([[50, 12], [50, 24]]);
+  expect(result.arcs).not.toContainEqual([50, 12]);
+});
+
 test("cancelling the share sheet does not fall back to a file download", async ({ page }) => {
   const result = await page.evaluate(async () => {
     const blob = new Blob(["x"], { type: "video/mp4" });
@@ -591,6 +691,7 @@ test("range guide is available beyond dips and shows checkpoints plus movement",
             bendAngle: 150,
             guidePhase: "down",
             guideProgress: .4,
+            rangePosition: .4,
           })),
         };
         window.__fakePoseSession = this;
@@ -612,13 +713,16 @@ test("range guide is available beyond dips and shows checkpoints plus movement",
   await expect(page.locator("#sess-range-label")).toHaveText("Lower down");
   await expect(page.locator(".sess-range-track b")).toHaveCount(2);
   await expect(page.locator("#sess-range-marker")).toHaveCSS("bottom", /.+/);
+  const markerBefore = await page.locator("#sess-range-marker").evaluate((element) => element.style.bottom);
 
   await page.evaluate(() => {
     window.__fakePoseSession.snapshot.results[0].guidePhase = "up";
     window.__fakePoseSession.snapshot.results[0].guideProgress = .7;
+    window.__fakePoseSession.snapshot.results[0].rangePosition = .3;
   });
   await expect(page.locator("#sess-range-label")).toHaveText("Push up");
   await expect(page.locator("#sess-range-value")).toHaveText("70%");
+  await expect.poll(() => page.locator("#sess-range-marker").evaluate((element) => element.style.bottom)).not.toBe(markerBefore);
 
   await page.getByRole("button", { name: "Close", exact: true }).click();
   await expect(page.locator(".session")).toHaveCount(0);
@@ -702,6 +806,47 @@ test("daily target completion shows finish and extra-set actions", async ({ page
   await page.getByRole("button", { name: "Close", exact: true }).click();
   await page.getByRole("button", { name: "Exit without saving", exact: true }).click();
   await expect(page.locator(".session")).toHaveCount(0);
+});
+
+test("rest screen switches the next exercise without starting the set", async ({ page }) => {
+  await page.evaluate(async () => {
+    class FakePoseSession {
+      constructor(exercises) {
+        this.snapshot = { results: exercises.map((exercise) => ({ exercise, repCount: 0, status: "up", bendAngle: 170 })) };
+        window.__fakePoseSession = this;
+      }
+      setRecordingContext() {}
+      setActive(index) { this.active = index; }
+      setCountingEnabled(on) { this.countingEnabled = on; }
+      async start() {}
+      stop() {}
+      isRecording() { return false; }
+      async toggleRecording() { return false; }
+    }
+    window.PoseSession = FakePoseSession;
+    const challenge = app.challenges.find((item) => item.id === "main");
+    challenge.goals = [
+      { exercise: "pushups", repsPerDay: 50 },
+      { exercise: "squats", repsPerDay: 50 },
+    ];
+    challenge.progression = { step: 0, period: "day" };
+    challenge.myTodayReps = {};
+    await window.openSession("main", "pushups");
+    window.__fakePoseSession.snapshot.results[0].repCount = 1;
+  });
+
+  await page.getByRole("button", { name: "Finish set", exact: true }).click();
+  await expect(page.locator("#sess-rest")).toBeVisible();
+  await expect(page.locator(".sess-rest-exercises button")).toHaveCount(2);
+  await page.getByRole("button", { name: "Squats", exact: true }).click();
+  await expect(page.locator("#sess-rest")).toBeVisible();
+  await expect(page.getByRole("button", { name: "Squats", exact: true })).toHaveClass(/active/);
+  expect(await page.evaluate(() => window.__fakePoseSession.active)).toBe(1);
+
+  await page.getByRole("button", { name: "Start next set", exact: true }).click();
+  await expect(page.locator("#sess-rest")).toBeHidden();
+  await page.getByRole("button", { name: "Close", exact: true }).click();
+  await page.getByRole("button", { name: "Exit without saving", exact: true }).click();
 });
 
 test("saving a partial workout opens a useful result screen", async ({ page }) => {

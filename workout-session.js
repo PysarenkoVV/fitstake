@@ -231,12 +231,32 @@ async function openSession(challengeId, startExercise) {
   }
   function renderRestActions(completed) {
     restActionsEl.classList.toggle("complete", completed);
-    restActionsEl.innerHTML = completed
+    const picker = !completed && combo
+      ? `<div class="sess-rest-exercises" aria-label="${t("Exercises")}">
+          ${goals.map((goal, index) => `<button type="button" data-sess="restExercise" data-index="${index}" class="${index === active ? "active" : ""}" aria-pressed="${index === active}">${esc(Exercise.displayName(goal.exercise))}</button>`).join("")}
+        </div>`
+      : "";
+    restActionsEl.innerHTML = picker + (completed
       ? `<button class="sess-rest-action sess-rest-primary" data-sess="finish">${icon("check")}${t("Finish workout")}</button>
          <button class="sess-rest-action sess-rest-secondary" data-sess="restExtra">${icon("plus")}${t("Extra set")}</button>`
       : `<button class="sess-rest-action sess-rest-primary" data-sess="restResume">${iconF("play")}${t("Start next set")}</button>
          <button class="sess-rest-action sess-rest-secondary" data-sess="restPlus">${t("+30 sec")}</button>
-         <button class="sess-rest-action sess-rest-secondary" data-sess="finish"><span class="sess-stop-mark is-white"></span>${t("Finish workout")}</button>`;
+         <button class="sess-rest-action sess-rest-secondary" data-sess="finish"><span class="sess-stop-mark is-white"></span>${t("Finish workout")}</button>`);
+  }
+  function updateRestExercise() {
+    const goal = goals[active], result = resultFor(goal.exercise);
+    restCounterEl.textContent = `${Exercise.displayName(goal.exercise)}  ${totalFor(goal, result)}${goal.target != null ? ` / ${goal.target}` : ""}`;
+  }
+  function switchRestExercise(index) {
+    if (!resting || index < 0 || index >= goals.length || index === active) return;
+    active = index;
+    sess.setActive(active);
+    resetReadyState();
+    renderCounter();
+    updateRestExercise();
+    renderRestActions(false);
+    prevBottomKey = "";
+    prevGoalReached = false;
   }
   function startRest() {
     const reps = closeCurrentSet();
@@ -252,8 +272,7 @@ async function openSession(challengeId, startExercise) {
     restEl.classList.remove("ready", "complete");
     restEl.hidden = false;
     overlay.classList.add("resting");
-    const rg = goals[active], rTotal = totalFor(rg, resultFor(rg.exercise));
-    restCounterEl.textContent = `${Exercise.displayName(rg.exercise)}  ${rTotal}${rg.target != null ? ` / ${rg.target}` : ""}`;
+    updateRestExercise();
     restSetEl.textContent = t("Set %lld completed", setReps.length);
     restRepsEl.textContent = lastSetWasRecord ? t("New best set: %lld", reps) : t("%lld reps", reps);
     restTotalEl.textContent = t("Total %@", `${dayRepTotal()} / ${goals.reduce((sum, goal) => sum + (goal.target || 0), 0)}`);
@@ -362,7 +381,9 @@ async function openSession(challengeId, startExercise) {
         if (rangePhase && phase !== rangePhase) rangeReachedUntil = now + 260;
         rangePhase = phase;
         const reached = now < rangeReachedUntil;
-        const progress = reached ? 100 : Math.round((ar.guideProgress || 0) * 100);
+        const progress = Math.round((ar.guideProgress || 0) * 100);
+        const position = Math.max(0, Math.min(1, Number(ar.rangePosition) || 0));
+        const visualPosition = g.exercise === "pullups" ? 1 - position : position;
         rangeGuideEl.dataset.phase = phase;
         rangeGuideEl.classList.toggle("reached", reached || progress >= 96);
         const labels = {
@@ -372,8 +393,10 @@ async function openSession(challengeId, startExercise) {
           dips: { down: "Lower down", up: "Push up" },
         };
         rangeLabelEl.textContent = t((labels[g.exercise] || labels.pushups)[phase]);
-        rangeFillEl.style.height = `${progress}%`;
-        rangeMarkerEl.style.bottom = `${5 + progress * .88}%`;
+        // Маркер всегда повторяет абсолютное положение тела: верх нормы = верх
+        // шкалы, низ нормы = низ. При смене фазы он больше не прыгает на другой край.
+        rangeFillEl.style.height = `${visualPosition * 100}%`;
+        rangeMarkerEl.style.bottom = `${5 + (1 - visualPosition) * 88}%`;
         rangeValueEl.textContent = `${progress}%`;
       }
 
@@ -566,6 +589,7 @@ async function openSession(challengeId, startExercise) {
       }
     }
     else if (a === "restResume") resumeAfterRest();
+    else if (a === "restExercise") switchRestExercise(Number(b.dataset.index));
     else if (a === "restExtra") startExtraSet();
     else if (a === "doSave") { setBtnLoading(b, true, t("Save workout")); await endSession(true); if (document.body.contains(overlay)) setBtnLoading(b, false); }
     else if (a === "doExit") endSession(false);

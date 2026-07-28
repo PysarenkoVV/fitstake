@@ -56,3 +56,21 @@ test("rules use hryvnia test coin and lead to an editable review", async ({ page
   await expect(page.getByText(/3 days · Only me/)).toBeVisible();
   await expect(page.getByRole("button", { name: "Create challenge", exact: true })).toBeEnabled();
 });
+
+test("review combines rules and stake into one final conditions card", async ({ page }) => {
+  await page.evaluate(() => {
+    ui.form = newCreateForm({
+      step: 3, type: "goal", access: "public", title: "Qq", miss: null,
+      sel_pushups: true, pushups: 50, duration: 3, buyIn: 50,
+      limitParticipants: false,
+    });
+    ui.full = CreateWizard;
+    render();
+  });
+
+  await expect(page.locator(".create-review-card")).toHaveCount(3);
+  await expect(page.getByText("Final conditions", { exact: true })).toHaveCount(1);
+  await expect(page.getByText("No daily rules · Stake 50", { exact: true })).toBeVisible();
+  await expect(page.locator(".create-review-label").getByText("Rules", { exact: true })).toHaveCount(0);
+  await expect(page.locator(".create-review-label").getByText("Stake", { exact: true })).toHaveCount(0);
+});

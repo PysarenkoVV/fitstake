@@ -56,8 +56,8 @@ const EX = {
     angleJoints: (s) => ({ a: s + "Shoulder", vertex: s + "Elbow", b: s + "Wrist" }),
     bodyJoints: ["leftShoulder", "rightShoulder"],
     wristAbove: false,
-    downThreshold: 125,
-    upThreshold: 150,
+    downThreshold: 135,
+    upThreshold: 145,
     minBodyTravel: 0.18,
     maxAnchorDrift: 1.4,
     relativeBodyTravel: true,
@@ -156,6 +156,11 @@ class RepCounter {
     this.downFrames = 0;
     this.upFrames = 0;
     this.lastCountAt = -Infinity;
+    this.activeSide = null;
+    this.rangeTopOffset = null;
+    this.rangeBodyProgress = null;
+    this.rangeScale = null;
+    this.smoothedRangePosition = null;
 
     const cfg = EX[exercise] || {};
     this.downThreshold = cfg.downThreshold != null ? cfg.downThreshold : 110;
@@ -179,13 +184,22 @@ class RepCounter {
     if (!enoughSides) {
       if (this.tracking && this.lostFrames < this.graceFrames) {
         this.lostFrames++;
-        return { status: this.wasDown ? "down" : "up", bendAngle: this.smoothedAngle };
+        return {
+          status: this.wasDown ? "down" : "up",
+          bendAngle: this.smoothedAngle,
+          rangePosition: this.smoothedRangePosition,
+        };
       }
       this.tracking = false;
       this.smoothedAngle = null;
       this.wasDown = false;
       this.armed = false;
       this.downFrames = this.upFrames = 0;
+      this.activeSide = null;
+      this.rangeTopOffset = null;
+      this.rangeBodyProgress = null;
+      this.rangeScale = null;
+      this.smoothedRangePosition = null;
       this.bodyAtDown = this.leftAnchorAtDown = this.rightAnchorAtDown = this.feetAtDown = null;
       const anything = Object.values(points).some((p) => p && p.confidence > this.minConfidence);
       return { status: anything ? "partialBody" : "noBody", bendAngle: null };
@@ -193,7 +207,13 @@ class RepCounter {
     this.tracking = true;
     this.lostFrames = 0;
 
-    const sideAngles = sides.map((s) => this._bendAngle(s, points, size));
+    if (this.exercise === "dips" && (!this.activeSide || !sides.includes(this.activeSide))) {
+      this.activeSide = sides.reduce((best, side) =>
+        this._sideConfidence(side, points) > this._sideConfidence(best, points) ? side : best
+      , sides[0]);
+    }
+    const angleSides = this.exercise === "dips" && this.activeSide ? [this.activeSide] : sides;
+    const sideAngles = angleSides.map((s) => this._bendAngle(s, points, size));
     // При съёмке отжиманий под углом дальний локоть часто выглядит заметно прямее
     // ближнего. Среднее двух углов не доходило до порога, хотя повтор был полным.
     // Внизу достаточно подтверждённого сгиба одной руки, наверху — подтверждённого
@@ -204,7 +224,16 @@ class RepCounter {
     const angle = this.smoothedAngle != null ? this.smoothedAngle + this.smoothing * (raw - this.smoothedAngle) : raw;
     this.smoothedAngle = angle;
 
-    if (angle < this.downThreshold) {
+    const bodyMotion = this._bodyRangeMotion(points, size, angle);
+    const dipMotion = this.exercise === "dips" ? bodyMotion : null;
+    const reachedDown = angle < this.downThreshold || (dipMotion && dipMotion.countProgress >= 0.90);
+    const reachedUp = angle > this.upThreshold
+      || (this.wasDown
+        && dipMotion
+        && dipMotion.countProgress <= 0.20
+        && angle >= this.upThreshold - 5);
+
+    if (reachedDown) {
       this.downFrames++;
       this.upFrames = 0;
       // Ворота позы: у подтягиваний кисти выше плеч, у брусьев ниже —
@@ -217,7 +246,7 @@ class RepCounter {
         this.rightAnchorAtDown = this._anchor("right", points, size);
         this.feetAtDown = this._feetMid(points, size);
       }
-    } else if (angle > this.upThreshold) {
+    } else if (reachedUp) {
       this.upFrames++;
       this.downFrames = 0;
       if (this.wasDown && this.upFrames >= this.stableFrames) {
@@ -227,11 +256,74 @@ class RepCounter {
           this.lastCountAt = now;
         }
         this.armed = true;
+        if (this.exercise === "dips") this.activeSide = null;
       } else if (!this.wasDown && this.upFrames >= this.stableFrames) this.armed = true;
     } else {
       this.downFrames = this.upFrames = 0;
     }
-    return { status: this.wasDown ? "down" : "up", bendAngle: angle };
+    const anglePosition = Math.max(0, Math.min(1,
+      (this.upThreshold - angle) / Math.max(1, this.upThreshold - this.downThreshold)
+    ));
+    const targetPosition = bodyMotion ? bodyMotion.progress : anglePosition;
+    this.smoothedRangePosition = bodyMotion
+      ? targetPosition
+      : (this.smoothedRangePosition == null
+        ? targetPosition
+        : this.smoothedRangePosition + 0.24 * (targetPosition - this.smoothedRangePosition));
+    return {
+      status: this.wasDown ? "down" : "up",
+      bendAngle: angle,
+      rangePosition: Math.max(0, Math.min(1, this.smoothedRangePosition)),
+    };
+  }
+
+  _sideConfidence(side, points) {
+    if (!side) return -1;
+    const j = EX[this.exercise].angleJoints(side);
+    return [points[j.a], points[j.vertex], points[j.b]]
+      .reduce((lowest, point) => Math.min(lowest, point ? point.confidence : 0), 1);
+  }
+
+  // Положение корпуса относительно опорных кистей, нормализованное длиной руки.
+  // Для dips это дополнительный сигнал счётчика, для всех упражнений — стабильная
+  // координата индикатора, которая не прыгает между углами левой и правой стороны.
+  _bodyRangeMotion(points, size, angle) {
+    const body = this._bodyMid(points, size);
+    const anchors = ["left", "right"].map((side) => this._anchor(side, points, size)).filter(Boolean);
+    const lengths = ["left", "right"].map((side) => this._limbLength(side, points, size)).filter((value) => value != null);
+    if (!body || !anchors.length || !lengths.length) return null;
+    const anchorY = anchors.reduce((sum, point) => sum + point.y, 0) / anchors.length;
+    const scale = lengths.reduce((sum, value) => sum + value, 0) / lengths.length;
+    if (scale <= 0) return null;
+    if (this.rangeScale == null) this.rangeScale = scale;
+    const offset = (body.y - anchorY) / this.rangeScale;
+    if (this.rangeTopOffset == null) this.rangeTopOffset = offset;
+    const direction = this.exercise === "pullups" ? -1 : 1;
+    const displacement = direction * (offset - this.rangeTopOffset);
+    const nearTop = Math.abs(displacement) <= this.minBodyTravel * 0.20;
+    if (!this.wasDown && angle >= this.upThreshold && nearTop) {
+      this.rangeScale += 0.08 * (scale - this.rangeScale);
+      // Медленно подстраиваем верхнюю норму только при подтверждённом распрямлении,
+      // чтобы калибровка не следовала за корпусом во время спуска.
+      this.rangeTopOffset += 0.08 * (offset - this.rangeTopOffset);
+    }
+    const normalizedTravel = Math.max(0, direction * (offset - this.rangeTopOffset));
+    const countProgress = Math.max(0, Math.min(1,
+      normalizedTravel / Math.max(0.01, this.minBodyTravel)
+    ));
+    const guideTravel = this.exercise === "dips"
+      ? Math.max(0.65, this.minBodyTravel)
+      : this.minBodyTravel;
+    const rawProgress = Math.max(0, Math.min(1,
+      normalizedTravel / Math.max(0.01, guideTravel)
+    ));
+    this.rangeBodyProgress = this.rangeBodyProgress == null
+      ? rawProgress
+      : this.rangeBodyProgress + 0.32 * (rawProgress - this.rangeBodyProgress);
+    return {
+      progress: Math.max(0, Math.min(1, this.rangeBodyProgress)),
+      countProgress,
+    };
   }
 
   // true, если положение кистей относительно плеч соответствует упражнению
@@ -292,13 +384,10 @@ class RepCounter {
       const shoulder = jointMid(points, ["leftShoulder", "rightShoulder"], size, this.minConfidence);
       if (!shoulder) return null;
       const hip = jointMid(points, ["leftHip", "rightHip"], size, this.minConfidence);
-      const head = jointMid(points, ["leftEar", "rightEar"], size, this.minConfidence)
-        || jointMid(points, ["nose"], size, this.minConfidence);
       const torso = hip ? { x: (shoulder.x + hip.x) / 2, y: (shoulder.y + hip.y) / 2 } : shoulder;
       const samples = [
-        { point: shoulder, weight: 0.55 },
-        { point: torso, weight: 0.30 },
-        ...(head ? [{ point: head, weight: 0.15 }] : []),
+        { point: shoulder, weight: 0.65 },
+        { point: torso, weight: 0.35 },
       ];
       const weight = samples.reduce((sum, item) => sum + item.weight, 0);
       return {
@@ -575,13 +664,17 @@ class PoseSession {
         if (i !== this.active) return { exercise: c.exercise, repCount: c.count, status: "paused", bendAngle: null };
         const r = c.process(acceptedPoints, size, this.countingEnabled);
         const guidePhase = c.wasDown || !c.armed ? "up" : "down";
-        const span = Math.max(1, c.upThreshold - c.downThreshold);
-        const guideProgress = r.bendAngle == null ? 0 : Math.max(0, Math.min(1,
-          guidePhase === "up"
-            ? (r.bendAngle - c.downThreshold) / span
-            : (c.upThreshold - r.bendAngle) / span
-        ));
-        return { exercise: c.exercise, repCount: c.count, status: r.status, bendAngle: r.bendAngle, guidePhase, guideProgress };
+        const position = r.rangePosition == null ? 0 : r.rangePosition;
+        const guideProgress = guidePhase === "up" ? 1 - position : position;
+        return {
+          exercise: c.exercise,
+          repCount: c.count,
+          status: r.status,
+          bendAngle: r.bendAngle,
+          rangePosition: position,
+          guidePhase,
+          guideProgress,
+        };
       });
       // Всё нужное для активного упражнения в кадре — скелет зеленеет.
       const ar = results[this.active];
@@ -599,7 +692,7 @@ class PoseSession {
     const on = (p) => posePointVisible(p);
     const exercise = this.exercises[this.active];
     const hideLegs = exercise === "pushups" || exercise === "dips";
-    const hideHead = exercise === "pushups";
+    const hideHead = exercise === "pushups" || exercise === "squats";
     const hidden = (name) => (hideLegs && /Knee|Ankle$/.test(name)) || (hideHead && name === "head");
     ctx.lineWidth = Math.max(3, size.width / 260);
     // Изумрудный, когда всё нужное в кадре; иначе брендовый лайм.

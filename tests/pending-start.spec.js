@@ -102,3 +102,23 @@ test("long automatic combo title is shortened before Firebase publish", async ({
   expect(result.title.length).toBeLessThanOrEqual(40);
   expect(result.goals).toHaveLength(2);
 });
+
+test("public total goal publishes a valid miss policy", async ({ page }) => {
+  const result = await page.evaluate(async () => {
+    const originalCreate = Sync.createChallenge;
+    let published = null;
+    Sync.createChallenge = async (_id, meta) => { published = meta; return true; };
+    ui.form = newCreateForm({
+      type: "goal", access: "public", title: "Qq", miss: null,
+      sel_pushups: true, pushups: 50, duration: 3, buyIn: 50,
+      limitParticipants: false,
+    });
+    try {
+      const ok = await saveChallengeForm();
+      return { ok, missPolicy: published && published.missPolicy };
+    } finally {
+      Sync.createChallenge = originalCreate;
+    }
+  });
+  expect(result).toEqual({ ok: true, missPolicy: "never" });
+});

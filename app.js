@@ -2915,14 +2915,17 @@ function createSummary(f) {
     : f.access === "private" ? t("By invitation") : t("Only me");
   const rules = f.type === "streak" ? [MissPolicy.displayName(f.miss)] : [];
   if (f.progOn) rules.push(`+${f.progStep} ${f.progPeriod === "day" ? t("per day") : t("per week")}`);
+  const finalConditions = [
+    ...(rules.length ? rules : [t("No daily rules")]),
+    f.buyIn > 0 ? `${t("Stake")} ${fmt(f.buyIn)}` : t("No stake"),
+  ].join(" · ");
   return `<div class="create-review">
     <div><div class="display create-review-title">${t("Review challenge")}</div><div class="form-footer">${t("Check the conditions before publishing.")}</div></div>
     <div class="create-review-name">${esc(f.title.trim() || defaultTitle(f))}</div>
     <div class="create-review-list">
       ${card(0, f.type === "goal" ? "target" : "flame", f.type === "goal" ? t("Total goal") : t("Daily streak"), exerciseValue)}
       ${card(1, "calendar", t("Format"), `${t("%lld days", f.duration)} · ${access}`)}
-      ${card(2, "checkCircle", t("Rules"), rules.length ? rules.join(" · ") : t("No daily rules"))}
-      <button class="card create-review-card" data-act="editCreate:2"><span class="create-review-icon">${coinMark()}</span><span class="create-review-copy"><span class="create-review-label">${t("Stake")}</span><span class="create-review-value">${f.buyIn > 0 ? fmt(f.buyIn) : t("No stake")}</span></span><span class="secondary">${icon("chevronRight")}</span></button>
+      ${card(2, "checkCircle", t("Final conditions"), finalConditions)}
     </div>
   </div>`;
 }
@@ -3065,7 +3068,8 @@ async function saveChallengeForm() {
     minPlayers: 0,
     maxPlayers: access === "public" && f.limitParticipants ? Math.min(Math.max(+f.maxPlayers, 2), 500) : 0,
     startAt: access === "private" ? null : startOfDay(Date.now()),
-    durationDays: Math.min(Math.max(f.duration, 1), 365), buyIn: Math.max(f.buyIn, 0), isPublic, missPolicy: f.miss,
+    durationDays: Math.min(Math.max(f.duration, 1), 365), buyIn: Math.max(f.buyIn, 0), isPublic,
+    missPolicy: f.type === "goal" ? "never" : f.miss,
     progression: f.type === "streak" && f.progOn ? { step: f.progStep, period: f.progPeriod } : { step: 0, period: "day" },
   });
   if (ok === "publish-failed") { toast(t("Couldn't publish challenge. Check your connection and try again.")); return false; }

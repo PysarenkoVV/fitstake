@@ -618,7 +618,10 @@ button:is(:active, .pressed):not(:disabled) { transform: scale(0.97); filter: br
 .onb-ex-slider { padding: 0 16px 14px; display: flex; flex-direction: column; gap: 4px; border-top: 1px solid var(--border); padding-top: 12px; }
 
 /* ---- Сессия камеры ---- */
-.session { position: fixed; inset: 0; background: #000; z-index: 100; overflow: hidden; }
+.session {
+  --sess-side-inset: max(18px, env(safe-area-inset-left), env(safe-area-inset-right));
+  position: fixed; inset: 0; background: #000; z-index: 100; overflow: hidden;
+}
 .session video, .session .skeleton {
   position: absolute; inset: 0;
   width: 100%; height: 100%;
@@ -701,10 +704,10 @@ button:is(:active, .pressed):not(:disabled) { transform: scale(0.97); filter: br
 .sess-energy {
   position: absolute;
   z-index: 4;
-  left: max(18px, env(safe-area-inset-left));
+  left: var(--sess-side-inset);
   top: 50%;
   transform: translateY(-38%);
-  width: 72px;
+  width: 86px;
   display: grid;
   justify-items: center;
   gap: 9px;
@@ -714,13 +717,17 @@ button:is(:active, .pressed):not(:disabled) { transform: scale(0.97); filter: br
 }
 .sess-energy[hidden] { display: none; }
 .sess-energy > span {
-  width: 100px;
+  width: 86px;
+  min-height: 26px;
+  display: grid;
+  place-items: center;
   font-size: 11px;
   line-height: 1.15;
   font-weight: 800;
   text-align: center;
   text-transform: uppercase;
   letter-spacing: .05em;
+  overflow-wrap: anywhere;
 }
 .sess-energy-track {
   position: relative;
@@ -751,14 +758,14 @@ button:is(:active, .pressed):not(:disabled) { transform: scale(0.97); filter: br
 .sess-energy.low .sess-energy-track { border-color: var(--warning); }
 .sess-energy.low .sess-energy-track i { background: linear-gradient(to top, #ff7a45, var(--warning)); }
 .sess-energy.low > strong { color: #171006; background: var(--warning); }
-/* Шкала амплитуды dips: путь до следующего реального порога счётчика. */
+/* Шкала амплитуды: положение тела между верхней и нижней нормой. */
 .sess-range-guide {
   position: absolute;
   z-index: 4;
-  right: max(18px, env(safe-area-inset-right));
+  right: var(--sess-side-inset);
   top: 50%;
   transform: translateY(-38%);
-  width: 72px;
+  width: 86px;
   display: grid;
   justify-items: center;
   gap: 9px;
@@ -768,38 +775,34 @@ button:is(:active, .pressed):not(:disabled) { transform: scale(0.97); filter: br
 }
 .sess-range-guide[hidden] { display: none; }
 .sess-range-guide > span {
-  width: 100px;
+  width: 86px;
+  min-height: 26px;
+  display: grid;
+  place-items: center;
   font-size: 11px;
   line-height: 1.15;
   font-weight: 800;
   text-align: center;
   text-transform: uppercase;
   letter-spacing: .05em;
+  overflow-wrap: anywhere;
 }
 .sess-range-track {
   position: relative;
-  width: 24px;
+  width: 8px;
   height: 154px;
-  overflow: hidden;
-  border: 2px solid rgba(255,255,255,.72);
+  overflow: visible;
+  border: 0;
   border-radius: 999px;
-  background: rgba(0,0,0,.32);
-  box-shadow: inset 0 0 0 1px rgba(0,0,0,.18);
+  background: rgba(255,255,255,.30);
+  box-shadow: 0 0 0 1px rgba(0,0,0,.25), 0 4px 16px rgba(0,0,0,.36);
 }
-.sess-range-track i {
-  position: absolute;
-  inset: auto 3px 3px;
-  min-height: 4px;
-  border-radius: 999px;
-  background: linear-gradient(to top, var(--accent), var(--money));
-  box-shadow: 0 0 14px rgba(200,255,33,.42);
-  transition: height 90ms linear;
-}
+.sess-range-track i { display: none; }
 .sess-range-track b {
   position: absolute;
   z-index: 2;
   left: 50%;
-  width: 14px;
+  width: 30px;
   height: 3px;
   border-radius: 999px;
   background: #fff;
@@ -807,6 +810,16 @@ button:is(:active, .pressed):not(:disabled) { transform: scale(0.97); filter: br
 }
 .sess-range-track .range-mark-top { top: 8px; }
 .sess-range-track .range-mark-bottom { bottom: 8px; }
+.sess-range-track b::after {
+  position: absolute;
+  right: 22px;
+  color: rgba(255,255,255,.78);
+  font: 800 9px/1 var(--mono);
+  letter-spacing: .04em;
+  text-align: right;
+}
+.sess-range-track .range-mark-top::after { content: "TOP"; top: -3px; }
+.sess-range-track .range-mark-bottom::after { content: "BOTTOM"; bottom: -3px; }
 .sess-range-track em {
   position: absolute;
   z-index: 3;
@@ -817,7 +830,7 @@ button:is(:active, .pressed):not(:disabled) { transform: scale(0.97); filter: br
   background: var(--accent);
   box-shadow: 0 0 12px rgba(200,255,33,.6);
   transform: translate(-50%, 50%);
-  transition: bottom 90ms linear;
+  transition: bottom 120ms cubic-bezier(.2,.7,.2,1);
 }
 .sess-range-guide > strong {
   min-width: 42px;
@@ -827,11 +840,7 @@ button:is(:active, .pressed):not(:disabled) { transform: scale(0.97); filter: br
   font: 800 12px/1 var(--mono);
   text-align: center;
 }
-.sess-range-guide[data-phase="up"] .sess-range-track i {
-  background: linear-gradient(to top, #45d483, #7ff0b2);
-}
 .sess-range-guide.reached .sess-range-track {
-  border-color: var(--money);
   box-shadow: 0 0 0 4px rgba(69,212,131,.14), 0 0 22px rgba(69,212,131,.32);
 }
 .sess-range-guide.reached .sess-range-track em { background: var(--money); }
@@ -877,6 +886,32 @@ button:is(:active, .pressed):not(:disabled) { transform: scale(0.97); filter: br
 .sess-rest.complete .sess-complete-summary { display: block; }
 .sess-rest-actions { width: min(100%, 420px); margin-top: auto; display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
 .sess-rest-actions.complete { grid-template-columns: 1fr; }
+.sess-rest-exercises {
+  grid-column: 1 / -1;
+  display: flex;
+  gap: 8px;
+  max-width: 100%;
+  padding: 2px;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.sess-rest-exercises::-webkit-scrollbar { display: none; }
+.sess-rest-exercises button {
+  min-height: 40px;
+  padding: 0 14px;
+  flex: 0 0 auto;
+  border-radius: 999px;
+  color: rgba(255,255,255,.72);
+  background: rgba(10,10,10,.42);
+  box-shadow: inset 0 0 0 1px rgba(255,255,255,.16);
+  font-size: 13px;
+  font-weight: 750;
+}
+.sess-rest-exercises button.active {
+  color: #07110b;
+  background: var(--accent);
+  box-shadow: none;
+}
 .sess-rest-action, .sess-finish-set { height: 58px; border-radius: 16px; font-size: 15px; font-weight: 750; }
 .sess-rest-action {
   padding: 0 14px; display: flex; align-items: center; justify-content: center; gap: 10px;
