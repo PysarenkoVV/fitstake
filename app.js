@@ -368,7 +368,7 @@ const RU = {
   "Pull-up Progression": "Подтягивания: прогрессия", "Grows a bit every week": "Растёт каждую неделю",
   "Easier": "Легче", "Recommended": "Рекомендовано", "Harder": "Интенсивнее",
   "So your progress is saved and syncs across your devices": "Чтобы прогресс сохранялся и синхронизировался между устройствами",
-  "Continue with Google": "Продолжить с Google", "Continue with Facebook": "Продолжить с Facebook", "or": "или",
+  "Continue with Google": "Продолжить с Google", "Continue with Apple": "Продолжить с Apple", "Continue with Facebook": "Продолжить с Facebook", "or": "или",
   "Allow popups and try again": "Разреши всплывающие окна и попробуй снова",
   "Enable Google in Firebase (Sign-in method)": "Включи Google в Firebase (Sign-in method)",
   "Enable Facebook in Firebase (Sign-in method)": "Включи Facebook в Firebase (Sign-in method)",
@@ -434,6 +434,10 @@ const RU = {
   "Cancel": "Отмена", "Reset and start over": "Сбросить и начать заново",
   "Camera frames are processed on this device and are not uploaded to our servers.": "Кадры камеры обрабатываются на этом устройстве и не загружаются на наши серверы.",
   "Privacy Policy": "Политика конфиденциальности", "Delete account and data": "Удалить аккаунт и данные",
+  "Delete account permanently?": "Удалить аккаунт навсегда?", "Delete my account": "Удалить мой аккаунт",
+  "Your account and synced Repact data will be deleted. This cannot be undone.": "Аккаунт и синхронизированные данные Repact будут удалены. Это действие нельзя отменить.",
+  "For security, sign in again and retry deletion.": "Для безопасности войдите снова и повторите удаление.",
+  "Couldn't delete account": "Не удалось удалить аккаунт",
   "Video is recorded only when you tap Record and stays on your device unless you choose to share it.": "Видео записывается только после нажатия кнопки записи и остаётся на устройстве, пока вы сами им не поделитесь.",
   "We use PostHog and Firebase Analytics to understand product usage and improve the test app.": "Мы используем PostHog и Firebase Analytics, чтобы понимать использование продукта и улучшать тестовое приложение.",
   "Shared!": "Готово!", "Your result has been shared.": "Результат опубликован.",
@@ -2675,6 +2679,7 @@ function photoSlot(dataURL, caption) {
 // Форма входа (Google + email/пароль) — общая для профиля и онбординга.
 function authForm() {
   return `<button class="action-btn" data-act="googleAuth" style="background:#fff;color:#1f1f1f;box-shadow:none;backdrop-filter:none;-webkit-backdrop-filter:none">${t("Continue with Google")}</button>
+    <button class="action-btn" data-act="appleAuth" style="background:#000;color:#fff;box-shadow:inset 0 0 0 1px rgba(255,255,255,.22);backdrop-filter:none;-webkit-backdrop-filter:none">${t("Continue with Apple")}</button>
     <button class="action-btn" data-act="facebookAuth" style="background:#1877f2;color:#fff;box-shadow:none;backdrop-filter:none;-webkit-backdrop-filter:none">${t("Continue with Facebook")}</button>
     <div class="form-footer" style="text-align:center;opacity:.5">${t("or")}</div>
     <label class="form-label" for="auth-email">${t("Email")}</label>
@@ -2693,7 +2698,8 @@ function accountCard() {
   const header = `<div class="between">${lbl(t("Account"), "tracking-1")}${email ? `<span class="badge" style="color:var(--money)">${esc(email)}</span>` : ""}</div>`;
   const inner = email
     ? `<div class="form-footer">${t("Synced across your devices")}</div>
-       <button class="action-btn" data-act="signOut" style="background:var(--white-08);color:#fff">${t("Log out")}</button>`
+       <button class="action-btn" data-act="signOut" style="background:var(--white-08);color:#fff">${t("Log out")}</button>
+       <button class="action-btn" data-act="askDeleteAccount" style="background:transparent;color:var(--red);box-shadow:inset 0 0 0 1px rgba(255,87,87,.35)">${t("Delete account and data")}</button>`
     : `<div class="form-footer">${t("Sign in to sync progress across your devices")}</div>${authForm()}`;
   return `<div class="card" style="padding:16px;display:flex;flex-direction:column;gap:12px">${header}${inner}</div>`;
 }
@@ -2702,6 +2708,14 @@ function ResetDataSheet() {
   return sheetShell(t("Reset all test data?"), `<div class="stack">
     <div class="form-footer" style="font-size:15px;line-height:1.5">${t("This removes your local profile, workouts, photos and test coins from this device. This cannot be undone.")}</div>
     <button class="action-btn" data-act="confirmResetData" style="background:var(--red);color:#fff">${t("Reset and start over")}</button>
+    <button class="text-btn" data-act="closeSheet">${t("Cancel")}</button>
+  </div>`, true);
+}
+
+function DeleteAccountSheet() {
+  return sheetShell(t("Delete account permanently?"), `<div class="stack">
+    <div class="form-footer" style="font-size:15px;line-height:1.5">${t("Your account and synced Repact data will be deleted. This cannot be undone.")}</div>
+    <button class="action-btn" data-act="confirmDeleteAccount" style="background:var(--red);color:#fff">${t("Delete my account")}</button>
     <button class="text-btn" data-act="closeSheet">${t("Cancel")}</button>
   </div>`, true);
 }
@@ -4537,6 +4551,22 @@ root.addEventListener("click", async (e) => {
     case "restartFailed": restartFailed(arg); return;
     case "openBug": openBug(); return;
     case "askResetData": ui.sheet = ResetDataSheet; render(); return;
+    case "askDeleteAccount": ui.sheet = DeleteAccountSheet; render(); return;
+    case "confirmDeleteAccount": {
+      setBtnLoading(el, true, t("Delete my account"));
+      const result = await Sync.deleteAccount();
+      if (!result.ok) {
+        setBtnLoading(el, false);
+        toast(t(result.error === "auth/requires-recent-login"
+          ? "For security, sign in again and retry deletion."
+          : "Couldn't delete account"));
+        return;
+      }
+      localStorage.clear();
+      sessionStorage.clear();
+      location.reload();
+      return;
+    }
     case "confirmResetData": {
       for (let i = localStorage.length - 1; i >= 0; i--) {
         const key = localStorage.key(i);
@@ -4750,6 +4780,30 @@ root.addEventListener("click", async (e) => {
         "auth/popup-blocked": "Allow popups and try again",
         "auth/operation-not-supported-in-this-environment": "Google sign-in unavailable here — use email",
         "auth/web-storage-unsupported": "Google sign-in unavailable here — use email",
+        "offline": "Authentication service is still loading — try again",
+      }[res.error];
+      toast(hint ? t(hint) : (res.error || t("Couldn't sign in")));
+    }
+    return;
+  }
+  if (cmd === "appleAuth") {
+    setBtnLoading(el, true, t("Signing in…"));
+    const res = await Sync.signInApple();
+    if (res.ok) {
+      store.skippedAuth = false;
+      track("account_linked", { method: "apple" });
+      if (ui.screen === "onboarding") { finishOnboarding(); return; }
+      if (store["profile.name"]) Sync.registerUser(store["profile.name"]);
+      toast(t("Signed in"));
+      if (ui.authIntent) resumeAuthIntent(); else render();
+    } else {
+      setBtnLoading(el, false);
+      if (res.error === "cancelled") return;
+      const hint = {
+        "auth/operation-not-allowed": "Enable Apple in Firebase (Sign-in method)",
+        "auth/configuration-not-found": "Enable Apple in Firebase (Sign-in method)",
+        "auth/unauthorized-domain": "Add domain in Firebase (Authorized domains)",
+        "auth/popup-blocked": "Allow popups and try again",
         "offline": "Authentication service is still loading — try again",
       }[res.error];
       toast(hint ? t(hint) : (res.error || t("Couldn't sign in")));
