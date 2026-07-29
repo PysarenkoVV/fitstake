@@ -4,7 +4,7 @@
 "use strict";
 
 // Версия оболочки — держать в синхроне с CACHE в sw.js; уходит в баг-репорты.
-const APP_VERSION = "v154";
+const APP_VERSION = "v171";
 // Последняя JS-ошибка — прикладываем к баг-репорту, чтобы сразу видеть причину.
 let lastError = "";
 window.addEventListener("error", (e) => {
@@ -622,11 +622,23 @@ function phIdentify() { try { if (window.posthog && Sync.uid) window.posthog.ide
 
 function currentDayFromStart(days) {
   const s = new Date(SHARED_START + "T00:00:00").getTime();
-  return Math.min(Math.max(Math.floor((startOfDay(Date.now()) - s) / DAY) + 1, 1), days);
+  return Math.min(Math.max(calendarDayDiff(s, Date.now()) + 1, 1), days);
 }
 function dateKey(ts) {
   const d = new Date(ts || Date.now());
   return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0");
+}
+function calendarDayDiff(from, to) {
+  const a = new Date(from), b = new Date(to);
+  const aDay = Date.UTC(a.getFullYear(), a.getMonth(), a.getDate());
+  const bDay = Date.UTC(b.getFullYear(), b.getMonth(), b.getDate());
+  return Math.round((bDay - aDay) / DAY);
+}
+function shiftCalendarDay(epoch, offset) {
+  const date = new Date(epoch);
+  date.setHours(0, 0, 0, 0);
+  date.setDate(date.getDate() + offset);
+  return date.getTime();
 }
 
 function workoutClock(ms) {
@@ -691,9 +703,13 @@ function computeCurrentDay(c) {
   if (c.id === "main" && Sync.enabled) return currentDayFromStart(c.durationDays);
   const s = challengeStartEpoch(c);
   if (s == null) return 1;
-  return Math.min(Math.max(Math.floor((startOfDay(Date.now()) - s) / DAY) + 1, 1), c.durationDays);
+  return Math.min(Math.max(calendarDayDiff(s, Date.now()) + 1, 1), c.durationDays);
 }
-function dayEpoch(startKey, day) { return new Date(startKey + "T00:00:00").getTime() + (day - 1) * DAY; }
+function dayEpoch(startKey, day) {
+  const date = new Date(startKey + "T00:00:00");
+  date.setDate(date.getDate() + day - 1);
+  return date.getTime();
+}
 function dayClosed(c, day, dayData) {
   return c.goals.every((g) => (dayData[g.exercise] || 0) >= C.norm(c, g, day));
 }
@@ -791,7 +807,7 @@ function failLingerOver(c) {
 function challengeEnded(c) {
   const startKey = challengeStartKey(c);
   if (!startKey) return false;
-  return startOfDay(Date.now()) >= dayEpoch(startKey, c.durationDays) + DAY;
+  return startOfDay(Date.now()) >= dayEpoch(startKey, c.durationDays + 1);
 }
 function myStreak(c) {
   const me = C.me(c);
@@ -802,7 +818,7 @@ function mockHistory(joined) {
   const today = startOfDay(Date.now());
   const out = [];
   for (let back = 29; back >= 1; back--) {
-    const date = today - back * DAY;
+    const date = shiftCalendarDay(today, -back);
     if (back % 9 === 0) { out.push({ id: uid(), date, entries: [] }); continue; }
     const entries = joined.map((ch, offset) => {
       const seed = back * 7 + offset * 3, norm = C.repsNorm(ch);
@@ -893,10 +909,25 @@ function applySync() {
     ch.myTotalReps = Math.max(+ch.myTotalReps || 0, me._total);
     ch.myTotalByExercise = totalsByExercise(me._days);
     app.totalReps = Math.max(+app.totalReps || 0, me._total);
-    app.history = Object.entries(me._days).sort(([a], [b]) => (a < b ? -1 : 1)).map(([date, per]) => ({
-      id: date, date: new Date(date + "T00:00:00").getTime(),
-      entries: [{ id: date + "e", title: ch.title, norm: C.repsNorm(ch), reps: Object.values(per).reduce((a, b) => a + b, 0), byEx: per }],
-    }));
+    const historyByDay = new Map(app.history.map((record) => [
+      dateKey(record.date),
+      Object.assign({}, record, {
+        entries: (record.entries || []).filter((entry) =>
+          entry.challengeId !== ch.id && !(entry.challengeId == null && entry.title === ch.title)
+        ),
+      }),
+    ]));
+    for (const [date, per] of Object.entries(me._days)) {
+      const record = historyByDay.get(date) || { id: date, date: new Date(date + "T00:00:00").getTime(), entries: [] };
+      record.entries.push({
+        id: date + "e", challengeId: ch.id, title: ch.title, norm: C.repsNorm(ch),
+        reps: Object.values(per).reduce((a, b) => a + b, 0), byEx: per,
+      });
+      historyByDay.set(date, record);
+    }
+    app.history = Array.from(historyByDay.values())
+      .filter((record) => record.entries.length)
+      .sort((a, b) => a.date - b.date);
     const ahead = ch.myTotalReps > me._total || Object.keys(mergedToday).some((ex) => (mergedToday[ex] || 0) > (+serverToday[ex] || 0));
     if (ahead && Sync.enabled) Sync.report(today, ch.myTodayReps, ch.myTotalReps);
     }
@@ -920,6 +951,7 @@ function applyPublicChallenges(today) {
   const remoteIds = new Set(Object.keys(remote));
   app.challenges = app.challenges.filter((c) => !String(c.id).startsWith("ch_") || remoteIds.has(c.id));
   for (const [id, rec] of Object.entries(remote)) {
+    if (!/^[A-Za-z0-9_-]{1,80}$/.test(id)) continue;
     if (!rec.meta) continue;
     let c = app.challenges.find((x) => x.id === id);
     const m = rec.meta;
@@ -941,6 +973,10 @@ function applyPublicChallenges(today) {
       c.startAt = null;
     }
     c.currentDay = computeCurrentDay(c);
+    const localMe = C.me(c);
+    const localDays = localMe && localMe._days
+      ? localMe._days
+      : (c.myTodayKey ? { [c.myTodayKey]: c.myTodayReps || {} } : {});
     c.participants = Object.entries(rec.participants || {}).map(([pid, p]) => {
       const days = p.days || {}, day = days[today] || {}, totals = totalsByExercise(days);
       // goal — «готово» по общей сумме к цели; streak — по сегодняшней норме.
@@ -950,7 +986,20 @@ function applyPublicChallenges(today) {
         _ready: typeof p.ready === "number" ? p.ready : null };
     });
     const me = C.me(c);
-    if (me) { c.myTodayReps = Object.assign({}, me._days[today] || {}); c.myTodayKey = today; c.myTotalReps = me._total; c.myTotalByExercise = totalsByExercise(me._days); }
+    if (me) {
+      const serverDays = me._days;
+      me._days = mergeChallengeDays(serverDays, localDays);
+      me._total = Object.values(me._days).reduce((sum, perExercise) =>
+        sum + Object.values(perExercise || {}).reduce((daySum, reps) => daySum + (+reps || 0), 0), 0);
+      c.myTodayReps = Object.assign({}, me._days[today] || {});
+      c.myTodayKey = today;
+      c.myTotalReps = me._total;
+      c.myTotalByExercise = totalsByExercise(me._days);
+      if (JSON.stringify(me._days) !== JSON.stringify(serverDays)) {
+        queueChallengeProgress(c.id, me._days);
+        flushChallengeProgress();
+      }
+    }
   }
   if (JOIN_ID && app.challenges.some((c) => c.id === JOIN_ID) && !ui.full && !ui.sheet) { ui.tab = "challenges"; ui.detailId = JOIN_ID; }
 }
@@ -958,6 +1007,80 @@ function totalsByExercise(days) {
   const totals = {};
   for (const per of Object.values(days || {})) for (const [exercise, reps] of Object.entries(per || {})) totals[exercise] = (totals[exercise] || 0) + (+reps || 0);
   return totals;
+}
+function mergeChallengeDays(a, b) {
+  const merged = JSON.parse(JSON.stringify(a || {}));
+  for (const [date, perExercise] of Object.entries(b || {})) {
+    merged[date] = merged[date] || {};
+    for (const [exercise, reps] of Object.entries(perExercise || {})) {
+      merged[date][exercise] = Math.max(+merged[date][exercise] || 0, +reps || 0);
+    }
+  }
+  return merged;
+}
+function challengeOutboxKey() { return `fs.challengeOutbox.${Sync.uid || "guest"}`; }
+function queueChallengeProgress(challengeId, days) {
+  try {
+    const key = challengeOutboxKey();
+    const queued = JSON.parse(localStorage.getItem(key) || "{}");
+    queued[challengeId] = mergeChallengeDays(queued[challengeId], days);
+    localStorage.setItem(key, JSON.stringify(queued));
+  } catch {}
+}
+let challengeProgressFlush = null;
+async function flushChallengeProgress() {
+  if (challengeProgressFlush || !Sync.enabled || !Sync.uid) return challengeProgressFlush;
+  challengeProgressFlush = (async () => {
+    const key = challengeOutboxKey();
+    let queued;
+    try { queued = JSON.parse(localStorage.getItem(key) || "{}"); } catch { queued = {}; }
+    if (Sync.uid) {
+      try {
+        const guestKey = "fs.challengeOutbox.guest";
+        const guest = JSON.parse(localStorage.getItem(guestKey) || "{}");
+        for (const [challengeId, days] of Object.entries(guest)) {
+          queued[challengeId] = mergeChallengeDays(queued[challengeId], days);
+        }
+        localStorage.removeItem(guestKey);
+        localStorage.setItem(key, JSON.stringify(queued));
+      } catch {}
+    }
+    for (const [challengeId, days] of Object.entries(queued)) {
+      const total = Object.values(days || {}).reduce((sum, perExercise) =>
+        sum + Object.values(perExercise || {}).reduce((daySum, reps) => daySum + (+reps || 0), 0), 0);
+      let saved = true;
+      for (const [date, perExercise] of Object.entries(days || {})) {
+        if (!(await Sync.reportChallenge(challengeId, date, perExercise, total))) { saved = false; break; }
+      }
+      if (!saved) return false;
+      try {
+        const latest = JSON.parse(localStorage.getItem(key) || "{}");
+        const current = latest[challengeId] || {};
+        const hasNewerProgress = Object.entries(current).some(([date, perExercise]) =>
+          Object.entries(perExercise || {}).some(([exercise, reps]) =>
+            (+reps || 0) > (+((days[date] || {})[exercise]) || 0)
+          )
+        );
+        if (!hasNewerProgress) delete latest[challengeId];
+        localStorage.setItem(key, JSON.stringify(latest));
+      } catch {}
+    }
+    return true;
+  })();
+  let shouldContinue = false;
+  try {
+    const result = await challengeProgressFlush;
+    shouldContinue = result === true;
+    return result;
+  }
+  finally {
+    challengeProgressFlush = null;
+    try {
+      if (shouldContinue && Object.keys(JSON.parse(localStorage.getItem(challengeOutboxKey()) || "{}")).length) {
+        queueMicrotask(flushChallengeProgress);
+      }
+    } catch {}
+  }
 }
 // ---- Персистентность: баланс, челленджи, история и замеры живут в localStorage ----
 const LEGACY_SAVE_KEY = "fs.state";
@@ -975,9 +1098,9 @@ try {
   if (!localStorage.getItem(saveKey) && localStorage.getItem(LEGACY_SAVE_KEY)) localStorage.setItem(saveKey, localStorage.getItem(LEGACY_SAVE_KEY));
   lastSavedState = localStorage.getItem(saveKey);
 } catch {}
-function saveApp() {
+function saveApp(immediate = false) {
   clearTimeout(saveTimer);
-  saveTimer = setTimeout(() => {
+  const persist = () => {
     const serialized = JSON.stringify(snapshotApp());
     if (serialized === lastSavedState) return;
     try { localStorage.setItem(saveKey, serialized); lastSavedState = serialized; }
@@ -989,7 +1112,9 @@ function saveApp() {
       if (slimSerialized === lastSavedState) return;
       try { localStorage.setItem(saveKey, slimSerialized); lastSavedState = slimSerialized; } catch {}
     }
-  }, 250);
+  };
+  if (immediate) persist();
+  else saveTimer = setTimeout(persist, 250);
 }
 function restoreAppState(saved) {
   app.dayKey = dateKey();
@@ -1092,15 +1217,15 @@ function restoreTestCoins() {
   toast(t("+%lld coins", amount));
 }
 
-function logEntry(title, norm, reps, byEx) {
+function logEntry(challengeId, title, norm, reps, byEx) {
   const today = startOfDay(Date.now());
   let last = app.history[app.history.length - 1];
   if (!last || startOfDay(last.date) !== today) { last = { id: uid(), date: today, entries: [] }; app.history.push(last); }
-  const e = last.entries.find((x) => x.title === title);
+  const e = last.entries.find((x) => x.challengeId === challengeId);
   if (e) {
     e.reps += reps; if (norm != null) e.norm = norm;
     if (byEx) { e.byEx = e.byEx || {}; for (const [ex, n] of Object.entries(byEx)) e.byEx[ex] = (e.byEx[ex] || 0) + n; }
-  } else last.entries.push({ id: uid(), title, norm, reps, byEx: byEx ? Object.assign({}, byEx) : undefined });
+  } else last.entries.push({ id: uid(), challengeId, title, norm, reps, byEx: byEx ? Object.assign({}, byEx) : undefined });
 }
 
 function paidStorageKey(challengeId) {
@@ -1125,7 +1250,7 @@ async function joinChallenge(ch, weight, maxReps, beforePhoto) {
 
 async function createChallenge(o) {
   if (app.balance < o.buyIn) return false;
-  const id = o.id || ("ch_" + (Sync.uid || "local") + "_" + Date.now().toString(36));
+  const id = o.id || ("ch_" + (crypto.randomUUID ? crypto.randomUUID().replace(/-/g, "") : uid().replace(/[^A-Za-z0-9_-]/g, "")));
   if (o.isPublic && Sync.enabled) {
     const published = await Sync.createChallenge(id, { title: o.title, goals: o.goals, durationDays: o.durationDays, buyIn: o.buyIn,
       type: o.type || "streak", access: o.access || "public", minPlayers: o.minPlayers || 0, maxPlayers: o.maxPlayers || 0,
@@ -1213,7 +1338,7 @@ function addReps(ch, counts, sessionStats, sessionDayKey = dateKey()) {
   const wasDone = C.isTodayDone(ch);
   const completedBefore = new Set(ch.goals.filter((g) => C.exProgress(ch, g) >= C.norm(ch, g)).map((g) => g.exercise));
   app.totalReps += total;
-  logEntry(ch.title, C.repsNorm(ch), total, counts);
+  logEntry(ch.id, ch.title, C.repsNorm(ch), total, counts);
   for (const [ex, reps] of Object.entries(counts)) if (reps > 0) {
     ch.myTodayReps[ex] = (ch.myTodayReps[ex] || 0) + reps;
     ch.myTotalByExercise = ch.myTotalByExercise || {};
@@ -1221,6 +1346,8 @@ function addReps(ch, counts, sessionStats, sessionDayKey = dateKey()) {
     app.repsByExercise[ex] = (app.repsByExercise[ex] || 0) + reps;
   }
   ch.myTotalReps += total;
+  me._days = Object.assign({}, me._days || {}, { [sessionDayKey]: Object.assign({}, ch.myTodayReps) });
+  me._total = ch.myTotalReps;
   me.todayReps = C.myTodayTotal(ch);
   if (C.isTodayDone(ch)) me.doneToday = true;
   if (C.isGoal(ch) && C.isFinished(ch)) ch.isCompleted = true; // цель достигнута → челлендж завершён
@@ -1237,7 +1364,10 @@ function addReps(ch, counts, sessionStats, sessionDayKey = dateKey()) {
     ch.workoutStatsByDay[key] = day;
   }
   if (ch.id === "main") Sync.report(sessionDayKey, ch.myTodayReps, ch.myTotalReps);
-  else if (ch.isPublic) Sync.reportChallenge(ch.id, sessionDayKey, ch.myTodayReps, ch.myTotalReps);
+  else if (ch.isPublic) {
+    queueChallengeProgress(ch.id, me._days);
+    flushChallengeProgress();
+  }
   if (Sync.enabled && ch.participants.length > 1) {
     const base = { actorName: store["profile.name"] || "Player", challengeId: ch.id, challengeTitle: ch.title, dateKey: sessionDayKey };
     if (closed) Sync.publishActivity(Object.assign({}, base, { type: "day" }));
@@ -1569,10 +1699,10 @@ function ChallengeCard(c, withPlay) {
 
   const canPlay = joined && !failed && !C.isTodayDone(c) && !challengeEnded(c);
   const playBtn = canPlay ? (withPlay
-    ? `<button class="card-play" data-act="play:${c.id}" style="width:44px;height:44px;border-radius:50%;background:var(--accent);color:#000;display:flex;align-items:center;justify-content:center">${iconF("play")}</button>`
+    ? `<button class="card-play" data-act="play:${esc(c.id)}" style="width:44px;height:44px;border-radius:50%;background:var(--accent);color:#000;display:flex;align-items:center;justify-content:center">${iconF("play")}</button>`
     : `<span style="width:44px;height:44px;border-radius:50%;background:var(--accent);color:#000;display:flex;align-items:center;justify-content:center">${iconF("play")}</span>`) : "";
 
-  return `<div class="card challenge-card ${doneBorder}${failed ? " failed" : ""}"><button class="challenge-card-main" data-act="open:${c.id}">
+  return `<div class="card challenge-card ${doneBorder}${failed ? " failed" : ""}"><button class="challenge-card-main" data-act="open:${esc(c.id)}">
     <div class="between" style="align-items:flex-start">
       <div style="font-size:20px;font-weight:700">${esc(c.title)}</div>
       <div class="row gap6">${failed ? "" : `${c.ownerId === Sync.uid ? badge(t("Creator"), "var(--accent)") : joined && c.isPublic ? badge(t("Joined"), "var(--money)") : ""}${joined ? streakPill(myStreak(c)) : ""}${challengeEnded(c) ? badge(t("Completed"), "var(--money)") : badge(c.isPublic ? t("Public") : t("Private"), c.isPublic ? "var(--text-secondary)" : "var(--purple)")}`}</div>
@@ -1593,20 +1723,20 @@ function PendingCard(c) {
   if (c.access === "public") {
     statusLine = t("Gathered %lld / %lld · %lld ready", players, c.minPlayers, readyCount);
     actions = me && !me._ready
-      ? `<button class="action-btn" data-act="setReady:${c.id}">${iconF("checkCircle")}${t("Ready!")}</button>`
+      ? `<button class="action-btn" data-act="setReady:${esc(c.id)}">${iconF("checkCircle")}${t("Ready!")}</button>`
       : `<div class="secondary center" style="font-size:13px">${t("Waiting for everyone to gather and get ready…")}</div>`;
   } else {
     statusLine = t("%lld players", players);
     if (isOwner && players > 1) {
-      actions = `<div class="row gap8"><button class="action-btn" data-act="startToday:${c.id}" style="flex:1">${t("Start today")}</button><button class="action-btn plain" data-act="startTomorrow:${c.id}" style="flex:1">${t("Start tomorrow")}</button></div>`;
+      actions = `<div class="row gap8"><button class="action-btn" data-act="startToday:${esc(c.id)}" style="flex:1">${t("Start today")}</button><button class="action-btn plain" data-act="startTomorrow:${esc(c.id)}" style="flex:1">${t("Start tomorrow")}</button></div>`;
     } else if (isOwner) {
-      actions = `<button class="action-btn" data-act="startSolo:${c.id}">${iconF("flame")}${t("Start solo!")}</button>`;
+      actions = `<button class="action-btn" data-act="startSolo:${esc(c.id)}">${iconF("flame")}${t("Start solo!")}</button>`;
     } else {
       actions = `<div class="secondary center" style="font-size:13px">${t("Waiting for the creator to start…")}</div>`;
     }
   }
   return `<div class="card challenge-card">
-    <button class="challenge-card-main" data-act="open:${c.id}">
+    <button class="challenge-card-main" data-act="open:${esc(c.id)}">
       <div class="between" style="align-items:flex-start">
         <div style="font-size:20px;font-weight:700">${esc(c.title)}</div>
         <div class="row gap6">${badge(c.access === "public" ? t("Public") : t("Private"), c.access === "public" ? "var(--text-secondary)" : "var(--purple)")}</div>
@@ -1615,7 +1745,7 @@ function PendingCard(c) {
       <div class="secondary" style="font-size:13px">${esc(statusLine)}</div>
     </button>
     <div class="challenge-pending-actions">
-      <button class="action-btn plain" data-act="invitePending:${c.id}">${icon("share")}${t("Invite friends")}</button>
+      <button class="action-btn plain" data-act="invitePending:${esc(c.id)}">${icon("share")}${t("Invite friends")}</button>
       ${actions}
     </div>
   </div>`;
@@ -1655,7 +1785,7 @@ function YoursTab() {
   const todayNorm = streakActive.reduce((s, c) => s + C.repsNorm(c), 0);
   const remaining = Math.max(0, todayNorm - todayReps);
   const streak = mine.length ? Math.max(0, ...mine.map((c) => myStreak(c))) : 0;
-  const msLeft = startOfDay(Date.now()) + DAY - Date.now();
+  const msLeft = shiftCalendarDay(Date.now(), 1) - Date.now();
   const hh = Math.floor(msLeft / 3600000), mm = Math.floor((msLeft % 3600000) / 60000);
   const allDone = active.length > 0 && !availableToday.length;
 
@@ -1680,7 +1810,7 @@ function YoursTab() {
   const popularTitle = browse.some((c) => c.participants.length > 1) ? t("Popular challenges") : t("Open challenges");
   const popular = browse.length ? `<section class="home-section">
     <div class="home-section-head"><span>${popularTitle}</span><button data-act="findChallenge">${t("See all")}</button></div>
-    <div class="home-challenge-strip">${browse.map((c) => `<button class="card home-challenge" data-act="open:${c.id}">
+    <div class="home-challenge-strip">${browse.map((c) => `<button class="card home-challenge" data-act="open:${esc(c.id)}">
       <span class="home-challenge-icon">${iconF("flame")}</span>
       <strong>${esc(c.title)}</strong>
       <span>${esc(C.goalsText(c))}</span>
@@ -1769,7 +1899,7 @@ function FriendsSheet() {
     if (!ts) return "";
     const diff = startOfDay(Date.now()) - startOfDay(ts);
     if (diff <= 0) return t("today");
-    if (diff === DAY) return t("yesterday");
+    if (calendarDayDiff(ts, Date.now()) === 1) return t("yesterday");
     return new Date(ts).toLocaleDateString(localeCode(), { day: "numeric", month: "short" });
   };
   const rows = list.map(([id, u]) => {
@@ -1882,9 +2012,9 @@ function DetailScreen(id) {
   if (joined) {
     const ended = challengeEnded(c);
     const inviteBtn = `<button class="action-btn plain" data-act="invite">${icon("share")}${t("Invite friends")}</button>`;
-    const shareDayBtn = C.isTodayDone(c) ? `<button class="action-btn share-result-btn" data-act="shareDay:${c.id}">${iconF("share")}${t("Share today's result")}</button>` : "";
-    const leaveBtn = `<button class="action-btn" data-act="askLeave:${c.id}" style="background:transparent;color:var(--red);box-shadow:none">${t("Leave challenge")}</button>`;
-    const restartBtn = `<button class="action-btn money" data-act="restartFailed:${c.id}">${iconF("flame")}${t("Keep going")}</button>`;
+    const shareDayBtn = C.isTodayDone(c) ? `<button class="action-btn share-result-btn" data-act="shareDay:${esc(c.id)}">${iconF("share")}${t("Share today's result")}</button>` : "";
+    const leaveBtn = `<button class="action-btn" data-act="askLeave:${esc(c.id)}" style="background:transparent;color:var(--red);box-shadow:none">${t("Leave challenge")}</button>`;
+    const restartBtn = `<button class="action-btn money" data-act="restartFailed:${esc(c.id)}">${iconF("flame")}${t("Keep going")}</button>`;
     body = !ended && myFailed(c) ? [
       failedCard(c), restartBtn, totalCard(c), potCard(c), rulesCard(c),
       c.beforePhoto ? beforeAfterCard(c) : "", participantsCard(c), leaveBtn,
@@ -1893,7 +2023,7 @@ function DetailScreen(id) {
       c.beforePhoto ? beforeAfterCard(c) : "", inviteBtn, leaveBtn,
     ].join("") : [
       totalCard(c), challengeSetProgressCard(c), todayCard(c),
-      C.isFinished(c) ? `<button class="action-btn money" data-act="showResult:${c.id}">${iconF("trophy")}${t("Show result")}</button>` : "",
+      C.isFinished(c) ? `<button class="action-btn money" data-act="showResult:${esc(c.id)}">${iconF("trophy")}${t("Show result")}</button>` : "",
       callToAction(c), shareDayBtn, inviteBtn,
       potCard(c), socialCard(c), rulesCard(c),
       c.beforePhoto ? beforeAfterCard(c) : "", participantsCard(c), callToAction(c), leaveBtn,
@@ -1996,10 +2126,10 @@ function callToAction(c) {
   if (C.isJoined(c)) {
     const done = C.isTodayDone(c);
     // Комбо — большая кнопка открывает выбор, с какого упражнения начать; одиночное — сразу старт.
-    const act = c.goals.length > 1 ? `startPick:${c.id}` : `play:${c.id}`;
+    const act = c.goals.length > 1 ? `startPick:${esc(c.id)}` : `play:${esc(c.id)}`;
     return `<button class="action-btn ${done ? "money" : ""}" data-act="${act}">${done ? icon("plusCircleLine") : iconF("flame")}${done ? t("Extra reps") : C.actionText(c)}</button>`;
   }
-  return `<button class="action-btn" data-act="join:${c.id}">${t("Join for")} ${coin(c.buyIn)}</button>`;
+  return `<button class="action-btn" data-act="join:${esc(c.id)}">${t("Join for")} ${coin(c.buyIn)}</button>`;
 }
 // Лист выбора «с чего начать» для комбо: строки-упражнения, тап → запуск именно его.
 function StartPicker() {
@@ -2007,7 +2137,7 @@ function StartPicker() {
   if (!c) return "";
   const rows = c.goals.map((g) => {
     const reps = C.exProgress(c, g), norm = C.norm(c, g), done = reps >= norm;
-    return `<button class="picker-row" data-act="play:${c.id}:${g.exercise}">
+    return `<button class="picker-row" data-act="play:${esc(c.id)}:${esc(g.exercise)}">
       <span class="row gap12"><span style="display:flex;color:var(--accent)">${exIcon(g.exercise)}</span><span style="font-weight:600;font-size:16px">${esc(Exercise.displayName(g.exercise))}</span></span>
       <span class="row gap12"><span class="money ${done ? "c-money" : "secondary"}" style="font-size:15px">${reps} / ${norm}</span><span style="color:var(--accent);display:flex">${iconF("play")}</span></span>
     </button>`;
@@ -2024,7 +2154,7 @@ function WorkoutPickerSheet() {
     const remaining = C.isGoal(c)
       ? Math.max(0, c.goals.reduce((sum, g) => sum + C.norm(c, g), 0) - (c.myTotalReps || 0))
       : Math.max(0, C.repsNorm(c) - C.myTodayTotal(c));
-    return `<button class="workout-choice" data-act="play:${c.id}">
+    return `<button class="workout-choice" data-act="play:${esc(c.id)}">
       <span class="workout-choice-icon">${iconF("flame")}</span>
       <span class="workout-choice-copy"><strong>${esc(c.title)}</strong><small>${esc(C.goalsText(c))}</small></span>
       <span class="workout-choice-left">${t("%lld left", remaining)}</span>
@@ -2051,7 +2181,7 @@ function LeaveSheet() {
       <div style="font-weight:700;font-size:17px">${esc(c.title)}</div>
       <div class="secondary" style="font-size:14px;line-height:1.45">${t("Your buy-in won't be refunded and you won't be able to see the results.")}</div>
     </div>
-    <button class="action-btn danger" data-act="confirmLeave:${c.id}">${t("Leave")}</button>
+    <button class="action-btn danger" data-act="confirmLeave:${esc(c.id)}">${t("Leave")}</button>
     <button class="action-btn plain" data-act="closeSheet">${t("Cancel")}</button>`;
   return sheetShell(t("Leave challenge?"), body, true);
 }
@@ -2236,11 +2366,11 @@ function StatsTab() {
     byDayEx.set(key, acc);
   }
   const today0 = startOfDay(Date.now());
-  const series = (n) => { const out = []; for (let back = n - 1; back >= 0; back--) out.push(byDay.get(today0 - back * DAY) || 0); return out; };
+  const series = (n) => { const out = []; for (let back = n - 1; back >= 0; back--) out.push(byDay.get(shiftCalendarDay(today0, -back)) || 0); return out; };
 
   // Упражнения за 30 дней — опции фильтра (показываем, только если их больше одного).
   const exSet = new Set();
-  for (let back = 29; back >= 0; back--) { const acc = byDayEx.get(today0 - back * DAY); if (acc) for (const ex of Object.keys(acc)) if (acc[ex] > 0) exSet.add(ex); }
+  for (let back = 29; back >= 0; back--) { const acc = byDayEx.get(shiftCalendarDay(today0, -back)); if (acc) for (const ex of Object.keys(acc)) if (acc[ex] > 0) exSet.add(ex); }
   const exList = [...exSet].sort((a, b) => EX_ORDER.indexOf(a) - EX_ORDER.indexOf(b));
   const filterEx = exList.includes(statExFilter) ? statExFilter : "all";
 
@@ -2248,13 +2378,13 @@ function StatsTab() {
   const paddedAll = series(28);
   const weeksAll = [0, 1, 2, 3].map((w) => paddedAll.slice(w * 7, w * 7 + 7).reduce((a, b) => a + b, 0));
   const repsForDay = (date) => filterEx === "all" ? (byDay.get(date) || 0) : ((byDayEx.get(date) || {})[filterEx] || 0);
-  const weekWindow = []; for (let back = 27; back >= 0; back--) weekWindow.push(repsForDay(today0 - back * DAY));
+  const weekWindow = []; for (let back = 27; back >= 0; back--) weekWindow.push(repsForDay(shiftCalendarDay(today0, -back)));
   const weeks = [0, 1, 2, 3].map((w) => weekWindow.slice(w * 7, w * 7 + 7).reduce((a, b) => a + b, 0));
 
   // Активность по дням: reps, дневная норма и флаг «день закрыт» (норма выполнена).
   const days = [];
   for (let back = 29; back >= 0; back--) {
-    const date = today0 - back * DAY;
+    const date = shiftCalendarDay(today0, -back);
     const reps = byDay.get(date) || 0, norm = byDayNorm.get(date) || 0;
     days.push({ date, reps, norm, done: norm > 0 && reps >= norm });
   }
@@ -3198,7 +3328,7 @@ function DayCompleteFull() {
   const c = app.challenges.find((x) => x.id === ui.fullId);
   const today = C.myTodayTotal(c), extra = Math.max(0, today - C.repsNorm(c));
   const workout = workoutSummary(c);
-  const days = app.history.flatMap((d) => d.entries.filter((e) => e.title === c.title).map((e) => e.reps));
+  const days = app.history.flatMap((d) => d.entries.filter((e) => e.challengeId === c.id).map((e) => e.reps));
   const best = Math.max(today, ...days, 0);
   const ranked = C.active(c).slice().sort((a, b) => b.todayReps - a.todayReps);
   const rank = Math.max(1, ranked.findIndex((p) => p.isMe) + 1);
@@ -3217,7 +3347,7 @@ function DayCompleteFull() {
       <div><span>${t("Today's place")}</span><strong>${t("%lld of %lld", rank, ranked.length)}</strong></div>
       <div><span>${t("Streak")}</span><strong>${myStreak(c)}</strong></div>
     </div>
-    <button class="action-btn" data-act="shareDay:${c.id}" style="max-width:320px">${iconF("share")}${t("Share")}</button>
+    <button class="action-btn" data-act="shareDay:${esc(c.id)}" style="max-width:320px">${iconF("share")}${t("Share")}</button>
     <button class="text-btn" data-act="closeFull">${t("Close")}</button>
   </div></div>`;
 }
@@ -3250,7 +3380,7 @@ function WorkoutResultFull() {
       <div><span>${t("Best set")}</span><strong>${best}</strong></div>
     </div>
     <div class="workout-result-actions">
-      <button class="action-btn" data-act="shareDay:${c.id}">${iconF("share")}${t("Share")}</button>
+      <button class="action-btn" data-act="shareDay:${esc(c.id)}">${iconF("share")}${t("Share")}</button>
       <button class="text-btn" data-act="closeFull">${t("Done")}</button>
     </div>
   </div></div>`;
@@ -3279,7 +3409,7 @@ function ShareDayEditorFull() {
         <button class="share-bg-option" data-act="pickSharePhoto:camera"><span class="share-bg-swatch">${iconF("camera")}</span><span>${t("Open camera")}</span></button>
       </div>
       ${photo ? sharePhotoControls(f) : ""}
-      <button class="action-btn" data-act="publishDay:${c.id}">${iconF("share")}${t("Share story")}</button>
+      <button class="action-btn" data-act="publishDay:${esc(c.id)}">${iconF("share")}${t("Share story")}</button>
     </div>
   </div></div>`;
 }
@@ -3423,8 +3553,8 @@ function ChallengeCompleteFull() {
       ${fieldStepper(t("Weight"), "weight", 35, 180, 1)}${fieldStepper(t("Max reps in one set"), "maxReps", 1, 120, 1)}
     </div>
 
-    <button class="action-btn" data-act="shareResult:${c.id}" style="width:100%">${iconF("share")}${t("Share result")}</button>
-    <button class="action-btn money" data-act="saveResult:${c.id}" style="width:100%">${t("Save to profile")}</button>
+    <button class="action-btn" data-act="shareResult:${esc(c.id)}" style="width:100%">${iconF("share")}${t("Share result")}</button>
+    <button class="action-btn money" data-act="saveResult:${esc(c.id)}" style="width:100%">${t("Save to profile")}</button>
     <button class="text-btn" data-act="closeFull">${t("Close")}</button>
   </div></div>`;
 }
@@ -4399,7 +4529,7 @@ root.addEventListener("click", async (e) => {
     }
     case "showResult": openChallengeComplete(app.challenges.find((c) => c.id === arg)); return;
     case "startToday": case "startSolo": startChallengeNow(arg, startOfDay(Date.now())); return;
-    case "startTomorrow": startChallengeNow(arg, startOfDay(Date.now()) + DAY); return;
+    case "startTomorrow": startChallengeNow(arg, shiftCalendarDay(Date.now(), 1)); return;
     case "setReady": await markReady(arg); return;
     case "invitePending": shareInvite(arg); return;
     case "askLeave": openLeave(arg); return;
@@ -5064,6 +5194,10 @@ async function shareInvite(id) {
 const JOIN_ID = new URLSearchParams(location.search).get("join") || null;
 const JOIN_INTENT = !!JOIN_ID;
 if (JOIN_ID) store.pendingInvite = { challengeId: JOIN_ID, receivedAt: Date.now() };
+if (Sync.watchChallenge) {
+  if (JOIN_ID) Sync.watchChallenge(JOIN_ID);
+  app.challenges.filter((challenge) => challenge.access === "private").forEach((challenge) => Sync.watchChallenge(challenge.id));
+}
 if (JOIN_INTENT && history.replaceState) history.replaceState(null, "", location.pathname);
 ui.screen = store.onboarded ? "tabs" : "onboarding";
 if (store.onboarded && store.testerGuide && store.testerGuide.status === "in_progress") ui.screen = "guide";
@@ -5115,6 +5249,7 @@ let syncRenderFrame = 0;
 Sync.init(() => {
   switchAppStorageOwner();
   applySync();
+  flushChallengeProgress();
   phIdentify(); // uid из auth готов — связываем аналитику с игроком
   // Без инкогнито: онбордился, но остался анонимом (или вышел) — на обязательный вход.
   if (Sync.enabled && Sync.isAnonymous && store.onboarded && !store.skippedAuth && ui.screen === "tabs") { ui.screen = "onboarding"; ui.onbStep = STEP.auth; }
@@ -5132,3 +5267,4 @@ if (store.onboarded && store["profile.name"]) Sync.registerUser(store["profile.n
 setInterval(() => { if (!liveSession && rolloverIfNeeded() && !ui.sheet && !ui.full) render(); }, 30000);
 document.addEventListener("visibilitychange", () => { if (!document.hidden && !liveSession && rolloverIfNeeded() && !ui.sheet && !ui.full) render(); });
 window.addEventListener("repact:resume", () => { if (!liveSession && rolloverIfNeeded()) render(); });
+window.addEventListener("online", () => flushChallengeProgress());

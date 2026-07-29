@@ -872,7 +872,7 @@ class PoseSession {
     this._recChunks = [];
     this._recorder = new MediaRecorder(this._recCanvas.captureStream(30), mime ? { mimeType: mime } : undefined);
     this._recorder.ondataavailable = (e) => { if (e.data.size) this._recChunks.push(e.data); };
-    this._recorder.start();
+    this._recorder.start(1000);
     this._recording = true;
     return true;
   }

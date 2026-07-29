@@ -1,7 +1,8 @@
 # Repact — AI fitness challenges
 
 Активная веб-версия Repact. Собрана
-напрямую со Swift-исходников, а не из старой папки `MyChallengeWeb`. Чистый
+напрямую со Swift-исходников, а не из старой версии в
+`../Archive/MyChallengeWeb`. Чистый
 HTML/CSS/JS — ничего собирать не надо.
 
 ## Что портировано (весь функционал iOS-аппа)
@@ -32,7 +33,7 @@ grace-кадры и анти-чит по ходу корпуса и неподв
 ## Запуск локально
 
 ```bash
-cd FitStakeWeb
+cd /Users/vitaliimac/Desktop/work/Vitalii2.0/Repact/Web
 python3 -m http.server 8000
 ```
 

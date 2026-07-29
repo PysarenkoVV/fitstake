@@ -146,3 +146,65 @@ test("fullscreen traps focus and browser Back closes it first", async ({ page })
   await expect(full).toHaveCount(0);
   await expect(page.getByRole("heading", { name: "Challenges", exact: true })).toBeVisible();
 });
+
+test("remote challenge ids cannot inject markup into Browse", async ({ page }) => {
+  await page.addInitScript(() => {
+    localStorage.setItem("fs.onboarded", "true");
+    localStorage.setItem("fs.skippedAuth", "true");
+    window.__challengeXss = false;
+  });
+  await page.goto("/");
+  const result = await page.evaluate(() => {
+    const maliciousId = `x"><img src=x onerror="window.__challengeXss=true">`;
+    Sync.state.challenges = {
+      [maliciousId]: {
+        meta: {
+          title: "Injected", goals: [{ exercise: "pushups", repsPerDay: 10 }],
+          durationDays: 7, buyIn: 0, type: "streak", access: "public",
+          missPolicy: "never", createdAt: Date.now(),
+        },
+        participants: {},
+      },
+    };
+    applyPublicChallenges(dateKey());
+    render();
+    return {
+      executed: window.__challengeXss,
+      imageCount: document.querySelectorAll('img[src="x"]').length,
+      challengePresent: app.challenges.some((challenge) => challenge.id === maliciousId),
+    };
+  });
+  expect(result).toEqual({ executed: false, imageCount: 0, challengePresent: false });
+});
+
+test("calendar days remain unique across the autumn DST transition", async ({ browser }) => {
+  const context = await browser.newContext({ timezoneId: "Europe/Berlin" });
+  const page = await context.newPage();
+  await page.goto("/");
+  const keys = await page.evaluate(() => [1, 2, 3].map((day) => dateKey(dayEpoch("2025-10-25", day))));
+  expect(keys).toEqual(["2025-10-25", "2025-10-26", "2025-10-27"]);
+  await context.close();
+});
+
+test("history keeps challenges with the same title separate", async ({ page }) => {
+  await page.goto("/");
+  const entries = await page.evaluate(() => {
+    app.history = [];
+    logEntry("challenge-a", "Daily", 10, 10, { pushups: 10 });
+    logEntry("challenge-b", "Daily", 20, 20, { squats: 20 });
+    return app.history[0].entries.map(({ challengeId, reps }) => ({ challengeId, reps }));
+  });
+  expect(entries).toEqual([
+    { challengeId: "challenge-a", reps: 10 },
+    { challengeId: "challenge-b", reps: 20 },
+  ]);
+});
+
+test("Firebase rules separate public discovery from private invite records", () => {
+  const rules = JSON.parse(fs.readFileSync(new URL("../database.rules.json", import.meta.url), "utf8")).rules.fitstake;
+  expect(rules.publicChallenges[".read"]).toBe(true);
+  expect(rules.privateChallenges[".read"]).toBeUndefined();
+  expect(rules.privateChallenges.$challengeId[".read"]).toBe("auth != null");
+  expect(rules.publicChallenges.$challengeId[".validate"]).toContain("numChildren()");
+  expect(rules.publicChallenges.$challengeId[".validate"]).toContain("matches(/^[A-Za-z0-9_-]");
+});

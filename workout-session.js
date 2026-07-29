@@ -534,6 +534,14 @@ async function openSession(challengeId, startExercise) {
     if (resting) { restTotalMs += Math.max(0, now - restStartedAt); resting = false; }
     closeCurrentSet();
     const sessionStats = { elapsedMs: sessionElapsedMs(now), restMs: restTotalMs, setReps: setReps.slice() };
+    let closed;
+    if (save && !isDemo) {
+      try {
+        closed = addReps(c, counts, sessionStats, sessionDayKey);
+        saveApp(true);
+      }
+      catch (e) { finishing = false; toast(t("Couldn't save. Try again.")); return; }
+    }
     if (sess.isRecording()) { try { await sess.toggleRecording(); } catch (e) { wsfx("recError"); } }
     if (save) {
       if (isDemo) {
@@ -541,9 +549,6 @@ async function openSession(challengeId, startExercise) {
         openDemoComplete(Object.values(counts).reduce((sum, n) => sum + n, 0));
         return;
       }
-      let closed;
-      try { closed = addReps(c, counts, sessionStats, sessionDayKey); }
-      catch (e) { finishing = false; toast(t("Couldn't save. Try again.")); return; } // разблокируем — можно повторить
       destroySession();
       rolloverIfNeeded();
       render();

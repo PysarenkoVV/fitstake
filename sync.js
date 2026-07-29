@@ -23,14 +23,45 @@ window.Sync = (() => {
   let accountEmail = null;     // email, если вошёл в аккаунт; null у анонима
   let isAnon = true;
 
-  const state = { users: null, participants: null, challenges: null, follows: null, activity: null, reactions: null, ready: false, error: null };
+  const state = { users: null, participants: null, challenges: null, challengePaths: {}, follows: null, activity: null, reactions: null, ready: false, error: null };
   let db = null, F = null, A = null, authInstance = null, onChange = null;
+  let initFailed = false;
+  const challengeBuckets = { public: {}, private: {} };
+  const watchedPrivate = new Set();
   let resolveAuthReady;
   const authReady = new Promise((resolve) => { resolveAuthReady = resolve; });
   // Операции, вызванные до готовности auth+db, — выполняем после подключения.
   const queued = [];
-  function ready(fn) { (db && uid) ? fn() : queued.push(fn); }
-  function write(path, upd) { F.update(F.ref(db, path), upd).catch(() => {}); }
+  function ready(fn, fail) {
+    if (db && uid) fn();
+    else if (initFailed) { if (fail) fail(); }
+    else queued.push({ fn, fail });
+  }
+  function write(path, upd) { return F.update(F.ref(db, path), upd).then(() => true).catch(() => false); }
+  function publishChallenges() {
+    state.challenges = Object.assign({}, challengeBuckets.public, challengeBuckets.private);
+    if (onChange) onChange();
+  }
+  function challengePath(id) {
+    return state.challengePaths[id] || (challengeBuckets.private[id] ? "fitstake/privateChallenges/" + id : "fitstake/publicChallenges/" + id);
+  }
+  function watchChallenge(id) {
+    if (!/^[A-Za-z0-9_-]{1,80}$/.test(String(id || "")) || watchedPrivate.has(id)) return;
+    watchedPrivate.add(id);
+    ready(() => {
+      F.onValue(F.ref(db, "fitstake/privateChallenges/" + id), (snap) => {
+        const value = snap.val();
+        if (value) {
+          challengeBuckets.private[id] = value;
+          state.challengePaths[id] = "fitstake/privateChallenges/" + id;
+        } else {
+          delete challengeBuckets.private[id];
+          delete state.challengePaths[id];
+        }
+        publishChallenges();
+      }, () => {});
+    });
+  }
 
   async function init(cb) {
     onChange = cb;
@@ -61,11 +92,12 @@ window.Sync = (() => {
         state.participants = snap.val() || {};
         if (onChange) onChange();
       });
-      F.onValue(F.ref(db, "fitstake/challenges"), (snap) => {
-        state.challenges = snap.val() || {};
+      F.onValue(F.ref(db, "fitstake/publicChallenges"), (snap) => {
+        challengeBuckets.public = snap.val() || {};
+        for (const id of Object.keys(challengeBuckets.public)) state.challengePaths[id] = "fitstake/publicChallenges/" + id;
+        publishChallenges();
         state.ready = true;
         state.error = null;
-        if (onChange) onChange();
       }, () => { state.ready = true; state.error = "sync"; if (onChange) onChange(); });
       F.onValue(F.ref(db, "fitstake/follows"), (snap) => {
         state.follows = snap.val() || {};
@@ -85,7 +117,7 @@ window.Sync = (() => {
           uid = user.uid;
           isAnon = !!user.isAnonymous;
           accountEmail = user.isAnonymous ? null : (user.email || null);
-          queued.splice(0).forEach((fn) => fn());
+          queued.splice(0).forEach((item) => item.fn());
           if (onChange) onChange();
         } else {
           uid = null;
@@ -96,6 +128,8 @@ window.Sync = (() => {
       });
       return true;
     } catch (e) {
+      initFailed = true;
+      queued.splice(0).forEach((item) => { if (item.fail) item.fail(); });
       resolveAuthReady(false);
       console.warn("Sync off:", e);
       return false;
@@ -263,12 +297,16 @@ window.Sync = (() => {
 
   function createChallenge(id, meta, name) {
     return new Promise((resolve) => ready(() => {
-      const base = "fitstake/challenges/" + id;
+      const base = meta.access === "private"
+        ? "fitstake/privateChallenges/" + id
+        : "fitstake/publicChallenges/" + id;
+      state.challengePaths[id] = base;
+      if (meta.access === "private") watchChallenge(id);
       const updates = {};
       updates[base + "/meta"] = Object.assign({}, meta, { ownerId: uid, createdAt: Date.now() });
       updates[base + "/participants/" + uid] = { name: name || "Player", joinedAt: Date.now(), total: 0 };
       F.update(F.ref(db), updates).then(() => resolve(true)).catch(() => resolve(false));
-    }));
+    }, () => resolve(false)));
   }
 
   function joinChallenge(id, name) {
@@ -279,51 +317,51 @@ window.Sync = (() => {
       const isMember = rec && rec.participants && rec.participants[uid];
       const upd = { name: name || "Player" };
       if (state.challenges && !isMember) { upd.joinedAt = Date.now(); upd.total = 0; }
-      F.update(F.ref(db, "fitstake/challenges/" + id + "/participants/" + uid), upd)
+      F.update(F.ref(db, challengePath(id) + "/participants/" + uid), upd)
         .then(() => resolve(true)).catch(() => resolve(false));
-    }));
+    }, () => resolve(false)));
   }
 
   function leaveChallenge(id) {
     return new Promise((resolve) => ready(() => {
-      F.remove(F.ref(db, "fitstake/challenges/" + id + "/participants/" + uid)).then(() => resolve(true)).catch(() => resolve(false));
-    }));
+      F.remove(F.ref(db, challengePath(id) + "/participants/" + uid)).then(() => resolve(true)).catch(() => resolve(false));
+    }, () => resolve(false)));
   }
 
   // Участник public-челленджа нажал «Готов!» — метка времени готовности.
   function setReady(id) {
     return new Promise((resolve) => ready(() => {
-      F.set(F.ref(db, "fitstake/challenges/" + id + "/participants/" + uid + "/ready"), Date.now())
+      F.set(F.ref(db, challengePath(id) + "/participants/" + uid + "/ready"), Date.now())
         .then(() => resolve(true)).catch(() => resolve(false));
-    }));
+    }, () => resolve(false)));
   }
 
   // Создатель private-челленджа задал дату старта (сегодня/завтра). Пишет только владелец.
   function setStartAt(id, ts) {
     return new Promise((resolve) => ready(() => {
-      F.set(F.ref(db, "fitstake/challenges/" + id + "/startAt"), ts)
+      F.set(F.ref(db, challengePath(id) + "/startAt"), ts)
         .then(() => resolve(true)).catch(() => resolve(false));
-    }));
+    }, () => resolve(false)));
   }
 
   function reportChallenge(id, dateKey, perExercise, total) {
-    ready(() => {
+    return new Promise((resolve) => ready(() => {
       const upd = { total };
       for (const [ex, reps] of Object.entries(perExercise)) upd["days/" + dateKey + "/" + ex] = reps;
-      write("fitstake/challenges/" + id + "/participants/" + uid, upd);
-    });
+      write(challengePath(id) + "/participants/" + uid, upd).then(resolve);
+    }, () => resolve(false)));
   }
 
   // «Провалил, но хочу продолжать»: прощаем пропуски до этой даты — misses считаются заново.
   function restart(dateKey) { if (enabled) ready(() => write("fitstake/challenge_main/participants/" + uid, { restartFrom: dateKey })); }
-  function restartChallenge(id, dateKey) { if (enabled) ready(() => write("fitstake/challenges/" + id + "/participants/" + uid, { restartFrom: dateKey })); }
+  function restartChallenge(id, dateKey) { if (enabled) ready(() => write(challengePath(id) + "/participants/" + uid, { restartFrom: dateKey })); }
 
   function setFollowing(targetUid, on) {
     return new Promise((resolve) => ready(() => {
       const ref = F.ref(db, "fitstake/follows/" + uid + "/" + targetUid);
       const op = on ? F.set(ref, true) : F.remove(ref);
       op.then(() => resolve(true)).catch(() => resolve(false));
-    }));
+    }, () => resolve(false)));
   }
 
   function publishActivity(payload) {
@@ -339,7 +377,7 @@ window.Sync = (() => {
       const ref = F.ref(db, "fitstake/reactions/" + eventId + "/" + uid);
       const op = on ? F.set(ref, emoji) : F.remove(ref);
       op.then(() => resolve(true)).catch(() => resolve(false));
-    }));
+    }, () => resolve(false)));
   }
 
   // Отчёт о проблеме от тестера → общий узел bugReports (create-only по правилам БД).
@@ -355,12 +393,12 @@ window.Sync = (() => {
           .then(() => (shot ? F.set(F.ref(db, "fitstake/bugShots/" + ref.key), shot).catch(() => {}) : null))
           .then(() => resolve(true))
           .catch(() => resolve(false));
-      });
+      }, () => resolve(false));
     });
   }
 
   return {
-    enabled, state, init, registerUser, join, report, createChallenge, joinChallenge, leaveChallenge, reportChallenge, restart, restartChallenge, setReady, setStartAt, setFollowing, publishActivity, setReaction, reportBug, signIn, signUp, signInGoogle, signInFacebook, signOutUser,
+    enabled, state, init, watchChallenge, registerUser, join, report, createChallenge, joinChallenge, leaveChallenge, reportChallenge, restart, restartChallenge, setReady, setStartAt, setFollowing, publishActivity, setReaction, reportBug, signIn, signUp, signInGoogle, signInFacebook, signOutUser,
     get uid() { return uid; },
     get email() { return accountEmail; },
     get isAnonymous() { return isAnon; },
