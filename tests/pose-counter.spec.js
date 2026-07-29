@@ -30,14 +30,13 @@ test("dips require full extension and ignore angle jitter without vertical trave
     const point = (x, y) => ({ x, y, confidence: 1 });
     const pose = (kind, moveBody = true) => {
       const top = kind === "top", partial = kind === "partial";
-      const shoulderY = moveBody ? (top ? .30 : partial ? .35 : .40) : .30;
-      const elbowY = top ? .40 : .50;
-      const wristY = top ? .50 : (partial ? .577 : .50);
-      const wristOffset = top ? 0 : (partial ? .064 : .10);
+      const shoulderY = moveBody ? (top ? .30 : partial ? .35 : .42) : .30;
+      const elbowY = top ? .40 : partial ? .44 : .48;
+      const elbowOffset = top ? 0 : partial ? .03 : .08;
       return {
         leftShoulder: point(.40, shoulderY), rightShoulder: point(.60, shoulderY),
-        leftElbow: point(.40, elbowY), rightElbow: point(.60, elbowY),
-        leftWrist: point(.40 + wristOffset, wristY), rightWrist: point(.60 - wristOffset, wristY),
+        leftElbow: point(.40 + elbowOffset, elbowY), rightElbow: point(.60 - elbowOffset, elbowY),
+        leftWrist: point(.40, .50), rightWrist: point(.60, .50),
       };
     };
     const counter = new window.RepCounter("dips");
@@ -63,16 +62,16 @@ test("dips keep counting through a brief hidden wrist but do not count a head no
     const pose = (down, hideRightWrist = false, nodOnly = false) => {
       const travel = down && !nodOnly ? .10 : 0;
       const shoulderY = .30 + travel;
-      const elbowY = down ? .50 : .40;
-      const wristY = .50;
+      const elbowY = down ? .48 : .40;
       return {
         nose: point(.50, .16 + (down ? .10 : 0)),
         leftEar: point(.47, .17 + (down ? .10 : 0)),
         rightEar: point(.53, .17 + (down ? .10 : 0)),
         leftShoulder: point(.40, shoulderY), rightShoulder: point(.60, shoulderY),
-        leftElbow: point(.40, elbowY), rightElbow: point(.60, elbowY),
-        leftWrist: point(down ? .50 : .40, wristY),
-        rightWrist: point(down ? .50 : .60, wristY, hideRightWrist ? .1 : 1),
+        leftElbow: point(down ? .48 : .40, elbowY),
+        rightElbow: point(down ? .52 : .60, elbowY),
+        leftWrist: point(.40, .50),
+        rightWrist: point(.60, .50, hideRightWrist ? .1 : 1),
         leftHip: point(.44, .55 + travel), rightHip: point(.56, .55 + travel),
       };
     };
@@ -90,6 +89,32 @@ test("dips keep counting through a brief hidden wrist but do not count a head no
     return { hiddenWrist: run(false), headOnly: run(true) };
   });
   expect(result).toEqual({ hiddenWrist: 1, headOnly: 0 });
+});
+
+test("dips keep counting when both wrists disappear after the grip is established", async ({ page }) => {
+  const count = await page.evaluate(() => {
+    const point = (x, y, confidence = 1) => ({ x, y, confidence });
+    const pose = (down, hideWrists = false) => ({
+      leftShoulder: point(.40, down ? .42 : .30), rightShoulder: point(.60, down ? .42 : .30),
+      leftElbow: point(down ? .48 : .40, down ? .48 : .40),
+      rightElbow: point(down ? .52 : .60, down ? .48 : .40),
+      leftWrist: point(.40, .50, hideWrists ? .1 : 1),
+      rightWrist: point(.60, .50, hideWrists ? .1 : 1),
+      leftHip: point(.45, down ? .67 : .55), rightHip: point(.55, down ? .67 : .55),
+    });
+    const counter = new window.RepCounter("dips");
+    let now = 0;
+    const feed = (points, frames) => {
+      for (let i = 0; i < frames; i++) {
+        counter.process(points, { width: 1000, height: 1000 }, true, now += 50);
+      }
+    };
+    feed(pose(false), 5);
+    feed(pose(true, true), 6);
+    feed(pose(false, true), 6);
+    return counter.count;
+  });
+  expect(count).toBe(1);
 });
 
 test("dips use body travel when a low camera compresses the elbow angle", async ({ page }) => {

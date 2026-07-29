@@ -161,6 +161,7 @@ class RepCounter {
     this.rangeBodyProgress = null;
     this.rangeScale = null;
     this.smoothedRangePosition = null;
+    this.dipGripAnchors = { left: null, right: null };
 
     const cfg = EX[exercise] || {};
     this.downThreshold = cfg.downThreshold != null ? cfg.downThreshold : 110;
@@ -179,6 +180,7 @@ class RepCounter {
   }
 
   process(points, size, countingEnabled = true, now = performance.now()) {
+    if (this.exercise === "dips") this._updateDipGripAnchors(points, size);
     const sides = ["left", "right"].filter((s) => this._limbVisible(s, points));
     const enoughSides = sides.length === 2 || (!this.requireBothSides && this.tracking && sides.length > 0);
     if (!enoughSides) {
@@ -282,6 +284,33 @@ class RepCounter {
     const j = EX[this.exercise].angleJoints(side);
     return [points[j.a], points[j.vertex], points[j.b]]
       .reduce((lowest, point) => Math.min(lowest, point ? point.confidence : 0), 1);
+  }
+
+  // На брусьях кисти физически остаются на одном месте, но PoseLandmarker при
+  // нижнем ракурсе иногда переносит landmark кисти вниз по стойке. Запоминаем
+  // первый надёжный хват и принимаем только небольшие последующие поправки.
+  _updateDipGripAnchors(points, size) {
+    for (const side of ["left", "right"]) {
+      const wrist = points[side + "Wrist"];
+      if (!this._inFrame(wrist)) continue;
+      const saved = this.dipGripAnchors[side];
+      if (!saved) {
+        this.dipGripAnchors[side] = clonePosePoint(wrist);
+        continue;
+      }
+      const shoulder = points[side + "Shoulder"], elbow = points[side + "Elbow"];
+      if (!this._inFrame(shoulder) || !this._inFrame(elbow)) continue;
+      const armScale = dist(px(shoulder, size), px(elbow, size));
+      if (armScale <= 0 || dist(px(wrist, size), px(saved, size)) > armScale * 0.30) continue;
+      blendPosePoint(saved, wrist, 0.10);
+    }
+  }
+
+  _jointPoint(side, name, points) {
+    if (this.exercise === "dips" && name === side + "Wrist" && this.dipGripAnchors[side]) {
+      return this.dipGripAnchors[side];
+    }
+    return points[name];
   }
 
   // Положение корпуса относительно опорных кистей, нормализованное длиной руки.
@@ -403,7 +432,7 @@ class RepCounter {
 
   _anchor(s, points, size) {
     const j = EX[this.exercise].angleJoints(s).b;
-    const p = points[j];
+    const p = this._jointPoint(s, j, points);
     return p && p.confidence > this.minConfidence ? px(p, size) : null;
   }
 
@@ -414,7 +443,7 @@ class RepCounter {
     const j = EX[this.exercise].angleJoints(s);
     const v = points[j.vertex];
     if (!v || v.confidence <= this.minConfidence) return null;
-    const b = points[j.b], a = points[j.a];
+    const b = this._jointPoint(s, j.b, points), a = points[j.a];
     if (b && b.confidence > this.minConfidence) return dist(px(v, size), px(b, size));
     if (a && a.confidence > this.minConfidence) return dist(px(v, size), px(a, size));
     return null;
@@ -429,18 +458,40 @@ class RepCounter {
 
   _limbVisible(s, points) {
     const j = EX[this.exercise].angleJoints(s);
-    return this._inFrame(points[j.a]) && this._inFrame(points[j.vertex]) && this._inFrame(points[j.b]);
+    return this._inFrame(points[j.a])
+      && this._inFrame(points[j.vertex])
+      && this._inFrame(this._jointPoint(s, j.b, points));
   }
 
   _bendAngle(s, points, size) {
     const j = EX[this.exercise].angleJoints(s);
-    const v = points[j.vertex], a = points[j.a], b = points[j.b];
+    const v = points[j.vertex], a = points[j.a], b = this._jointPoint(s, j.b, points);
     if (this.use3d && v.world && a.world && b.world) return angleAt3(v.world, a.world, b.world);
     return angleAt(px(v, size), px(a, size), px(b, size));
   }
 }
 
 function px(p, size) { return { x: p.x * size.width, y: p.y * size.height }; }
+function clonePosePoint(point) {
+  return {
+    ...point,
+    world: point.world ? { ...point.world } : undefined,
+  };
+}
+function blendPosePoint(target, source, amount) {
+  for (const key of ["x", "y", "z"]) {
+    if (Number.isFinite(source[key])) target[key] += amount * (source[key] - target[key]);
+  }
+  if (source.world) {
+    if (!target.world) target.world = { ...source.world };
+    else {
+      for (const key of ["x", "y", "z"]) {
+        if (Number.isFinite(source.world[key])) target.world[key] += amount * (source.world[key] - target.world[key]);
+      }
+    }
+  }
+  target.confidence = Math.max(target.confidence || 0, source.confidence || 0);
+}
 function jointMid(points, names, size, confidence) {
   const visible = names.map((name) => points[name])
     .filter((p) => p && p.confidence > confidence)

@@ -179,12 +179,13 @@ window.Sync = (() => {
     if (!enabled || !(await waitForAuth())) return { ok: false, error: "offline" };
     const provider = new A.GoogleAuthProvider();
     const cur = authInstance.currentUser;
+    let pendingCredential = null;
     try {
       if (window.RepactNativeAuth && typeof window.RepactNativeAuth.signInGoogle === "function") {
         const tokens = await window.RepactNativeAuth.signInGoogle();
-        const credential = A.GoogleAuthProvider.credential(tokens.idToken || null, tokens.accessToken);
-        if (cur && cur.isAnonymous) await A.linkWithCredential(cur, credential);
-        else await A.signInWithCredential(authInstance, credential);
+        pendingCredential = A.GoogleAuthProvider.credential(tokens.idToken || null, tokens.accessToken);
+        if (cur && cur.isAnonymous) await A.linkWithCredential(cur, pendingCredential);
+        else await A.signInWithCredential(authInstance, pendingCredential);
       } else if (cur && cur.isAnonymous) await A.linkWithPopup(cur, provider);
       else await A.signInWithPopup(authInstance, provider);
       refreshAuthState();
@@ -192,10 +193,15 @@ window.Sync = (() => {
     } catch (e) {
       if (e && e.message === "cancelled") return { ok: false, error: "cancelled" };
       const code = (e && e.code) || "error";
-      // Этот Google-аккаунт уже привязан к другому uid — просто входим в него.
-      if (code === "auth/credential-already-in-use") {
+      // Анонимный пользователь уже существует как полноценный Google-аккаунт:
+      // link пытается создать дубль и получает collision. Не регистрируем заново —
+      // используем тот же Google credential для обычного входа.
+      const collision = code === "auth/credential-already-in-use"
+        || code === "auth/email-already-in-use"
+        || code === "auth/account-exists-with-different-credential";
+      if (cur && cur.isAnonymous && collision) {
         try {
-          const cred = A.GoogleAuthProvider.credentialFromError(e);
+          const cred = pendingCredential || A.GoogleAuthProvider.credentialFromError(e);
           if (cred) { await A.signInWithCredential(authInstance, cred); refreshAuthState(); return { ok: true }; }
         } catch {}
       }

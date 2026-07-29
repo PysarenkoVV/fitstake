@@ -64,6 +64,14 @@ test("service worker never stores failed responses", () => {
   expect(source.indexOf("if (res.ok)")).toBeLessThan(source.indexOf("c.put(request, copy)"));
 });
 
+test("Google auth signs into an existing account after anonymous-link collisions", () => {
+  const source = fs.readFileSync(new URL("../sync.js", import.meta.url), "utf8");
+  expect(source).toContain('code === "auth/email-already-in-use"');
+  expect(source).toContain('code === "auth/account-exists-with-different-credential"');
+  expect(source).toContain("pendingCredential || A.GoogleAuthProvider.credentialFromError(e)");
+  expect(source).toContain("await A.signInWithCredential(authInstance, cred)");
+});
+
 test("standalone layout uses the full viewport after iOS camera sessions", () => {
   const source = fs.readFileSync(new URL("../styles.css", import.meta.url), "utf8");
   expect(source).toContain("@media (display-mode: standalone)");
