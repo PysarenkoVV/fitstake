@@ -59,7 +59,19 @@ window.Sync = (() => {
           delete state.challengePaths[id];
         }
         publishChallenges();
-      }, () => {});
+      }, async () => {
+        // До вступления приватная ссылка открывает только безопасный preview meta.
+        // Имена участников и их прогресс правила не отдают.
+        try {
+          const meta = (await F.get(F.ref(db, "fitstake/privateChallenges/" + id + "/meta"))).val();
+          if (meta) {
+            challengeBuckets.private[id] = { meta, participants: {} };
+            state.challengePaths[id] = "fitstake/privateChallenges/" + id;
+            publishChallenges();
+          }
+        } catch {}
+        watchedPrivate.delete(id);
+      });
     });
   }
 
@@ -235,6 +247,70 @@ window.Sync = (() => {
     }
   }
 
+  async function signInApple() {
+    if (!enabled || !(await waitForAuth())) return { ok: false, error: "offline" };
+    const provider = new A.OAuthProvider("apple.com");
+    provider.addScope("email");
+    provider.addScope("name");
+    const cur = authInstance.currentUser;
+    let pendingCredential = null;
+    try {
+      if (window.RepactNativeAuth && typeof window.RepactNativeAuth.signInApple === "function") {
+        const tokens = await window.RepactNativeAuth.signInApple();
+        pendingCredential = provider.credential({
+          idToken: tokens.idToken,
+          rawNonce: tokens.rawNonce,
+        });
+        if (cur && cur.isAnonymous) await A.linkWithCredential(cur, pendingCredential);
+        else await A.signInWithCredential(authInstance, pendingCredential);
+      } else if (cur && cur.isAnonymous) {
+        await A.linkWithPopup(cur, provider);
+      } else {
+        await A.signInWithPopup(authInstance, provider);
+      }
+      refreshAuthState();
+      return { ok: true };
+    } catch (e) {
+      if (e && (e.message === "cancelled" || e.code === "auth/popup-closed-by-user")) {
+        return { ok: false, error: "cancelled" };
+      }
+      const code = (e && e.code) || "error";
+      if (cur && cur.isAnonymous && code === "auth/credential-already-in-use" && pendingCredential) {
+        try {
+          await A.signInWithCredential(authInstance, pendingCredential);
+          refreshAuthState();
+          return { ok: true };
+        } catch {}
+      }
+      return { ok: false, error: code };
+    }
+  }
+
+  async function deleteAccount() {
+    if (!enabled || !(await waitForAuth())) return { ok: false, error: "offline" };
+    const user = authInstance.currentUser;
+    if (!user || user.isAnonymous) return { ok: false, error: "no-account" };
+    try {
+      const updates = {};
+      updates["fitstake/deletionRequests/" + user.uid] = { requestedAt: Date.now() };
+      updates["fitstake/users/" + user.uid] = null;
+      updates["fitstake/challenge_main/participants/" + user.uid] = null;
+      updates["fitstake/follows/" + user.uid] = null;
+      for (const [id, path] of Object.entries(state.challengePaths || {})) {
+        if (/^[A-Za-z0-9_-]{1,80}$/.test(id)) updates[path + "/participants/" + user.uid] = null;
+      }
+      await F.update(F.ref(db), updates);
+      await A.deleteUser(user);
+      uid = null;
+      accountEmail = null;
+      isAnon = true;
+      return { ok: true };
+    } catch (e) {
+      const code = (e && e.code) || "error";
+      return { ok: false, error: code };
+    }
+  }
+
   async function signOutUser() {
     if (A && authInstance) { try { await A.signOut(authInstance); } catch {} }
     // onAuthStateChanged(null) вернёт анонимный вход.
@@ -324,7 +400,7 @@ window.Sync = (() => {
       const upd = { name: name || "Player" };
       if (state.challenges && !isMember) { upd.joinedAt = Date.now(); upd.total = 0; }
       F.update(F.ref(db, challengePath(id) + "/participants/" + uid), upd)
-        .then(() => resolve(true)).catch(() => resolve(false));
+        .then(() => { watchChallenge(id); resolve(true); }).catch(() => resolve(false));
     }, () => resolve(false)));
   }
 
@@ -404,7 +480,7 @@ window.Sync = (() => {
   }
 
   return {
-    enabled, state, init, watchChallenge, registerUser, join, report, createChallenge, joinChallenge, leaveChallenge, reportChallenge, restart, restartChallenge, setReady, setStartAt, setFollowing, publishActivity, setReaction, reportBug, signIn, signUp, signInGoogle, signInFacebook, signOutUser,
+    enabled, state, init, watchChallenge, registerUser, join, report, createChallenge, joinChallenge, leaveChallenge, reportChallenge, restart, restartChallenge, setReady, setStartAt, setFollowing, publishActivity, setReaction, reportBug, signIn, signUp, signInGoogle, signInFacebook, signInApple, deleteAccount, signOutUser,
     get uid() { return uid; },
     get email() { return accountEmail; },
     get isAnonymous() { return isAnon; },

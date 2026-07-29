@@ -72,6 +72,16 @@ test("Google auth signs into an existing account after anonymous-link collisions
   expect(source).toContain("await A.signInWithCredential(authInstance, cred)");
 });
 
+test("Apple auth and in-app account deletion are wired through Firebase", () => {
+  const syncSource = fs.readFileSync(new URL("../sync.js", import.meta.url), "utf8");
+  const appSource = fs.readFileSync(new URL("../app.js", import.meta.url), "utf8");
+  expect(syncSource).toContain('new A.OAuthProvider("apple.com")');
+  expect(syncSource).toContain("await A.deleteUser(user)");
+  expect(syncSource).toContain("deletionRequests");
+  expect(appSource).toContain('data-act="appleAuth"');
+  expect(appSource).toContain("confirmDeleteAccount");
+});
+
 test("standalone layout uses the full viewport after iOS camera sessions", () => {
   const source = fs.readFileSync(new URL("../styles.css", import.meta.url), "utf8");
   expect(source).toContain("@media (display-mode: standalone)");
@@ -212,7 +222,9 @@ test("Firebase rules separate public discovery from private invite records", () 
   const rules = JSON.parse(fs.readFileSync(new URL("../database.rules.json", import.meta.url), "utf8")).rules.fitstake;
   expect(rules.publicChallenges[".read"]).toBe(true);
   expect(rules.privateChallenges[".read"]).toBeUndefined();
-  expect(rules.privateChallenges.$challengeId[".read"]).toBe("auth != null");
+  expect(rules.privateChallenges.$challengeId[".read"]).toContain("meta/ownerId");
+  expect(rules.privateChallenges.$challengeId[".read"]).toContain("participants");
+  expect(rules.privateChallenges.$challengeId.meta[".read"]).toBe("auth != null");
   expect(rules.publicChallenges.$challengeId[".validate"]).toContain("numChildren()");
   expect(rules.publicChallenges.$challengeId[".validate"]).toContain("matches(/^[A-Za-z0-9_-]");
 });
