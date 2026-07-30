@@ -81,7 +81,7 @@ window.UA_TRANSLATIONS = {
   "Athlete": "Атлет", "Measurements": "Заміри", "New measurement": "Новий замір", "kg": "кг", "cm": "см",
   "Account": "Акаунт", "Email": "Електронна пошта", "Password": "Пароль", "Log in": "Увійти", "Log out": "Вийти",
   "Sign up": "Зареєструватися", "Create account": "Створити акаунт", "Create your account": "Створіть акаунт",
-  "Continue with Google": "Продовжити з Google", "Continue with Apple": "Продовжити з Apple", "Continue with Facebook": "Продовжити з Facebook", "Continue as guest": "Продовжити як гість", "Guest": "Гість", "or": "або",
+  "Continue with Google": "Продовжити з Google", "Continue with Apple": "Продовжити з Apple", "Continue with Facebook": "Продовжити з Facebook", "Continue as guest": "Продовжити як гість", "Already have an account? Log in": "Вже є акаунт? Увійти", "Welcome back": "З поверненням", "Sign in to restore your progress on this device.": "Увійдіть, щоб відновити прогрес на цьому пристрої.", "Complete your profile": "Завершіть налаштування профілю", "Guest": "Гість", "or": "або",
   "Notifications": "Сповіщення", "No notifications yet": "Сповіщень поки немає", "Report a problem": "Повідомити про проблему",
   "Send report": "Надіслати", "Thanks! Report sent.": "Дякуємо! Звіт надіслано.",
   "Counting & camera": "Підрахунок і камера", "Design & layout": "Дизайн і верстка", "App behavior": "Робота застосунку",

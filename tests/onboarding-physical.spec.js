@@ -11,6 +11,43 @@ test.beforeEach(async ({ page }) => {
   await page.goto("/");
 });
 
+test("returning user can sign in from the welcome screen and skip onboarding", async ({ page }) => {
+  const returningButton = page.getByRole("button", { name: "Already have an account? Log in", exact: true });
+  await expect(returningButton).toBeVisible();
+  expect((await returningButton.boundingBox()).height).toBeGreaterThanOrEqual(44);
+  await page.setViewportSize({ width: 375, height: 667 });
+  await returningButton.scrollIntoViewIfNeeded();
+  const compactButtonBox = await returningButton.boundingBox();
+  expect(compactButtonBox.y + compactButtonBox.height).toBeLessThanOrEqual(667);
+  await returningButton.click();
+  await expect(page.getByText("Welcome back", { exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Sign up", exact: true })).toHaveCount(0);
+  const emailLogin = page.getByRole("button", { name: "Log in", exact: true });
+  await emailLogin.scrollIntoViewIfNeeded();
+  expect((await emailLogin.boundingBox()).height).toBeGreaterThanOrEqual(44);
+
+  await page.evaluate(() => {
+    window.__returningAuthOptions = null;
+    Object.defineProperties(Sync, {
+      uid: { configurable: true, get: () => "existing-user" },
+      email: { configurable: true, get: () => "existing@example.com" },
+      isAnonymous: { configurable: true, get: () => false },
+    });
+    Sync.state.users = { "existing-user": { name: "Existing athlete" } };
+    Sync.signInGoogle = async (options) => {
+      window.__returningAuthOptions = options;
+      return { ok: true };
+    };
+  });
+  await page.getByRole("button", { name: "Continue with Google", exact: true }).click();
+
+  await expect(page.getByRole("button", { name: "Challenges", exact: true })).toBeVisible();
+  await expect(page.getByText("Welcome back", { exact: true })).toHaveCount(0);
+  expect(await page.evaluate(() => window.__returningAuthOptions)).toEqual({ existing: true });
+  expect(await page.evaluate(() => JSON.parse(localStorage.getItem("fs.onboarded")))).toBe(true);
+  expect(await page.evaluate(() => JSON.parse(localStorage.getItem("fs.profile.name")))).toBe("Existing athlete");
+});
+
 async function toPhysicalStep(page) {
   await page.getByRole("button", { name: "Get started", exact: true }).click();
   await expect(page.locator("#onb-name")).toHaveValue("Test");

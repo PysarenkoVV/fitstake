@@ -4,7 +4,7 @@
 "use strict";
 
 // Версия оболочки — держать в синхроне с CACHE в sw.js; уходит в баг-репорты.
-const APP_VERSION = "v171";
+  const APP_VERSION = "v174";
 // Последняя JS-ошибка — прикладываем к баг-репорту, чтобы сразу видеть причину.
 let lastError = "";
 window.addEventListener("error", (e) => {
@@ -175,6 +175,10 @@ const RU = {
   "Your reps were recognized correctly. Join a challenge to start saving progress.": "Повторы распознаны правильно. Вступи в челлендж, чтобы сохранять прогресс.",
   "Try again": "Повторить демо",
   "Continue as guest": "Продолжить как гость",
+  "Already have an account? Log in": "Уже есть аккаунт? Войти",
+  "Welcome back": "С возвращением",
+  "Sign in to restore your progress on this device.": "Войди, чтобы восстановить прогресс на этом устройстве.",
+  "Complete your profile": "Заверши настройку профиля",
   "You’ll get 50 test coins. Guest progress stays only on this device.": "Ты получишь 50 тестовых коинов. Прогресс гостя хранится только на этом устройстве.",
   "Guest": "Гость",
   "Progress is stored only on this device": "Прогресс хранится только на этом устройстве",
@@ -1419,7 +1423,7 @@ function goalForChoice(level, maxReps, choice) {
 // ==========================================================================
 // UI-состояние и рендер (см. app-ui.js — экраны ниже в этом же файле)
 // ==========================================================================
-const ui = { screen: "onboarding", tab: "yours", detailId: null, sheet: null, full: null, onbStep: 0, guideReplay: false, form: null, profileSection: null, workoutResult: null };
+const ui = { screen: "onboarding", tab: "yours", detailId: null, sheet: null, full: null, onbStep: 0, returningLogin: false, guideReplay: false, form: null, profileSection: null, workoutResult: null };
 ui.recentWorkoutsExpanded = false;
 
 function isGuest() { return !Sync.enabled || Sync.isAnonymous || !Sync.email; }
@@ -2677,7 +2681,7 @@ function photoSlot(dataURL, caption) {
   return `<div style="display:flex;flex-direction:column;gap:5px"><div class="photo-slot" style="height:150px">${dataURL ? `<img src="${dataURL}" alt="${esc(caption || "")}">` : icon("camera")}</div>${lbl(caption)}</div>`;
 }
 // Форма входа (Google + email/пароль) — общая для профиля и онбординга.
-function authForm() {
+function authForm(existingOnly = false) {
   return `<button class="action-btn" data-act="googleAuth" style="background:#fff;color:#1f1f1f;box-shadow:none;backdrop-filter:none;-webkit-backdrop-filter:none">${t("Continue with Google")}</button>
     <button class="action-btn" data-act="appleAuth" style="background:#000;color:#fff;box-shadow:inset 0 0 0 1px rgba(255,255,255,.22);backdrop-filter:none;-webkit-backdrop-filter:none">${t("Continue with Apple")}</button>
     <button class="action-btn" data-act="facebookAuth" style="background:#1877f2;color:#fff;box-shadow:none;backdrop-filter:none;-webkit-backdrop-filter:none">${t("Continue with Facebook")}</button>
@@ -2688,7 +2692,7 @@ function authForm() {
     <input class="field" id="auth-pass" type="password" autocomplete="current-password" placeholder="${esc(t("Password"))}">
     <div style="display:flex;gap:8px">
       <button class="action-btn" data-act="submitAuth" data-mode="signin" style="flex:1;background:var(--white-08);color:#fff">${t("Log in")}</button>
-      <button class="action-btn" data-act="submitAuth" data-mode="signup" style="flex:1">${t("Sign up")}</button>
+      ${existingOnly ? "" : `<button class="action-btn" data-act="submitAuth" data-mode="signup" style="flex:1">${t("Sign up")}</button>`}
     </div>`;
 }
 // Аккаунт в профиле: у вошедшего — email + выход; у анонима — форма входа.
@@ -2928,6 +2932,7 @@ function OnbExercises() {
 
 function Onboarding() {
   const step = ui.onbStep, level = store["profile.level"];
+  const returningLogin = ui.returningLogin && step === STEP.auth;
 
   const optionCard = (title, subtitle, selected, act) =>
     `<button class="card ${selected ? "selected" : ""}" data-act="${act}" style="padding:16px;width:100%;display:flex;align-items:center;gap:10px;text-align:left">
@@ -2944,7 +2949,11 @@ function Onboarding() {
     <div class="onb-wordmark display">Repact</div>
     <div class="onb-tagline form-footer">${t("Every rep is verified by the camera. Coins on the line. Miss too many days and you're out.")}</div></div>`;
   // Вход — последний шаг, перед сохранением прогресса (только с Firebase).
-  else if (step === STEP.auth) content = question(t("Create your account"), t("So your progress is saved and syncs across your devices."), authForm());
+  else if (step === STEP.auth) content = question(
+    t(returningLogin ? "Welcome back" : "Create your account"),
+    t(returningLogin ? "Sign in to restore your progress on this device." : "So your progress is saved and syncs across your devices."),
+    authForm(returningLogin)
+  );
   else if (step === STEP.name) content = question(t("Your name"), t("Friends will see it in the leaderboard."),
     `<input class="field" id="onb-name" value="${esc(store["profile.name"] || "")}" placeholder="${esc(t("Your name"))}" aria-label="${esc(t("Your name"))}" maxlength="20" autocomplete="name">`);
   else if (step === STEP.physical) content = question(t("Your physical profile"), null, OnbPhysical());
@@ -2973,13 +2982,15 @@ function Onboarding() {
   const authStep = Sync.enabled && step === STEP.auth;
   const footerLabel = step === 0 ? t("Get started") : step === LAST_STEP ? t("Let's go") : t("Continue");
   const footer = authStep
-    ? `<div style="padding:0 20px 8px;padding-bottom:calc(8px + var(--safe-bottom));text-align:center"><div class="form-footer" style="margin-bottom:4px">${t("You’ll get 50 test coins. Guest progress stays only on this device.")}</div><button class="text-btn" data-act="skipAuth" style="width:100%">${t("Continue as guest")}</button></div>`
-    : `<div style="padding:0 20px 8px;padding-bottom:calc(8px + var(--safe-bottom));display:flex;flex-direction:column;gap:4px"><button class="action-btn" data-act="onbNext">${footerLabel}</button>${step === 0 ? `<button class="text-btn" data-act="demo">${t("Try a demo workout")}</button>` : ""}</div>`;
+    ? (returningLogin
+      ? `<div style="padding-bottom:calc(8px + var(--safe-bottom))"></div>`
+      : `<div style="padding:0 20px 8px;padding-bottom:calc(8px + var(--safe-bottom));text-align:center"><div class="form-footer" style="margin-bottom:4px">${t("You’ll get 50 test coins. Guest progress stays only on this device.")}</div><button class="text-btn" data-act="skipAuth" style="width:100%">${t("Continue as guest")}</button></div>`)
+    : `<div style="padding:0 20px 8px;padding-bottom:calc(8px + var(--safe-bottom));display:flex;flex-direction:column;gap:4px"><button class="action-btn" data-act="onbNext">${footerLabel}</button>${step === 0 ? `<button class="text-btn" data-act="demo">${t("Try a demo workout")}</button>${Sync.enabled ? `<button class="text-btn" data-act="onbLogin">${t("Already have an account? Log in")}</button>` : ""}` : ""}</div>`;
   return `<div style="min-height:100dvh;display:flex;flex-direction:column">
     <div class="row gap12" style="padding:max(10px,env(safe-area-inset-top)) 20px 0;align-items:center">
       ${step > 0 ? `<button data-act="onbBack" aria-label="${t("Back")}" style="width:32px;height:32px;display:flex;align-items:center;justify-content:center;color:#fff">${icon("chevronLeft")}</button>` : `<span style="width:32px;height:32px"></span>`}
-      <div style="flex:1">${bar(step / LAST_STEP)}</div>
-      ${step > 0 ? `<span class="label secondary" style="font-size:12px;white-space:nowrap">${t("Step %lld of %lld", step, LAST_STEP)}</span>` : langToggle()}
+      <div style="flex:1">${returningLogin ? "" : bar(step / LAST_STEP)}</div>
+      ${returningLogin ? `<span class="label secondary" style="font-size:12px;white-space:nowrap">${t("Log in")}</span>` : step > 0 ? `<span class="label secondary" style="font-size:12px;white-space:nowrap">${t("Step %lld of %lld", step, LAST_STEP)}</span>` : langToggle()}
     </div>
     <div class="onb-content ${step === 0 ? "onb-content-welcome" : ""}">${content}</div>
     ${footer}
@@ -2994,6 +3005,30 @@ function finishOnboarding() {
   phIdentify();
   track("onboarding_completed", { level: store["profile.level"], daily_goal: store.dailyGoal });
   startTesterGuide(false);
+}
+
+function finishReturningLogin() {
+  switchAppStorageOwner();
+  const cloudUser = Sync.state.users && Sync.state.users[Sync.uid];
+  ui.returningLogin = false;
+  store.skippedAuth = false;
+  if (!cloudUser) {
+    ui.onbStep = STEP.name;
+    toast(t("Complete your profile"));
+    render();
+    return;
+  }
+  if (cloudUser.name) store["profile.name"] = cloudUser.name;
+  store.onboarded = true;
+  ui.screen = "tabs";
+  ui.onbStep = 0;
+  ui.tab = store.pendingInvite ? "challenges" : "yours";
+  ui.detailId = store.pendingInvite && store.pendingInvite.challengeId || null;
+  applySync();
+  saveApp(true);
+  phIdentify();
+  track("returning_account_signed_in");
+  render();
 }
 
 // ==========================================================================
@@ -4749,7 +4784,7 @@ root.addEventListener("click", async (e) => {
     if (res.ok) {
       store.skippedAuth = false;
       track("account_linked", { method: "email", mode });
-      if (ui.screen === "onboarding") { finishOnboarding(); return; } // вход — последний шаг, завершаем онбординг
+      if (ui.screen === "onboarding") { if (ui.returningLogin) finishReturningLogin(); else finishOnboarding(); return; }
       if (store["profile.name"]) Sync.registerUser(store["profile.name"]);
       toast(t("Signed in"));
       if (ui.authIntent) resumeAuthIntent(); else render();
@@ -4762,11 +4797,11 @@ root.addEventListener("click", async (e) => {
   }
   if (cmd === "googleAuth") {
     setBtnLoading(el, true, t("Signing in…"));
-    const res = await Sync.signInGoogle();
+    const res = await Sync.signInGoogle({ existing: ui.returningLogin });
     if (res.ok) {
       store.skippedAuth = false;
       track("account_linked", { method: "google" });
-      if (ui.screen === "onboarding") { finishOnboarding(); return; } // вход — последний шаг, завершаем онбординг
+      if (ui.screen === "onboarding") { if (ui.returningLogin) finishReturningLogin(); else finishOnboarding(); return; }
       if (store["profile.name"]) Sync.registerUser(store["profile.name"]);
       toast(t("Signed in"));
       if (ui.authIntent) resumeAuthIntent(); else render();
@@ -4788,11 +4823,11 @@ root.addEventListener("click", async (e) => {
   }
   if (cmd === "appleAuth") {
     setBtnLoading(el, true, t("Signing in…"));
-    const res = await Sync.signInApple();
+    const res = await Sync.signInApple({ existing: ui.returningLogin });
     if (res.ok) {
       store.skippedAuth = false;
       track("account_linked", { method: "apple" });
-      if (ui.screen === "onboarding") { finishOnboarding(); return; }
+      if (ui.screen === "onboarding") { if (ui.returningLogin) finishReturningLogin(); else finishOnboarding(); return; }
       if (store["profile.name"]) Sync.registerUser(store["profile.name"]);
       toast(t("Signed in"));
       if (ui.authIntent) resumeAuthIntent(); else render();
@@ -4812,11 +4847,11 @@ root.addEventListener("click", async (e) => {
   }
   if (cmd === "facebookAuth") {
     setBtnLoading(el, true, t("Signing in…"));
-    const res = await Sync.signInFacebook();
+    const res = await Sync.signInFacebook({ existing: ui.returningLogin });
     if (res.ok) {
       store.skippedAuth = false;
       track("account_linked", { method: "facebook" });
-      if (ui.screen === "onboarding") { finishOnboarding(); return; }
+      if (ui.screen === "onboarding") { if (ui.returningLogin) finishReturningLogin(); else finishOnboarding(); return; }
       if (store["profile.name"]) Sync.registerUser(store["profile.name"]);
       toast(t("Signed in"));
       if (ui.authIntent) resumeAuthIntent(); else render();
@@ -4889,7 +4924,12 @@ root.addEventListener("click", async (e) => {
   }
 
   // Онбординг
-  if (cmd === "onbBack") { if (ui.onbStep > 0) { ui.onbStep--; render(); } return; }
+  if (cmd === "onbBack") {
+    if (ui.returningLogin) { ui.returningLogin = false; ui.onbStep = 0; render(); return; }
+    if (ui.onbStep > 0) { ui.onbStep--; render(); }
+    return;
+  }
+  if (cmd === "onbLogin") { ui.returningLogin = true; ui.onbStep = STEP.auth; render(); return; }
   if (cmd === "onbNext") {
     if (ui.onbStep === STEP.name) {
       const inp = document.getElementById("onb-name");

@@ -187,7 +187,7 @@ window.Sync = (() => {
 
   // Вход через Google (popup — остаёмся внутри установленной PWA, без redirect).
   // Аноним → linkWithPopup: uid и весь прогресс сохраняются. Иначе — обычный вход.
-  async function signInGoogle() {
+  async function signInGoogle(options = {}) {
     if (!enabled || !(await waitForAuth())) return { ok: false, error: "offline" };
     const provider = new A.GoogleAuthProvider();
     const cur = authInstance.currentUser;
@@ -196,9 +196,9 @@ window.Sync = (() => {
       if (window.RepactNativeAuth && typeof window.RepactNativeAuth.signInGoogle === "function") {
         const tokens = await window.RepactNativeAuth.signInGoogle();
         pendingCredential = A.GoogleAuthProvider.credential(tokens.idToken || null, tokens.accessToken);
-        if (cur && cur.isAnonymous) await A.linkWithCredential(cur, pendingCredential);
+        if (cur && cur.isAnonymous && !options.existing) await A.linkWithCredential(cur, pendingCredential);
         else await A.signInWithCredential(authInstance, pendingCredential);
-      } else if (cur && cur.isAnonymous) await A.linkWithPopup(cur, provider);
+      } else if (cur && cur.isAnonymous && !options.existing) await A.linkWithPopup(cur, provider);
       else await A.signInWithPopup(authInstance, provider);
       refreshAuthState();
       return { ok: true };
@@ -224,13 +224,13 @@ window.Sync = (() => {
 
   // Вход через Facebook. Веб и iOS WebView используют один Firebase popup-flow.
   // Анонимный аккаунт привязываем, чтобы сохранить уже набранный прогресс.
-  async function signInFacebook() {
+  async function signInFacebook(options = {}) {
     if (!enabled || !(await waitForAuth())) return { ok: false, error: "offline" };
     const provider = new A.FacebookAuthProvider();
     provider.addScope("email");
     const cur = authInstance.currentUser;
     try {
-      if (cur && cur.isAnonymous) await A.linkWithPopup(cur, provider);
+      if (cur && cur.isAnonymous && !options.existing) await A.linkWithPopup(cur, provider);
       else await A.signInWithPopup(authInstance, provider);
       refreshAuthState();
       return { ok: true };
@@ -247,7 +247,7 @@ window.Sync = (() => {
     }
   }
 
-  async function signInApple() {
+  async function signInApple(options = {}) {
     if (!enabled || !(await waitForAuth())) return { ok: false, error: "offline" };
     const provider = new A.OAuthProvider("apple.com");
     provider.addScope("email");
@@ -261,9 +261,9 @@ window.Sync = (() => {
           idToken: tokens.idToken,
           rawNonce: tokens.rawNonce,
         });
-        if (cur && cur.isAnonymous) await A.linkWithCredential(cur, pendingCredential);
+        if (cur && cur.isAnonymous && !options.existing) await A.linkWithCredential(cur, pendingCredential);
         else await A.signInWithCredential(authInstance, pendingCredential);
-      } else if (cur && cur.isAnonymous) {
+      } else if (cur && cur.isAnonymous && !options.existing) {
         await A.linkWithPopup(cur, provider);
       } else {
         await A.signInWithPopup(authInstance, provider);
