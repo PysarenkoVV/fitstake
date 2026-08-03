@@ -4,7 +4,7 @@
 "use strict";
 
 // Версия оболочки — держать в синхроне с CACHE в sw.js; уходит в баг-репорты.
-  const APP_VERSION = "v176";
+  const APP_VERSION = "v177";
 // Последняя JS-ошибка — прикладываем к баг-репорту, чтобы сразу видеть причину.
 let lastError = "";
 window.addEventListener("error", (e) => {
@@ -303,7 +303,7 @@ const RU = {
   "Your exercises": "Твои упражнения", "Pick what you train and set your one-set max.": "Отметь, что тренируешь, и укажи максимум за подход.",
   "Pick what you train. Repact will measure your progress from verified workouts.": "Выбери, что тренируешь. Repact сам измерит прогресс по подтверждённым тренировкам.",
   "Strength progress": "Прогресс силы", "Verified sets only": "Только подтверждённые сеты",
-  "First workout": "Первая тренировка", "Best set": "Лучший сет", "Best set: %lld": "Лучший сет: %lld", "New best set: %lld": "Новый лучший сет: %lld", "Latest workout": "Последняя тренировка",
+  "First workout": "Первая тренировка", "Best set": "Лучший сет", "Best set: %lld": "Лучший сет: %lld", "New best set: %lld": "Новый лучший сет: %lld", "Record: %lld": "Рекорд: %lld", "Latest workout": "Последняя тренировка",
   "%@ level → %lld working sets per exercise.": "Уровень %@ → %lld рабочих сета на упражнение.",
   "This information is used to personalize your first week workout program. You can edit it later from your profile page.": "Эти данные помогут собрать программу первой недели под тебя. Их можно изменить позже в профиле.",
   "Your starting point — at the finish you'll see how far you've come.": "Твоя точка отсчёта — на финише увидишь, как далеко ушёл.",

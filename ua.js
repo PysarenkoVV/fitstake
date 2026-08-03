@@ -42,7 +42,7 @@ window.UA_TRANSLATIONS = {
   "Push-ups per day": "Віджимань на день", "Squats per day": "Присідань на день", "Reps": "Повтори",
   "Reps per day": "Повторів на день", "reps per day": "повторів на день", "%lld reps": "%lld повторів",
   "%lld reps/day": "%lld повторів на день", "%lld / day": "%lld / день", "%lld days": "%lld днів",
-  "%lld sets": "%lld підходів", "Sets": "Підходи", "Best set": "Найкращий підхід", "Best set: %lld": "Найкращий підхід: %lld", "New best set: %lld": "Новий найкращий підхід: %lld", "Average set": "Середній підхід",
+  "%lld sets": "%lld підходів", "Sets": "Підходи", "Best set": "Найкращий підхід", "Best set: %lld": "Найкращий підхід: %lld", "New best set: %lld": "Новий найкращий підхід: %lld", "Record: %lld": "Рекорд: %lld", "Average set": "Середній підхід",
   "Max reps": "Максимум за підхід", "Max reps in one set": "Максимум за підхід", "Time": "Час",
   "Try a demo workout": "Спробувати демо-тренування", "Choose an exercise": "Оберіть вправу",
   "Pick what you want to try. You can change it later.": "Оберіть, що хочете спробувати. Потім вибір можна змінити.",

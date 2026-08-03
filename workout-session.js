@@ -35,6 +35,7 @@ async function openSession(challengeId, startExercise) {
       </div>
       <div class="hint" id="sess-hint"></div>
     </div>
+    <div class="sess-meta" id="sess-meta"></div>
     <div class="sess-countdown" id="sess-countdown" aria-live="assertive"></div>
     <div class="sess-energy" id="sess-energy" role="progressbar" aria-label="${t("Set energy")}" aria-valuemin="0" aria-valuemax="100" aria-valuenow="100" hidden>
       <span>${t("Set energy")}</span>
@@ -83,6 +84,7 @@ async function openSession(challengeId, startExercise) {
   const completeSummaryEl = overlay.querySelector("#sess-complete-summary");
   const restActionsEl = overlay.querySelector("#sess-rest-actions");
   const restCounterEl = overlay.querySelector("#sess-rest-counter");
+  const metaEl = overlay.querySelector("#sess-meta");
   const countersEl = overlay.querySelector("#sess-counters");
   const bottomEl = overlay.querySelector("#sess-bottom");
 
@@ -154,10 +156,11 @@ async function openSession(challengeId, startExercise) {
   function renderCounter() {
     const g = goals[active];
     const hasPrev = combo && active > 0, hasNext = combo && active < goals.length - 1;
+    metaEl.innerHTML = `
+      <span class="cap">${esc(Exercise.displayName(g.exercise))}${combo ? ` • ${active + 1}/${goals.length}` : ""}</span>
+      <span class="sess-best" id="sess-best">${t("Record: %lld", Math.max(0, Number(store["profile.reps." + g.exercise]) || 0))}</span>`;
     countersEl.className = "counter-col";
     countersEl.innerHTML = `
-      <span class="cap">${esc(Exercise.displayName(g.exercise))}${combo ? ` • ${active + 1}/${goals.length}` : ""}</span>
-      <span class="sess-best" id="sess-best">${t("Best set: %lld", Math.max(0, Number(store["profile.reps." + g.exercise]) || 0))}</span>
       <div class="count-line">
         <span class="counter-big c-white" id="sess-num">${totalFor(g, resultFor(g.exercise))}</span>
         ${g.target != null ? `<span class="count-target">/ ${g.target}</span>` : ""}
@@ -402,13 +405,13 @@ async function openSession(challengeId, startExercise) {
 
       // Счётчик активного упражнения
       const numEl = countersEl.querySelector("#sess-num");
-      const bestEl = countersEl.querySelector("#sess-best");
+      const bestEl = metaEl.querySelector("#sess-best");
       if (bestEl) {
         const best = Math.max(0, Number(store["profile.reps." + g.exercise]) || 0);
         const setCount = currentSetReps();
         const isNewBest = setCount > best;
         bestEl.classList.toggle("new", isNewBest);
-        bestEl.textContent = isNewBest ? t("New best set: %lld", setCount) : t("Best set: %lld", best);
+        bestEl.textContent = t("Record: %lld", isNewBest ? setCount : best);
       }
       if (numEl) {
         numEl.textContent = total;

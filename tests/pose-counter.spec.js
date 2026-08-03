@@ -803,11 +803,21 @@ test("a new best set is compared with the profile value and saved", async ({ pag
     await window.openSession("demo", "pushups");
   });
 
-  await expect(page.locator("#sess-best")).toHaveText("Best set: 1");
+  await expect(page.locator("#sess-best")).toHaveText("Record: 1");
+  const metaLayout = await page.evaluate(() => {
+    const meta = document.querySelector("#sess-meta").getBoundingClientRect();
+    const count = document.querySelector("#sess-num").getBoundingClientRect();
+    return {
+      aboveCounter: meta.bottom < count.top,
+      insideViewport: meta.top >= 0 && meta.left >= 0 && meta.right <= innerWidth,
+      duplicateBottomLabels: document.querySelectorAll("#sess-counters .cap, #sess-counters .sess-best").length,
+    };
+  });
+  expect(metaLayout).toEqual({ aboveCounter: true, insideViewport: true, duplicateBottomLabels: 0 });
   await page.evaluate(() => {
     window.__fakePoseSession.snapshot.results[0].repCount = 2;
   });
-  await expect(page.locator("#sess-best")).toHaveText("New best set: 2");
+  await expect(page.locator("#sess-best")).toHaveText("Record: 2");
   await expect(page.locator("#sess-best")).toHaveClass(/new/);
 
   await page.getByRole("button", { name: "Finish set", exact: true }).click();
