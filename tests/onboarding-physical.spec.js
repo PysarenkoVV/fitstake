@@ -36,7 +36,7 @@ test("returning user can sign in from the welcome screen and skip onboarding", a
     Sync.state.users = { "existing-user": { name: "Existing athlete" } };
     Sync.signInGoogle = async (options) => {
       window.__returningAuthOptions = options;
-      return { ok: true };
+      return { ok: true, profile: { name: "Existing athlete" } };
     };
   });
   await page.getByRole("button", { name: "Continue with Google", exact: true }).click();

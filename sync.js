@@ -153,6 +153,16 @@ window.Sync = (() => {
     return authReady;
   }
 
+  async function signedInResult() {
+    refreshAuthState();
+    let profile = null;
+    try { profile = (await F.get(F.ref(db, "fitstake/users/" + uid))).val(); } catch {}
+    if (!profile && authInstance.currentUser && authInstance.currentUser.displayName) {
+      profile = { name: authInstance.currentUser.displayName };
+    }
+    return { ok: true, profile };
+  }
+
   // Регистрация нового аккаунта. Сейчас аноним — привязываем email к нему через
   // linkWithCredential, сохраняя uid и весь прогресс; иначе создаём новый аккаунт.
   // Если email уже занят — вернём email-taken (пусть пользователь войдёт).
@@ -178,8 +188,7 @@ window.Sync = (() => {
     if (!enabled || !(await waitForAuth())) return { ok: false, error: "offline" };
     try {
       await A.signInWithEmailAndPassword(authInstance, email, password);
-      refreshAuthState();
-      return { ok: true };
+      return signedInResult();
     } catch (e) {
       return { ok: false, error: authError(e) };
     }
@@ -200,8 +209,7 @@ window.Sync = (() => {
         else await A.signInWithCredential(authInstance, pendingCredential);
       } else if (cur && cur.isAnonymous && !options.existing) await A.linkWithPopup(cur, provider);
       else await A.signInWithPopup(authInstance, provider);
-      refreshAuthState();
-      return { ok: true };
+      return signedInResult();
     } catch (e) {
       if (e && e.message === "cancelled") return { ok: false, error: "cancelled" };
       const code = (e && e.code) || "error";
@@ -214,7 +222,7 @@ window.Sync = (() => {
       if (cur && cur.isAnonymous && collision) {
         try {
           const cred = pendingCredential || A.GoogleAuthProvider.credentialFromError(e);
-          if (cred) { await A.signInWithCredential(authInstance, cred); refreshAuthState(); return { ok: true }; }
+          if (cred) { await A.signInWithCredential(authInstance, cred); return signedInResult(); }
         } catch {}
       }
       if (code === "auth/popup-closed-by-user" || code === "auth/cancelled-popup-request") return { ok: false, error: "cancelled" };
@@ -232,14 +240,13 @@ window.Sync = (() => {
     try {
       if (cur && cur.isAnonymous && !options.existing) await A.linkWithPopup(cur, provider);
       else await A.signInWithPopup(authInstance, provider);
-      refreshAuthState();
-      return { ok: true };
+      return signedInResult();
     } catch (e) {
       const code = (e && e.code) || "error";
       if (code === "auth/credential-already-in-use") {
         try {
           const cred = A.FacebookAuthProvider.credentialFromError(e);
-          if (cred) { await A.signInWithCredential(authInstance, cred); refreshAuthState(); return { ok: true }; }
+          if (cred) { await A.signInWithCredential(authInstance, cred); return signedInResult(); }
         } catch {}
       }
       if (code === "auth/popup-closed-by-user" || code === "auth/cancelled-popup-request") return { ok: false, error: "cancelled" };
@@ -268,8 +275,7 @@ window.Sync = (() => {
       } else {
         await A.signInWithPopup(authInstance, provider);
       }
-      refreshAuthState();
-      return { ok: true };
+      return signedInResult();
     } catch (e) {
       if (e && (e.message === "cancelled" || e.code === "auth/popup-closed-by-user")) {
         return { ok: false, error: "cancelled" };
@@ -278,8 +284,7 @@ window.Sync = (() => {
       if (cur && cur.isAnonymous && code === "auth/credential-already-in-use" && pendingCredential) {
         try {
           await A.signInWithCredential(authInstance, pendingCredential);
-          refreshAuthState();
-          return { ok: true };
+          return signedInResult();
         } catch {}
       }
       return { ok: false, error: code };

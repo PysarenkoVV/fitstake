@@ -4,7 +4,7 @@
 "use strict";
 
 // Версия оболочки — держать в синхроне с CACHE в sw.js; уходит в баг-репорты.
-  const APP_VERSION = "v174";
+  const APP_VERSION = "v175";
 // Последняя JS-ошибка — прикладываем к баг-репорту, чтобы сразу видеть причину.
 let lastError = "";
 window.addEventListener("error", (e) => {
@@ -3007,9 +3007,9 @@ function finishOnboarding() {
   startTesterGuide(false);
 }
 
-function finishReturningLogin() {
+function finishReturningLogin(profile) {
   switchAppStorageOwner();
-  const cloudUser = Sync.state.users && Sync.state.users[Sync.uid];
+  const cloudUser = profile || (Sync.state.users && Sync.state.users[Sync.uid]);
   ui.returningLogin = false;
   store.skippedAuth = false;
   if (!cloudUser) {
@@ -4784,7 +4784,7 @@ root.addEventListener("click", async (e) => {
     if (res.ok) {
       store.skippedAuth = false;
       track("account_linked", { method: "email", mode });
-      if (ui.screen === "onboarding") { if (ui.returningLogin) finishReturningLogin(); else finishOnboarding(); return; }
+      if (ui.screen === "onboarding") { if (ui.returningLogin) finishReturningLogin(res.profile); else finishOnboarding(); return; }
       if (store["profile.name"]) Sync.registerUser(store["profile.name"]);
       toast(t("Signed in"));
       if (ui.authIntent) resumeAuthIntent(); else render();
@@ -4801,7 +4801,7 @@ root.addEventListener("click", async (e) => {
     if (res.ok) {
       store.skippedAuth = false;
       track("account_linked", { method: "google" });
-      if (ui.screen === "onboarding") { if (ui.returningLogin) finishReturningLogin(); else finishOnboarding(); return; }
+      if (ui.screen === "onboarding") { if (ui.returningLogin) finishReturningLogin(res.profile); else finishOnboarding(); return; }
       if (store["profile.name"]) Sync.registerUser(store["profile.name"]);
       toast(t("Signed in"));
       if (ui.authIntent) resumeAuthIntent(); else render();
@@ -4827,7 +4827,7 @@ root.addEventListener("click", async (e) => {
     if (res.ok) {
       store.skippedAuth = false;
       track("account_linked", { method: "apple" });
-      if (ui.screen === "onboarding") { if (ui.returningLogin) finishReturningLogin(); else finishOnboarding(); return; }
+      if (ui.screen === "onboarding") { if (ui.returningLogin) finishReturningLogin(res.profile); else finishOnboarding(); return; }
       if (store["profile.name"]) Sync.registerUser(store["profile.name"]);
       toast(t("Signed in"));
       if (ui.authIntent) resumeAuthIntent(); else render();
@@ -4851,7 +4851,7 @@ root.addEventListener("click", async (e) => {
     if (res.ok) {
       store.skippedAuth = false;
       track("account_linked", { method: "facebook" });
-      if (ui.screen === "onboarding") { if (ui.returningLogin) finishReturningLogin(); else finishOnboarding(); return; }
+      if (ui.screen === "onboarding") { if (ui.returningLogin) finishReturningLogin(res.profile); else finishOnboarding(); return; }
       if (store["profile.name"]) Sync.registerUser(store["profile.name"]);
       toast(t("Signed in"));
       if (ui.authIntent) resumeAuthIntent(); else render();
