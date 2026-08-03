@@ -281,6 +281,7 @@ async function openSession(challengeId, startExercise) {
     restTotalEl.textContent = t("Total %@", `${dayRepTotal()} / ${goals.reduce((sum, goal) => sum + (goal.target || 0), 0)}`);
     renderRestActions(false);
     sess.setCountingEnabled(false);
+    sess.setTrackingEnabled?.(false);
     updateRest(now);
     prevBottomKey = "";
   }
@@ -297,6 +298,7 @@ async function openSession(challengeId, startExercise) {
     restEl.classList.remove("ready");
     overlay.classList.remove("resting");
     setStartTotal = sessionRepTotal();
+    sess.setTrackingEnabled?.(true);
     sess.setCountingEnabled(true, preserveCurrentRep);
     prevBottomKey = "";
   }
@@ -314,6 +316,7 @@ async function openSession(challengeId, startExercise) {
     completeSummaryEl.textContent = `${t("%lld sets", setReps.length)} • ${t("avg %lld", average)}`;
     renderRestActions(true);
     sess.setCountingEnabled(false);
+    sess.setTrackingEnabled?.(false);
     prevBottomKey = "";
   }
   function startExtraSet() {
@@ -325,6 +328,7 @@ async function openSession(challengeId, startExercise) {
     setStartTotal = sessionRepTotal();
     if (workoutStartedAt && workoutStoppedAt) workoutStartedAt += Math.max(0, performance.now() - workoutStoppedAt);
     workoutStoppedAt = 0;
+    sess.setTrackingEnabled?.(true);
     sess.setCountingEnabled(true);
     prevBottomKey = "";
   }
@@ -363,7 +367,6 @@ async function openSession(challengeId, startExercise) {
       }
       updateElapsed(now);
       updateRest(now);
-      if (resting && ar && ar.status === "down") resumeAfterRest(true);
       const showEnergy = !resting && !allReached && currentSetReps() > 0 && !!lastRepAt;
       energyEl.hidden = !showEnergy;
       if (showEnergy) {

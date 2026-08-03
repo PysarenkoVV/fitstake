@@ -574,6 +574,7 @@ class PoseSession {
     this._dipPointAge = {};
     this._visualPoints = {};
     this._visualLostFrames = 0;
+    this._trackingEnabled = true;
     this.countingEnabled = false;
     this.facing = "user";   // "user" (фронталка) | "environment" (задняя)
     this.zoom = 1;          // 1× | 0.5× — 0.5 = задний ультра-ширик (отдельная линза)
@@ -593,6 +594,15 @@ class PoseSession {
         c.armed = c.smoothedAngle != null && c.smoothedAngle > c.upThreshold;
         c.bodyAtDown = c.leftAnchorAtDown = c.rightAnchorAtDown = c.feetAtDown = null;
       }
+    }
+  }
+
+  setTrackingEnabled(on) {
+    this._trackingEnabled = !!on;
+    if (!this._trackingEnabled) {
+      this._visualPoints = {};
+      this._visualLostFrames = 0;
+      if (this._ctx && this._canvas) this._ctx.clearRect(0, 0, this._canvas.width, this._canvas.height);
     }
   }
 
@@ -651,6 +661,13 @@ class PoseSession {
   _loop() {
     if (!this._running) return;
     const video = this._video;
+    if (!this._trackingEnabled) {
+      if (this._recording && video && video.readyState >= 2 && video.videoWidth) {
+        this._drawRecordFrame({ width: video.videoWidth, height: video.videoHeight });
+      }
+      requestAnimationFrame(() => this._loop());
+      return;
+    }
     if (video && video.readyState >= 2 && video.videoWidth) {
       const size = { width: video.videoWidth, height: video.videoHeight };
       if (this._canvas.width !== size.width || this._canvas.height !== size.height) {

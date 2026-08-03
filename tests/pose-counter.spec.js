@@ -647,7 +647,7 @@ test("a set ends automatically after ten seconds without another rep", async ({ 
   await page.getByRole("button", { name: "Finish workout", exact: true }).click();
 });
 
-test("starting a rep during rest resumes the next set without losing it", async ({ page }) => {
+test("pose changes during rest stay paused until the user resumes", async ({ page }) => {
   await page.evaluate(async () => {
     class FakePoseSession {
       constructor(exercises) {
@@ -660,6 +660,7 @@ test("starting a rep during rest resumes the next set without losing it", async 
         this.countingEnabled = on;
         this.preservedCurrentRep = preserveCurrentRep;
       }
+      setTrackingEnabled(on) { this.trackingEnabled = on; }
       async start() {}
       stop() {}
       isRecording() { return false; }
@@ -673,12 +674,19 @@ test("starting a rep during rest resumes the next set without losing it", async 
   await expect(page.getByRole("button", { name: "Finish set", exact: true })).toBeVisible();
   await page.getByRole("button", { name: "Finish set", exact: true }).click();
   await expect(page.locator("#sess-rest")).toBeVisible();
+  expect(await page.evaluate(() => window.__fakePoseSession.trackingEnabled)).toBe(false);
 
   await page.evaluate(() => {
     window.__fakePoseSession.snapshot.results[0].status = "down";
   });
+  await page.waitForTimeout(100);
+  await expect(page.locator("#sess-rest")).toBeVisible();
+  expect(await page.evaluate(() => window.__fakePoseSession.countingEnabled)).toBe(false);
+
+  await page.getByRole("button", { name: "Start next set", exact: true }).click();
   await expect(page.locator("#sess-rest")).toBeHidden();
-  expect(await page.evaluate(() => window.__fakePoseSession.preservedCurrentRep)).toBe(true);
+  expect(await page.evaluate(() => window.__fakePoseSession.trackingEnabled)).toBe(true);
+  expect(await page.evaluate(() => window.__fakePoseSession.preservedCurrentRep)).toBe(false);
 
   await page.evaluate(() => {
     window.__fakePoseSession.snapshot.results[0] = {
