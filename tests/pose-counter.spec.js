@@ -187,6 +187,34 @@ test("dips range position follows the body without jumping when the phase change
   expect(positions.returnedTop).toBeLessThan(positions.middleUp);
 });
 
+test("squat range indicator follows the knee angle when vertical body travel is compressed", async ({ page }) => {
+  const positions = await page.evaluate(() => {
+    const point = (x, y) => ({ x, y, confidence: 1 });
+    const pose = (bent) => ({
+      leftHip: point(bent ? .34 : .44, .50), rightHip: point(bent ? .66 : .56, .50),
+      leftKnee: point(bent ? .54 : .44, .70), rightKnee: point(bent ? .46 : .56, .70),
+      leftAnkle: point(.44, .90), rightAnkle: point(.56, .90),
+    });
+    const counter = new window.RepCounter("squats");
+    let now = 0;
+    const feed = (points, frames) => {
+      let result;
+      for (let i = 0; i < frames; i++) {
+        result = counter.process(points, { width: 1000, height: 1000 }, true, now += 50);
+      }
+      return result.rangePosition;
+    };
+    return {
+      top: feed(pose(false), 6),
+      bottom: feed(pose(true), 8),
+      returnedTop: feed(pose(false), 10),
+    };
+  });
+  expect(positions.top).toBeLessThan(.15);
+  expect(positions.bottom).toBeGreaterThan(.65);
+  expect(positions.returnedTop).toBeLessThan(.30);
+});
+
 test("dips guide maps both movement phases from zero to the checkpoint", async ({ page }) => {
   const result = await page.evaluate(() => {
     const counter = new window.RepCounter("dips");

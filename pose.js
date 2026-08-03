@@ -266,8 +266,11 @@ class RepCounter {
     const anglePosition = Math.max(0, Math.min(1,
       (this.upThreshold - angle) / Math.max(1, this.upThreshold - this.downThreshold)
     ));
-    const targetPosition = bodyMotion ? bodyMotion.progress : anglePosition;
-    this.smoothedRangePosition = bodyMotion
+    // Приседания считаются по углу колена: при нижнем ракурсе вертикальный ход таза
+    // сжимается и не должен замораживать подсказку, пока колено явно сгибается.
+    const useBodyRange = !!bodyMotion && (this.exercise === "dips" || this.exercise === "pullups");
+    const targetPosition = useBodyRange ? bodyMotion.progress : anglePosition;
+    this.smoothedRangePosition = useBodyRange
       ? targetPosition
       : (this.smoothedRangePosition == null
         ? targetPosition

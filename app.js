@@ -4,7 +4,7 @@
 "use strict";
 
 // Версия оболочки — держать в синхроне с CACHE в sw.js; уходит в баг-репорты.
-  const APP_VERSION = "v175";
+  const APP_VERSION = "v176";
 // Последняя JS-ошибка — прикладываем к баг-репорту, чтобы сразу видеть причину.
 let lastError = "";
 window.addEventListener("error", (e) => {
