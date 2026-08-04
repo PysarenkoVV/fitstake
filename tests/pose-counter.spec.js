@@ -156,6 +156,80 @@ test("dips use body travel when a low camera compresses the elbow angle", async 
   expect(count).toBe(1);
 });
 
+test("dips keep the grip fixed but use live arm geometry plus hip travel", async ({ page }) => {
+  const result = await page.evaluate(() => {
+    const pose = (angle, shoulderY, hipY, staleGripWorld = false) => {
+      const arm = (side) => {
+        const x = side === "left" ? .40 : .60;
+        const radians = angle * Math.PI / 180;
+        return {
+          [side + "Shoulder"]: {
+            x, y: shoulderY, confidence: 1,
+            world: { x: Math.sin(radians), y: Math.cos(radians), z: 0 },
+          },
+          [side + "Elbow"]: {
+            x, y: .42, confidence: 1,
+            world: { x: 0, y: 0, z: 0 },
+          },
+          [side + "Wrist"]: {
+            x, y: .55, confidence: 1,
+            world: staleGripWorld ? { x: 1, y: 0, z: 0 } : { x: 0, y: 1, z: 0 },
+          },
+          [side + "Hip"]: { x: side === "left" ? .45 : .55, y: hipY, confidence: 1 },
+        };
+      };
+      return { ...arm("left"), ...arm("right") };
+    };
+    const counter = new window.RepCounter("dips");
+    let now = 0;
+    const feed = (points, frames) => {
+      for (let i = 0; i < frames; i++) counter.process(points, { width: 1000, height: 1000 }, true, now += 50);
+    };
+
+    // The first reliable grip is kept in screen space, but its old root-relative
+    // world coordinate must not replace the current wrist in the elbow angle.
+    feed(pose(160, .30, .50, true), 1);
+    feed(pose(160, .30, .50), 6);
+    feed(pose(110, .42, .62), 8);
+    const fixedGripX = counter.dipGripAnchors.left.x;
+    feed(pose(160, .30, .50), 10);
+    return { count: counter.count, fixedGripX };
+  });
+  expect(result.count).toBe(1);
+  expect(result.fixedGripX).toBeCloseTo(.40, 2);
+});
+
+test("dips do not count arm bends and shoulder shrugs without hip travel", async ({ page }) => {
+  const count = await page.evaluate(() => {
+    const pose = (angle, shoulderY) => {
+      const arm = (side) => {
+        const x = side === "left" ? .40 : .60;
+        const radians = angle * Math.PI / 180;
+        return {
+          [side + "Shoulder"]: {
+            x, y: shoulderY, confidence: 1,
+            world: { x: Math.sin(radians), y: Math.cos(radians), z: 0 },
+          },
+          [side + "Elbow"]: { x, y: .42, confidence: 1, world: { x: 0, y: 0, z: 0 } },
+          [side + "Wrist"]: { x, y: .55, confidence: 1, world: { x: 0, y: 1, z: 0 } },
+          [side + "Hip"]: { x: side === "left" ? .45 : .55, y: .50, confidence: 1 },
+        };
+      };
+      return { ...arm("left"), ...arm("right") };
+    };
+    const counter = new window.RepCounter("dips");
+    let now = 0;
+    const feed = (points, frames) => {
+      for (let i = 0; i < frames; i++) counter.process(points, { width: 1000, height: 1000 }, true, now += 50);
+    };
+    feed(pose(160, .30), 6);
+    feed(pose(110, .42), 8);
+    feed(pose(160, .30), 10);
+    return counter.count;
+  });
+  expect(count).toBe(0);
+});
+
 test("dips range position follows the body without jumping when the phase changes", async ({ page }) => {
   const positions = await page.evaluate(() => {
     const point = (x, y) => ({ x, y, confidence: 1 });

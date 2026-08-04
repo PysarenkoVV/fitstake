@@ -156,7 +156,6 @@ class RepCounter {
     this.downFrames = 0;
     this.upFrames = 0;
     this.lastCountAt = -Infinity;
-    this.activeSide = null;
     this.rangeTopOffset = null;
     this.rangeBodyProgress = null;
     this.rangeScale = null;
@@ -197,7 +196,6 @@ class RepCounter {
       this.wasDown = false;
       this.armed = false;
       this.downFrames = this.upFrames = 0;
-      this.activeSide = null;
       this.rangeTopOffset = null;
       this.rangeBodyProgress = null;
       this.rangeScale = null;
@@ -209,18 +207,13 @@ class RepCounter {
     this.tracking = true;
     this.lostFrames = 0;
 
-    if (this.exercise === "dips" && (!this.activeSide || !sides.includes(this.activeSide))) {
-      this.activeSide = sides.reduce((best, side) =>
-        this._sideConfidence(side, points) > this._sideConfidence(best, points) ? side : best
-      , sides[0]);
-    }
-    const angleSides = this.exercise === "dips" && this.activeSide ? [this.activeSide] : sides;
-    const sideAngles = angleSides.map((s) => this._bendAngle(s, points, size));
+    const sideAngles = sides.map((s) => this._bendAngle(s, points, size));
     // При съёмке отжиманий под углом дальний локоть часто выглядит заметно прямее
     // ближнего. Среднее двух углов не доходило до порога, хотя повтор был полным.
     // Внизу достаточно подтверждённого сгиба одной руки, наверху — подтверждённого
     // разгибания; реальный ход корпуса ниже всё равно отсекает движения одной рукой.
-    const raw = this.exercise === "pushups" && sideAngles.length > 1
+    const useRobustArmAngle = (this.exercise === "pushups" || this.exercise === "dips") && sideAngles.length > 1;
+    const raw = useRobustArmAngle
       ? (this.wasDown || !this.armed ? Math.max(...sideAngles) : Math.min(...sideAngles))
       : sideAngles.reduce((a, b) => a + b, 0) / sideAngles.length;
     const angle = this.smoothedAngle != null ? this.smoothedAngle + this.smoothing * (raw - this.smoothedAngle) : raw;
@@ -258,7 +251,6 @@ class RepCounter {
           this.lastCountAt = now;
         }
         this.armed = true;
-        if (this.exercise === "dips") this.activeSide = null;
       } else if (!this.wasDown && this.upFrames >= this.stableFrames) this.armed = true;
     } else {
       this.downFrames = this.upFrames = 0;
@@ -280,13 +272,6 @@ class RepCounter {
       bendAngle: angle,
       rangePosition: Math.max(0, Math.min(1, this.smoothedRangePosition)),
     };
-  }
-
-  _sideConfidence(side, points) {
-    if (!side) return -1;
-    const j = EX[this.exercise].angleJoints(side);
-    return [points[j.a], points[j.vertex], points[j.b]]
-      .reduce((lowest, point) => Math.min(lowest, point ? point.confidence : 0), 1);
   }
 
   // На брусьях кисти физически остаются на одном месте, но PoseLandmarker при
@@ -416,16 +401,10 @@ class RepCounter {
       const shoulder = jointMid(points, ["leftShoulder", "rightShoulder"], size, this.minConfidence);
       if (!shoulder) return null;
       const hip = jointMid(points, ["leftHip", "rightHip"], size, this.minConfidence);
-      const torso = hip ? { x: (shoulder.x + hip.x) / 2, y: (shoulder.y + hip.y) / 2 } : shoulder;
-      const samples = [
-        { point: shoulder, weight: 0.65 },
-        { point: torso, weight: 0.35 },
-      ];
-      const weight = samples.reduce((sum, item) => sum + item.weight, 0);
-      return {
-        x: samples.reduce((sum, item) => sum + item.point.x * item.weight, 0) / weight,
-        y: samples.reduce((sum, item) => sum + item.point.y * item.weight, 0) / weight,
-      };
+      // Бёдра подтверждают реальное опускание всего тела и отсекают сгиб рук
+      // вместе с пожиманием плеч. Короткие пропажи бёдер уже сглаживаются и
+      // удерживаются PoseSession; плечи остаются запасным сигналом для низкой камеры.
+      return hip || shoulder;
     }
     const [j0, j1] = EX[this.exercise].bodyJoints;
     const vis = [j0, j1].map((j) => points[j]).filter((p) => p && p.confidence > this.minConfidence).map((p) => px(p, size));
@@ -468,7 +447,8 @@ class RepCounter {
 
   _bendAngle(s, points, size) {
     const j = EX[this.exercise].angleJoints(s);
-    const v = points[j.vertex], a = points[j.a], b = this._jointPoint(s, j.b, points);
+    const liveGrip = this.exercise === "dips" ? points[j.b] : null;
+    const v = points[j.vertex], a = points[j.a], b = liveGrip || this._jointPoint(s, j.b, points);
     if (this.use3d && v.world && a.world && b.world) return angleAt3(v.world, a.world, b.world);
     return angleAt(px(v, size), px(a, size), px(b, size));
   }
