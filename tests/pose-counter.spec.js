@@ -199,6 +199,46 @@ test("dips keep the grip fixed but use live arm geometry plus hip travel", async
   expect(result.fixedGripX).toBeCloseTo(.40, 2);
 });
 
+test("dips recalibrate a grip captured while approaching the bars", async ({ page }) => {
+  const result = await page.evaluate(() => {
+    const point = (x, y) => ({ x, y, confidence: 1 });
+    const pose = (kind, approachStep = null) => {
+      if (approachStep != null) {
+        const shift = approachStep * .035;
+        return {
+          leftShoulder: point(.32 + shift, .24 + shift), rightShoulder: point(.52 + shift, .24 + shift),
+          leftElbow: point(.32 + shift, .36 + shift), rightElbow: point(.52 + shift, .36 + shift),
+          leftWrist: point(.98 - shift, .02 + shift), rightWrist: point(.02 + shift, .02 + shift),
+          leftHip: point(.36 + shift, .50 + shift), rightHip: point(.48 + shift, .50 + shift),
+        };
+      }
+      const down = kind === "down";
+      return {
+        leftShoulder: point(.40, down ? .40 : .30), rightShoulder: point(.60, down ? .40 : .30),
+        leftElbow: point(down ? .48 : .40, down ? .47 : .40),
+        rightElbow: point(down ? .52 : .60, down ? .47 : .40),
+        leftWrist: point(.40, .50), rightWrist: point(.60, .50),
+        leftHip: point(.45, down ? .65 : .55), rightHip: point(.55, down ? .65 : .55),
+      };
+    };
+    const counter = new window.RepCounter("dips");
+    let now = 0;
+    const feed = (points, frames = 1) => {
+      for (let i = 0; i < frames; i++) counter.process(points, { width: 1000, height: 1000 }, true, now += 50);
+    };
+
+    for (let step = 0; step < 6; step++) feed(pose(null, step));
+    feed(pose("top"), 10);
+    const calibratedGripX = counter.dipGripAnchors.left && counter.dipGripAnchors.left.x;
+    feed(pose("down"), 8);
+    feed(pose("top"), 10);
+    return { count: counter.count, calibratedGripX };
+  });
+
+  expect(result.count).toBe(1);
+  expect(result.calibratedGripX).toBeCloseTo(.40, 2);
+});
+
 test("dips do not count arm bends and shoulder shrugs without hip travel", async ({ page }) => {
   const count = await page.evaluate(() => {
     const pose = (angle, shoulderY) => {

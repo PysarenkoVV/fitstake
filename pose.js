@@ -161,6 +161,10 @@ class RepCounter {
     this.rangeScale = null;
     this.smoothedRangePosition = null;
     this.dipGripAnchors = { left: null, right: null };
+    this.dipGripCandidates = { left: null, right: null };
+    this.dipGripStableFrames = 0;
+    this.dipGripReady = false;
+    this.dipGripLocked = false;
 
     const cfg = EX[exercise] || {};
     this.downThreshold = cfg.downThreshold != null ? cfg.downThreshold : 110;
@@ -201,6 +205,7 @@ class RepCounter {
       this.rangeScale = null;
       this.smoothedRangePosition = null;
       this.bodyAtDown = this.leftAnchorAtDown = this.rightAnchorAtDown = this.feetAtDown = null;
+      if (this.exercise === "dips") this._resetDipGripCalibration();
       const anything = Object.values(points).some((p) => p && p.confidence > this.minConfidence);
       return { status: anything ? "partialBody" : "noBody", bendAngle: null };
     }
@@ -233,9 +238,11 @@ class RepCounter {
       this.upFrames = 0;
       // Ворота позы: у подтягиваний кисти выше плеч, у брусьев ниже —
       // не даём чужому движению (отжимания от пола и т.п.) войти в повтор.
-      if (!this.wasDown && this.armed && this.downFrames >= this.stableFrames && this._gateOK(points)) {
+      const gripReady = this.exercise !== "dips" || this.dipGripReady;
+      if (!this.wasDown && this.armed && this.downFrames >= this.stableFrames && gripReady && this._gateOK(points)) {
         this.wasDown = true;
         this.armed = false;
+        if (this.exercise === "dips") this.dipGripLocked = true;
         this.bodyAtDown = this._bodyMid(points, size);
         this.leftAnchorAtDown = this._anchor("left", points, size);
         this.rightAnchorAtDown = this._anchor("right", points, size);
@@ -278,20 +285,88 @@ class RepCounter {
   // нижнем ракурсе иногда переносит landmark кисти вниз по стойке. Запоминаем
   // первый надёжный хват и принимаем только небольшие последующие поправки.
   _updateDipGripAnchors(points, size) {
-    for (const side of ["left", "right"]) {
-      const wrist = points[side + "Wrist"];
-      if (!this._inFrame(wrist)) continue;
-      const saved = this.dipGripAnchors[side];
-      if (!saved) {
-        this.dipGripAnchors[side] = clonePosePoint(wrist);
-        continue;
-      }
-      const shoulder = points[side + "Shoulder"], elbow = points[side + "Elbow"];
-      if (!this._inFrame(shoulder) || !this._inFrame(elbow)) continue;
-      const armScale = dist(px(shoulder, size), px(elbow, size));
-      if (armScale <= 0 || dist(px(wrist, size), px(saved, size)) > armScale * 0.30) continue;
-      blendPosePoint(saved, wrist, 0.10);
+    const sides = ["left", "right"];
+    const arms = sides.map((side) => ({
+      side,
+      shoulder: points[side + "Shoulder"],
+      elbow: points[side + "Elbow"],
+      wrist: points[side + "Wrist"],
+    }));
+    if (arms.some(({ shoulder, elbow, wrist }) =>
+      !this._inFrame(shoulder) || !this._inFrame(elbow) || !this._inFrame(wrist))) {
+      if (!this.dipGripLocked) this._clearDipGripCandidate();
+      return;
     }
+
+    const scales = arms.map(({ shoulder, elbow }) => dist(px(shoulder, size), px(elbow, size)));
+    const armScale = scales.reduce((sum, value) => sum + value, 0) / scales.length;
+    if (armScale <= 0) return;
+
+    if (this.dipGripLocked) {
+      for (const { side, wrist } of arms) {
+        const saved = this.dipGripAnchors[side];
+        if (saved && dist(px(wrist, size), px(saved, size)) <= armScale * 0.30) {
+          blendPosePoint(saved, wrist, 0.10);
+        }
+      }
+      return;
+    }
+
+    // До первого спуска не считаем первую увиденную кисть хватом. Обе руки
+    // должны несколько кадров оставаться неподвижными в верхней позиции — так
+    // подход к снаряду не фиксирует случайную опору, а реальный хват успевает
+    // перекалиброваться перед началом повтора.
+    const topReady = arms.every(({ side }) => this._liveBendAngle(side, points, size) >= this.upThreshold - 5);
+    if (!topReady) {
+      const gripDrifted = this.dipGripReady && arms.some(({ side, wrist }) => {
+        const saved = this.dipGripAnchors[side];
+        return !saved || dist(px(wrist, size), px(saved, size)) > armScale * 0.30;
+      });
+      if (gripDrifted) this.dipGripReady = false;
+      if (!this.dipGripReady) this._clearDipGripCandidate();
+      return;
+    }
+    const candidateMoved = arms.some(({ side, wrist }) => {
+      const candidate = this.dipGripCandidates[side];
+      return !candidate || dist(px(wrist, size), px(candidate, size)) > armScale * 0.08;
+    });
+    if (candidateMoved) {
+      const movedAwayFromGrip = arms.some(({ side, wrist }) => {
+        const saved = this.dipGripAnchors[side];
+        return !saved || dist(px(wrist, size), px(saved, size)) > armScale * 0.12;
+      });
+      if (movedAwayFromGrip) this.dipGripReady = false;
+      for (const { side, wrist } of arms) this.dipGripCandidates[side] = clonePosePoint(wrist);
+      this.dipGripStableFrames = 1;
+      return;
+    }
+    this.dipGripStableFrames++;
+    if (this.dipGripStableFrames < 4) return;
+
+    const recalibrated = arms.some(({ side }) => {
+      const saved = this.dipGripAnchors[side];
+      return !saved || dist(px(saved, size), px(this.dipGripCandidates[side], size)) > armScale * 0.12;
+    });
+    for (const { side } of arms) this.dipGripAnchors[side] = clonePosePoint(this.dipGripCandidates[side]);
+    this.dipGripReady = true;
+    if (recalibrated) {
+      this.rangeTopOffset = null;
+      this.rangeBodyProgress = null;
+      this.rangeScale = null;
+      this.smoothedRangePosition = null;
+    }
+  }
+
+  _clearDipGripCandidate() {
+    this.dipGripCandidates = { left: null, right: null };
+    this.dipGripStableFrames = 0;
+  }
+
+  _resetDipGripCalibration() {
+    this.dipGripAnchors = { left: null, right: null };
+    this.dipGripReady = false;
+    this.dipGripLocked = false;
+    this._clearDipGripCandidate();
   }
 
   _jointPoint(side, name, points) {
@@ -446,9 +521,21 @@ class RepCounter {
   }
 
   _bendAngle(s, points, size) {
+    return this.exercise === "dips"
+      ? this._liveBendAngle(s, points, size)
+      : this._jointBendAngle(s, points, size);
+  }
+
+  _liveBendAngle(s, points, size) {
     const j = EX[this.exercise].angleJoints(s);
-    const liveGrip = this.exercise === "dips" ? points[j.b] : null;
-    const v = points[j.vertex], a = points[j.a], b = liveGrip || this._jointPoint(s, j.b, points);
+    const v = points[j.vertex], a = points[j.a], b = points[j.b] || this._jointPoint(s, j.b, points);
+    if (this.use3d && v.world && a.world && b.world) return angleAt3(v.world, a.world, b.world);
+    return angleAt(px(v, size), px(a, size), px(b, size));
+  }
+
+  _jointBendAngle(s, points, size) {
+    const j = EX[this.exercise].angleJoints(s);
+    const v = points[j.vertex], a = points[j.a], b = this._jointPoint(s, j.b, points);
     if (this.use3d && v.world && a.world && b.world) return angleAt3(v.world, a.world, b.world);
     return angleAt(px(v, size), px(a, size), px(b, size));
   }
