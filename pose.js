@@ -642,6 +642,7 @@ class PoseSession {
     this._visualPoints = {};
     this._visualLostFrames = 0;
     this._trackingEnabled = true;
+    this._lastVideoTime = -1;
     this.countingEnabled = false;
     this.facing = "user";   // "user" (фронталка) | "environment" (задняя)
     this.zoom = 1;          // 1× | 0.5× — 0.5 = задний ультра-ширик (отдельная линза)
@@ -666,6 +667,7 @@ class PoseSession {
 
   setTrackingEnabled(on) {
     this._trackingEnabled = !!on;
+    this._lastVideoTime = -1;
     if (!this._trackingEnabled) {
       this._visualPoints = {};
       this._visualLostFrames = 0;
@@ -706,7 +708,9 @@ class PoseSession {
   // Ограничения потока под текущие камеру/зум. 0.5× — это отдельная физическая
   // линза (ультра-ширик), цифровым зумом её не получить — только по deviceId.
   _videoConstraints() {
-    const base = { width: { ideal: 1280 }, height: { ideal: 720 } };
+    // 960×540 достаточно для lite-модели и заметно снижает задержку внутри
+    // iOS WebView по сравнению с обработкой 1280×720.
+    const base = { width: { ideal: 960, max: 960 }, height: { ideal: 540, max: 540 } };
     if (this.facing === "environment" && this.zoom === 0.5 && this._lenses && this._lenses.ultra) {
       return Object.assign({ deviceId: { exact: this._lenses.ultra } }, base);
     }
@@ -729,13 +733,21 @@ class PoseSession {
     if (!this._running) return;
     const video = this._video;
     if (!this._trackingEnabled) {
-      if (this._recording && video && video.readyState >= 2 && video.videoWidth) {
+      if (this._recording && video && video.readyState >= 2 && video.videoWidth && video.currentTime !== this._lastVideoTime) {
+        this._lastVideoTime = video.currentTime;
         this._drawRecordFrame({ width: video.videoWidth, height: video.videoHeight });
       }
       requestAnimationFrame(() => this._loop());
       return;
     }
+    // RAF в iOS WebView часто быстрее реальной камеры. Повторный detectForVideo
+    // на том же кадре зря блокирует главный поток, скелет и индикаторы.
+    if (video && video.currentTime === this._lastVideoTime) {
+      requestAnimationFrame(() => this._loop());
+      return;
+    }
     if (video && video.readyState >= 2 && video.videoWidth) {
+      this._lastVideoTime = video.currentTime;
       const size = { width: video.videoWidth, height: video.videoHeight };
       if (this._canvas.width !== size.width || this._canvas.height !== size.height) {
         this._canvas.width = size.width;
@@ -889,9 +901,9 @@ class PoseSession {
         next[name] = prev;
         continue;
       }
-      const alpha = /Elbow|Wrist|Knee|Ankle$/.test(name) ? .52
-        : /Shoulder|Hip$|neck|root/.test(name) ? .34
-          : .30;
+      const alpha = /Elbow|Wrist|Knee|Ankle$/.test(name) ? .78
+        : /Shoulder|Hip$|neck|root/.test(name) ? .62
+          : .58;
       next[name] = {
         ...current,
         x: prev.x + alpha * (current.x - prev.x),

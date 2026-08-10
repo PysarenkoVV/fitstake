@@ -58,6 +58,44 @@ test("canvas dimensions follow both dimensions of the camera stream", async ({ p
   expect(dimensions).toEqual({ width: 1280, height: 960 });
 });
 
+test("iOS-friendly camera settings cap pose input at the proven Telegram resolution", async ({ page }) => {
+  await page.goto("/");
+  const constraints = await page.evaluate(() => {
+    const session = new window.PoseSession(["pushups"]);
+    return session._videoConstraints();
+  });
+  expect(constraints).toEqual({
+    facingMode: "user",
+    width: { ideal: 960, max: 960 },
+    height: { ideal: 540, max: 540 },
+  });
+});
+
+test("pose detection runs once per camera frame instead of once per animation frame", async ({ page }) => {
+  await page.goto("/");
+  const calls = await page.evaluate(() => {
+    const originalRAF = window.requestAnimationFrame;
+    window.requestAnimationFrame = () => 0;
+    const session = new window.PoseSession(["pushups"]);
+    let detections = 0;
+    session._running = true;
+    session._video = { readyState: 2, videoWidth: 960, videoHeight: 540, currentTime: 1 };
+    session._canvas = document.createElement("canvas");
+    session._ctx = session._canvas.getContext("2d");
+    session._landmarker = { detectForVideo: () => { detections++; return { landmarks: [] }; } };
+    session._sampleBrightness = () => 100;
+    session._drawSkeleton = () => {};
+    session._loop();
+    session._loop();
+    session._video.currentTime = 2;
+    session._loop();
+    session.stop();
+    window.requestAnimationFrame = originalRAF;
+    return detections;
+  });
+  expect(calls).toBe(2);
+});
+
 test("service worker never stores failed responses", () => {
   const source = fs.readFileSync(new URL("../sw.js", import.meta.url), "utf8");
   expect(source).toContain("if (res.ok)");

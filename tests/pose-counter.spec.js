@@ -454,8 +454,8 @@ test("visual skeleton smoothing is stronger on the torso and ignores a weak jump
     };
   });
 
-  expect(result.shoulder).toBeCloseTo(.234, 3);
-  expect(result.wrist).toBeCloseTo(.252, 3);
+  expect(result.shoulder).toBeCloseTo(.262, 3);
+  expect(result.wrist).toBeCloseTo(.278, 3);
   expect(result.wrist).toBeGreaterThan(result.shoulder);
   expect(result.outlierShoulder).toBeCloseTo(result.shoulder, 3);
   expect(result.sourceShoulder).toBe(.3);
