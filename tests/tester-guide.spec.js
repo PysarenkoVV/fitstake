@@ -105,3 +105,25 @@ test("unfinished checklist items are visually muted", async ({ page }) => {
   const color = await pending.first().locator("svg").evaluate((el) => getComputedStyle(el).color);
   expect(color).not.toBe("rgb(181, 255, 18)");
 });
+
+test("completed testing checklist has an explicit Finish test button", async ({ page }) => {
+  await page.addInitScript(() => {
+    localStorage.setItem("fs.testerProgress", JSON.stringify({ startedAt: Date.now(), cameraTested: true, inviteShared: true, resultShared: true, progressViewed: true, dismissed: false }));
+  });
+  await page.goto("/");
+  await page.evaluate(() => {
+    app.totalReps = 5;
+    app.challenges = [newChallenge({
+      id: "tester-complete", title: "Tester complete", access: "solo",
+      goals: [{ exercise: "pushups", repsPerDay: 5 }], durationDays: 3, startAt: startOfDay(Date.now()),
+      myTodayReps: { pushups: 5 },
+      participants: [{ id: "me", isMe: true, state: "active", doneToday: true, todayReps: 5 }],
+    })];
+    render();
+  });
+
+  const finish = page.getByRole("button", { name: "Finish test", exact: true });
+  await expect(finish).toBeVisible();
+  await finish.click();
+  await expect(page.locator(".tester-check-card")).toHaveCount(0);
+});

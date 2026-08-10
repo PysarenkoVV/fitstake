@@ -122,3 +122,25 @@ test("public total goal publishes a valid miss policy", async ({ page }) => {
   });
   expect(result).toEqual({ ok: true, missPolicy: "never" });
 });
+
+test("challenge creator name is normalized to the Firebase limit", async ({ page }) => {
+  const result = await page.evaluate(async () => {
+    const originalCreate = Sync.createChallenge;
+    const originalName = store["profile.name"];
+    let publishedName = null;
+    Sync.createChallenge = async (_id, _meta, name) => { publishedName = name; return true; };
+    store["profile.name"] = "A creator name longer than twenty characters";
+    ui.form = newCreateForm({
+      type: "streak", access: "public", title: "Name limit", miss: "never",
+      sel_pushups: true, pushups: 20, duration: 3, buyIn: 0,
+    });
+    try {
+      const ok = await saveChallengeForm();
+      return { ok, publishedName };
+    } finally {
+      store["profile.name"] = originalName;
+      Sync.createChallenge = originalCreate;
+    }
+  });
+  expect(result).toEqual({ ok: true, publishedName: "A creator name longe" });
+});

@@ -280,6 +280,7 @@ const RU = {
   "Best streak": "Лучшая серия", "Current streak": "Текущая серия", "Personal records": "Личные рекорды",
   "Recent workouts": "Последние тренировки", "Daily best": "Лучший день", "No reps yet": "Пока нет повторов",
   "Show all workouts": "Показать все тренировки", "Collapse workouts": "Свернуть тренировки",
+  "Show all activity": "Показать всю активность", "Collapse activity": "Свернуть активность", "Finish test": "Завершить тест",
   "Push-ups short": "Отжимания", "Squats short": "Приседания", "Pull-ups short": "Подтягивания", "Dips short": "Брусья",
   "Reps · 30 days": "Повторы · 30 дней", "Completion": "Выполнено", "All": "Все",
   "%lld of %lld": "%lld из %lld",
@@ -1263,7 +1264,7 @@ async function createChallenge(o) {
     const published = await Sync.createChallenge(id, { title: o.title, goals: o.goals, durationDays: o.durationDays, buyIn: o.buyIn,
       type: o.type || "streak", access: o.access || "public", minPlayers: o.minPlayers || 0, maxPlayers: o.maxPlayers || 0,
       startAt: o.access === "public" ? startOfDay(Date.now()) : null,
-      missPolicy: o.missPolicy, progressionStep: o.progression.step, progressionPeriod: o.progression.period }, store["profile.name"]);
+      missPolicy: o.missPolicy, progressionStep: o.progression.step, progressionPeriod: o.progression.period }, normalizedParticipantName(store["profile.name"]));
     if (!published) return "publish-failed";
   }
   spend(o.buyIn, o.title);
@@ -1271,6 +1272,10 @@ async function createChallenge(o) {
   localStorage.setItem("fs.paid." + id, "1");
   ui.createdChallengeId = id;
   return true;
+}
+
+function normalizedParticipantName(name) {
+  return String(name || "Player").trim().slice(0, 20) || "Player";
 }
 
 // Выход из челленджа: взнос НЕ возвращается, прогресс/результаты пропадают. Челлендж
@@ -1423,7 +1428,7 @@ function goalForChoice(level, maxReps, choice) {
 // ==========================================================================
 // UI-состояние и рендер (см. app-ui.js — экраны ниже в этом же файле)
 // ==========================================================================
-const ui = { screen: "onboarding", tab: "yours", detailId: null, sheet: null, full: null, onbStep: 0, returningLogin: false, guideReplay: false, form: null, profileSection: null, workoutResult: null };
+const ui = { screen: "onboarding", tab: "yours", detailId: null, sheet: null, full: null, onbStep: 0, returningLogin: false, guideReplay: false, form: null, profileSection: null, workoutResult: null, todayFeedExpanded: false };
 ui.recentWorkoutsExpanded = false;
 
 function isGuest() { return !Sync.enabled || Sync.isAnonymous || !Sync.email; }
@@ -1775,11 +1780,14 @@ function TesterChecklistCard() {
     [progress.progressViewed, t("View your progress")],
   ];
   const done = checks.filter(([value]) => value).length;
+  const finished = done === checks.length;
   return `<section class="card tester-check-card">
     <div class="between"><div><span class="home-eyebrow">${t("Test Repact")}</span><h2>${t("Your testing checklist")}</h2></div><button data-act="dismissTesterChecklist" aria-label="${t("Close")}">${icon("xmark")}</button></div>
     <div class="tester-check-progress">${bar(done / checks.length)}<span>${done}/${checks.length}</span></div>
     <div class="tester-check-items">${checks.map(([value, label]) => `<div class="${value ? "done" : "pending"}">${value ? iconF("checkCircle") : icon("plusCircleLine")}<span>${label}</span></div>`).join("")}</div>
-    <div class="row gap8"><button class="action-btn plain" data-act="openTesterGuide">${t("How Repact works")}</button><button class="action-btn plain" data-act="openBug">${icon("bug")}${t("Report a problem")}</button></div>
+    ${finished
+      ? `<button class="action-btn" data-act="finishTesterChecklist">${iconF("checkCircle")}${t("Finish test")}</button>`
+      : `<div class="row gap8"><button class="action-btn plain" data-act="openTesterGuide">${t("How Repact works")}</button><button class="action-btn plain" data-act="openBug">${icon("bug")}${t("Report a problem")}</button></div>`}
   </section>`;
 }
 function YoursTab() {
@@ -1861,8 +1869,12 @@ function YoursTab() {
 
   // Лента друзей: пульс активности по общим челленджам (сам список челленджей — во вкладке Challenges).
   const feedEvents = Sync.enabled ? sharedActivity().slice(0, 8) : [];
+  const visibleFeedEvents = ui.todayFeedExpanded ? feedEvents : feedEvents.slice(0, 2);
+  const feedToggle = feedEvents.length > 2
+    ? `<button data-act="toggleTodayFeed" aria-expanded="${ui.todayFeedExpanded}" aria-label="${t(ui.todayFeedExpanded ? "Collapse activity" : "Show all activity")}">${t(ui.todayFeedExpanded ? "Collapse activity" : "Show all activity")}${icon("chevronRight")}</button>`
+    : "";
   const feed = feedEvents.length
-    ? `<section class="home-section"><div class="home-section-head"><span>${t("Today in Repact")}</span></div><div class="stack" style="gap:6px">${activityFeedRows(feedEvents)}</div></section>`
+    ? `<section class="home-section home-activity-feed"><div class="home-section-head"><span>${t("Today in Repact")}</span>${feedToggle}</div><div class="stack" style="gap:6px">${activityFeedRows(visibleFeedEvents)}</div></section>`
     : mine.length ? `<div class="card card-soft center secondary" style="padding:20px;font-weight:500">${t("When friends complete their day — it shows up here.")}</div>`
     : `<section class="home-section"><div class="home-section-head"><span>${t("Today in Repact")}</span></div><div class="card card-soft home-quiet">${icon("bolt")}<span>${t("No activity yet — be the first to train today.")}</span></div></section>`;
 
@@ -4505,6 +4517,7 @@ root.addEventListener("click", async (e) => {
     case "create": openCreate(); return;
     case "challengeTab": ui.challengeTab = arg; render(); return;
     case "toggleHomeTips": ui.homeTipsExpanded = !ui.homeTipsExpanded; render(); return;
+    case "toggleTodayFeed": ui.todayFeedExpanded = !ui.todayFeedExpanded; render(); return;
     case "toggleRecentWorkouts": ui.recentWorkoutsExpanded = !ui.recentWorkoutsExpanded; render(); return;
     case "openAccountGate": openAuthGate("account"); return;
     case "closeAuthGate": closeAuthGate(); return;
@@ -4533,6 +4546,10 @@ root.addEventListener("click", async (e) => {
     case "dismissTesterChecklist": {
       const progress = testerProgress(); progress.dismissed = true; store.testerProgress = progress;
       track("tester_checklist_dismissed"); render(); return;
+    }
+    case "finishTesterChecklist": {
+      const progress = testerProgress(); progress.dismissed = true; store.testerProgress = progress;
+      track("tester_checklist_finished"); render(); return;
     }
     case "profileHome": ui.profileSection = null; navRender(() => window.scrollTo(0, 0)); return;
     case "editProfile": profileEditing = true; profileNameDraft = null; render(); return;

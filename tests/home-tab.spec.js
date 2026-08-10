@@ -52,6 +52,30 @@ test("home tips remain available after an active challenge is created", async ({
   await expect(page.getByRole("button", { name: "Hide tips", exact: true })).toHaveAttribute("aria-expanded", "true");
 });
 
+test("Today in Repact is compact by default and can be expanded", async ({ page }) => {
+  await page.evaluate(() => {
+    const main = newChallenge({
+      id: "feed-main", title: "Feed challenge", access: "solo",
+      goals: [{ exercise: "pushups", repsPerDay: 20 }], durationDays: 3, startAt: startOfDay(Date.now()),
+      participants: [{ id: "me", isMe: true, state: "active" }],
+    });
+    app.challenges = [main];
+    Sync.state.activity = Object.fromEntries(Array.from({ length: 5 }, (_, i) => ["feed-" + i, {
+      actorId: "friend-" + i, actorName: "Friend " + i, challengeId: "feed-main",
+      challengeTitle: main.title, type: "exercise", exercise: "pushups", ts: Date.now() - i,
+    }]));
+    ui.tab = "yours"; ui.todayFeedExpanded = false; render();
+  });
+
+  const section = page.locator(".home-activity-feed");
+  await expect(section.locator(".activity-row")).toHaveCount(2);
+  const expand = section.getByRole("button", { name: "Show all activity", exact: true });
+  await expect(expand).toHaveAttribute("aria-expanded", "false");
+  await expand.click();
+  await expect(section.locator(".activity-row")).toHaveCount(5);
+  await expect(section.getByRole("button", { name: "Collapse activity", exact: true })).toHaveAttribute("aria-expanded", "true");
+});
+
 test("challenge progress becomes brighter as the daily goal is completed", async ({ page }) => {
   await page.evaluate(() => {
     app.challenges = [newChallenge({
