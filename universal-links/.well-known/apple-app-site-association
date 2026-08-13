@@ -1,0 +1,20 @@
+{
+  "applinks": {
+    "details": [
+      {
+        "appIDs": [
+          "D5KBVUY892.app.repact.ios"
+        ],
+        "components": [
+          {
+            "/": "/",
+            "?": {
+              "join": "?*"
+            },
+            "comment": "Opens a Repact challenge invitation in the native iOS app."
+          }
+        ]
+      }
+    ]
+  }
+}
