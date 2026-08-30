@@ -266,3 +266,15 @@ test("Firebase rules separate public discovery from private invite records", () 
   expect(rules.publicChallenges.$challengeId[".validate"]).not.toContain("numChildren()");
   expect(rules.publicChallenges.$challengeId[".validate"]).toContain("matches(/^[A-Za-z0-9_-]");
 });
+
+test("Firebase rules accept the native focus challenge metadata", () => {
+  const rules = JSON.parse(fs.readFileSync(new URL("../database.rules.json", import.meta.url), "utf8")).rules.fitstake;
+  for (const bucket of ["publicChallenges", "privateChallenges"]) {
+    const meta = rules[bucket].$challengeId.meta;
+    expect(meta.focusApps.$index[".validate"]).toContain("instagram");
+    expect(meta.scheduledWeekdays.$index[".validate"]).toContain("newData.val() >= 1");
+    expect(meta.resetMinutes[".validate"]).toContain("<= 1439");
+    expect(meta.focusLockEnabled[".validate"]).toBe("newData.isBoolean()");
+    expect(meta.timeZoneIdentifier[".validate"]).toContain("<= 64");
+  }
+});
